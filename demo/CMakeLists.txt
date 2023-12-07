@@ -35,21 +35,6 @@ target_link_libraries(
     spdlog::spdlog)
 
 add_executable(
-    demo_server_shmem 
-    src/main_server_shmem.cpp)
-
-add_definitions(-DSPDLOG_FMT_EXTERNAL)
-
-target_link_libraries(
-    demo_server_shmem 
-    ZenohUTransport 
-    uprotocolsdk_shared 
-    /usr/local/lib64/libzenohc.so
-    fmt
-    spdlog::spdlog)
-
-
-add_executable(
     demo_client 
     src/main_client.cpp)
 

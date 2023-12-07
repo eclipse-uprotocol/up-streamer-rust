@@ -3,7 +3,6 @@
 #include <messageParser.h>
 #include <spdlog/spdlog.h>
 #include <zenohSessionManager.h>
-#include <shmemMemoryMapper.h>
 #include <uprotocol/uuid/serializer/UuidSerializer.h>
 #include <uprotocol/uri/serializer/LongUriSerializer.h>
 #include <zenoh.h>
@@ -222,34 +221,22 @@ UCode ZenohUTransport::sendPublish(const UUri &uri,
                                           nullptr);
         }
 
-        if (UPayloadType::SHARED == payload.type()) {
-            
-            auto shmbuf = ShmemMemoryMapper::instance().getShmemBuffer((uint8_t*)payload.data());
-
-            zc_owned_payload_t shmemPayload = zc_shmbuf_into_payload(z_move(shmbuf));
-      
-            zc_publisher_put_owned(z_loan(pub), 
-                                   z_move(shmemPayload),
-                                   &options);
-      
-        } else {
-            auto message = MessageBuilder::instance().build(uri,
-                                                            attributes,
-                                                            payload);
-            if (true == message.size()) {
-                spdlog::error("MessageBuilder::instance().build failed");
-                break;
-            }
-            
-            if (0 != z_publisher_put(z_loan(pub),
-                                    message.data(),
-                                    message.size(),
-                                    &options)){
-                spdlog::error("z_publisher_put failed");
-                break;
-            }
+        auto message = MessageBuilder::instance().build(uri,
+                                                        attributes,
+                                                        payload);
+        if (true == message.size()) {
+            spdlog::error("MessageBuilder::instance().build failed");
+            break;
         }
-
+        
+        if (0 != z_publisher_put(z_loan(pub),
+                                message.data(),
+                                message.size(),
+                                &options)){
+            spdlog::error("z_publisher_put failed");
+            break;
+        }
+        
         status = UCode::OK;
 
     } while(0);

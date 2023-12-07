@@ -26,8 +26,6 @@ add_library(
     src/zenohUTransport.cpp
     src/zenohRpcClient.cpp
     src/zenohSessionManager.cpp
-    src/shmem/shmemMemoryAllocator.cpp
-    src/shmem/shmemMemoryMapper.cpp
     src/messageBuilder.cpp
     src/messageParser.cpp
  #   src/uSubClient.cpp
