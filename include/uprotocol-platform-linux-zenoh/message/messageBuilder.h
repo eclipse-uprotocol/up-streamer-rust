@@ -31,7 +31,7 @@
 #include <uprotocol/uri/datamodel/UUri.h>
 #include <uprotocol/transport/datamodel/UPayload.h>
 #include <uprotocol/transport/datamodel/UAttributes.h>
-#include <messageCommon.h>
+#include <uprotocol-platform-linux-zenoh/message/messageCommon.h>
 #include <ustatus.pb.h>
 
 using namespace uprotocol::utransport;

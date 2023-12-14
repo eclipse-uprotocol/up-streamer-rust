@@ -1,5 +1,5 @@
-#include <zenohUTransport.h>
-#include <zenohRpcClient.h>
+#include <uprotocol-platform-linux-zenoh/transport/zenohUTransport.h>
+#include <uprotocol-platform-linux-zenoh/rpc/zenohRpcClient.h>
 #include <chrono>
 #include <csignal>
 

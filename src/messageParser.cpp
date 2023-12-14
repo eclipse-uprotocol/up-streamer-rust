@@ -22,7 +22,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include <messageParser.h>
+#include <uprotocol-platform-linux-zenoh/message/messageParser.h>
 #include <uprotocol/tools/base64.h>
 #include <uprotocol/uri/datamodel/UUri.h>
 #include <uprotocol/transport/datamodel/UPayload.h>

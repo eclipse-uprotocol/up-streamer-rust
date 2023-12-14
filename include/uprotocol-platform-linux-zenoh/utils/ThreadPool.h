@@ -30,7 +30,7 @@
 #include <utility>
 #include <vector>
 #include <spdlog/spdlog.h>
-#include <ConcurrentCyclicQueue.h>
+#include <uprotocol-platform-linux-zenoh/utils/ConcurrentCyclicQueue.h>
 
 class ThreadPool
 {

@@ -22,11 +22,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include <messageBuilder.h>
-#include <messageParser.h>
+#include <uprotocol-platform-linux-zenoh/message/messageBuilder.h>
+#include <uprotocol-platform-linux-zenoh/message/messageParser.h>
 #include <spdlog/spdlog.h>
-#include <zenohUTransport.h>
-#include <zenohSessionManager.h>
+#include <uprotocol-platform-linux-zenoh/transport/zenohUTransport.h>
+#include <uprotocol-platform-linux-zenoh/session/zenohSessionManager.h>
 #include <uprotocol/uuid/serializer/UuidSerializer.h>
 #include <uprotocol/uri/serializer/LongUriSerializer.h>
 #include <zenoh.h>

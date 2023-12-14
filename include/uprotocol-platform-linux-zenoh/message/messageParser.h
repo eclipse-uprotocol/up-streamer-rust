@@ -27,7 +27,7 @@
 
 #include <unordered_map>
 #include <vector>
-#include <messageCommon.h>
+#include <uprotocol-platform-linux-zenoh/message/messageCommon.h>
 #include <uprotocol/tools/base64.h>
 #include <uprotocol/uri/datamodel/UUri.h>
 #include <uprotocol/transport/datamodel/UPayload.h>

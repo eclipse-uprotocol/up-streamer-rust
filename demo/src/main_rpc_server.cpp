@@ -1,6 +1,6 @@
-#include <zenohUTransport.h>
+#include <uprotocol-platform-linux-zenoh/transport/zenohUTransport.h>
 #include <csignal>
-#include <utils/ConcurrentCyclicQueue.h>
+#include <utils/uprotocol-platform-linux-zenoh/utils/ConcurrentCyclicQueue.h>
 
 using namespace uprotocol::utransport;
 using namespace uprotocol::v1;

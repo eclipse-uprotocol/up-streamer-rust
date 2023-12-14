@@ -26,7 +26,7 @@
 #define _ZENOH_RPC_CLIENT_H_
 
 #include <rpc/RpcClient.h>
-#include <ThreadPool.h>
+#include <uprotocol-platform-linux-zenoh/utils/ThreadPool.h>
 #include <zenoh.h>
 #include <ustatus.pb.h>
 
