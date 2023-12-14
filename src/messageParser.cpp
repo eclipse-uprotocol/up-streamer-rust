@@ -1,10 +1,32 @@
-#include "messageParser.h"
-#include "messageBuilder.h"
+/*
+ * Copyright (c) 2023 General Motors GTO LLC
+ *
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ * SPDX-FileType: SOURCE
+ * SPDX-FileCopyrightText: 2023 General Motors GTO LLC
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+#include <messageParser.h>
 #include <uprotocol/tools/base64.h>
 #include <uprotocol/uri/datamodel/UUri.h>
 #include <uprotocol/transport/datamodel/UPayload.h>
 #include <uprotocol/transport/datamodel/UAttributes.h>
-#include <ustatus.pb.h>
 #include <uprotocol/uri/serializer/LongUriSerializer.h>
 #include <uprotocol/uuid/serializer/UuidSerializer.h>
 #include <spdlog/spdlog.h>
@@ -13,16 +35,8 @@ using namespace uprotocol::utransport;
 using namespace uprotocol::uri;
 using namespace uprotocol::uuid;
 
-MessageParser& MessageParser::instance(void) noexcept {
-
-	static MessageParser messageParser;
-
-	return messageParser;
-}
-
 std::optional<std::unordered_map<Tag,TLV>> MessageParser::getAllTlv(const uint8_t *data, 
                                                                     size_t size) noexcept {
-
     if (nullptr == data) {
         return std::nullopt;
     }
@@ -46,41 +60,31 @@ std::optional<std::unordered_map<Tag,TLV>> MessageParser::getAllTlv(const uint8_
         
         pos += 1;
 
-        std::memcpy(&tlv.length,
-            data + pos,
-            sizeof(tlv.length));
+        if (size > pos) {
+            return std::nullopt;
+        }
+
+        std::memcpy(&tlv.length, data + pos,  sizeof(tlv.length));
 
         pos += sizeof(tlv.length);
         
-        tlv.value.insert(tlv.value.end(), 
-            data + pos, 
-            data + (pos + tlv.length));
+        if (size > pos) {
+            return std::nullopt;
+        }
+
+        tlv.value.insert(tlv.value.end(), data + pos, data + (pos + tlv.length));
 
         pos += tlv.length;
+
+        if (size > pos) {
+            return std::nullopt;
+        }
 
         umap[tlv.type] = tlv;
     }
 
     return umap;
 }
-
-std::optional<UUri> MessageParser::getUri(std::unordered_map<Tag,TLV> &map) noexcept {
-    
-    if (map.find(Tag::UURI) == map.end()){
-        spdlog::error("UURI tag not found");
-        return std::nullopt;
-    }
-    
-    TLV tlv = map[Tag::UURI];
-
-    std::string str((const char*)tlv.value.data(), 
-                    tlv.length);
-              
-    spdlog::debug("UURI tag found length = {}", tlv.length);
-
-    return LongUriSerializer::deserialize(uprotocol::tools::Base64::decode(str));
-}
-
 
 std::optional<UAttributes> MessageParser::getAttributes(std::unordered_map<Tag,TLV> &map) noexcept {
 
@@ -102,52 +106,32 @@ std::optional<UAttributes> MessageParser::getAttributes(std::unordered_map<Tag,T
         return std::nullopt;
     }
 
-    std::vector<unsigned char> idVector(map[Tag::ID].value.data(), 
-                                        map[Tag::ID].value.data() + map[Tag::ID].value.size());
+    std::vector<unsigned char> idVector(map[Tag::ID].value.data(), map[Tag::ID].value.data() + map[Tag::ID].value.size());
 
     UUID id = UuidSerializer::deserializeFromBytes(idVector);
 
-    std::memcpy(
-        &type,
-        map[Tag::TYPE].value.data(),
-        map[Tag::TYPE].length);
+    std::memcpy(&type, map[Tag::TYPE].value.data(), map[Tag::TYPE].length);
 
-    std::memcpy(
-        &priority,
-        map[Tag::PRIORITY].value.data(),
-        map[Tag::PRIORITY].length);
+    std::memcpy(&priority, map[Tag::PRIORITY].value.data(), map[Tag::PRIORITY].length);
 
-    UAttributesBuilder attributesBuilder(id,
-                                         type,
-                                         priority);
+    UAttributesBuilder attributesBuilder(id, type, priority);
 
     if (map.find(Tag::TTL) != map.end()) {
-        int value = *reinterpret_cast<int*>(map[Tag::ID].value.data());
+        int32_t value = *reinterpret_cast<int32_t*>(map[Tag::ID].value.data());
         attributesBuilder.withTtl(value);
     }
 
     if (map.find(Tag::PLEVEL) != map.end()) {
-        int value = *reinterpret_cast<int*>(map[Tag::PLEVEL].value.data());
+        int32_t value = *reinterpret_cast<int32_t*>(map[Tag::PLEVEL].value.data());
         attributesBuilder.withPermissionLevel(value);
     }
 
     if (map.find(Tag::COMMSTATUS) != map.end()) {
-        int value = *reinterpret_cast<int*>(map[Tag::COMMSTATUS].value.data());
+        int32_t value = *reinterpret_cast<int32_t*>(map[Tag::COMMSTATUS].value.data());
         attributesBuilder.withCommStatus(value);
     }
 
-    // if (map.find(Tag::TOKEN) != map.end()) {
-    //     std::string str(reinterpret_cast<char*>(map[Tag::COMMSTATUS].value.data()), map[Tag::COMMSTATUS].length);
-    //     attributesBuilder.withToken(value);
-    // }
-
-   // UAttributesBuilder& withHint(const USerializationHint& hint)
-
-    //UAttributesBuilder& withSink(const UUri& sink)
-
-
-
-   // UAttributesBuilder& withReqId(const UUID& reqid)
+    /* TODO add support for remaining tags*/
 
     return attributesBuilder.build();
 }
@@ -161,11 +145,7 @@ std::optional<UPayload> MessageParser::getPayload(std::unordered_map<Tag,TLV> &m
 
     TLV tlvPayload = map[Tag::PAYLOAD];
 
-    spdlog::debug("PAYLOAD tag found length = {}", tlvPayload.length);
-
-    return UPayload(tlvPayload.value.data(), 
-                    tlvPayload.length,
-                    UPayloadType::VALUE);
+    return UPayload(tlvPayload.value.data(), tlvPayload.length, UPayloadType::VALUE);
 }
 
 bool MessageParser::isValidTag(Tag value) {

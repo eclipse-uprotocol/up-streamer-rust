@@ -1,3 +1,27 @@
+/*
+ * Copyright (c) 2023 General Motors GTO LLC
+ *
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ * SPDX-FileType: SOURCE
+ * SPDX-FileCopyrightText: 2023 General Motors GTO LLC
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #include "zenohRpcClient.h"
 #include <messageBuilder.h>
 #include <messageParser.h>
@@ -18,117 +42,127 @@ using namespace uprotocol::v1;
 
 
 ZenohRpcClient& ZenohRpcClient::instance(void) noexcept {
-	static ZenohRpcClient rpcClient;
+    
+    static ZenohRpcClient rpcClient;
 
-	return rpcClient;
+    return rpcClient;
 }
 
 UCode ZenohRpcClient::init() noexcept {
-    if (true == init_) {
-        spdlog::error("ZenohRpcClient is already initialized");
-        return UCode::UNAVAILABLE;
-    }
 
-    ZenohSessionManagerConfig config;
+    if (0 == refCount_) {
 
-    if (UCode::OK != ZenohSessionManager::instance().init(config)) {
-        spdlog::error("zenohSessionManager::instance().init() failed");
-        return UCode::UNAVAILABLE;
-    }
+        std::lock_guard<std::mutex> lock(mutex_);
 
-    if (ZenohSessionManager::instance().getSession().has_value()) {
-        session_ = ZenohSessionManager::instance().getSession().value();
+        if (0 == refCount_) {
+            /* by default initialized to empty strings */
+            ZenohSessionManagerConfig config;
+
+            if (UCode::OK != ZenohSessionManager::instance().init(config)) {
+                spdlog::error("zenohSessionManager::instance().init() failed");
+                return UCode::UNAVAILABLE;
+            }
+
+            if (ZenohSessionManager::instance().getSession().has_value()) {
+                session_ = ZenohSessionManager::instance().getSession().value();
+            } else {
+                return UCode::UNAVAILABLE;
+            }
+
+            threadPool_ = make_shared<ThreadPool>(threadPoolSize_);
+            if (nullptr == threadPool_) {
+                spdlog::error("failed to create thread pool");
+                return UCode::UNAVAILABLE;
+            }
+
+            threadPool_->init();
+
+        }
+        refCount_.fetch_add(1);
+
     } else {
-        return UCode::UNAVAILABLE;
+        refCount_.fetch_add(1);
     }
-
-    threadPool_ = make_shared<ThreadPool>(threadPoolSize_);
-    if (nullptr == threadPool_) {
-        spdlog::error("failed to create thread pool");
-        return UCode::UNAVAILABLE;
-    }
-
-    threadPool_->init();
-
-    init_ = true;
 
     return UCode::OK;
-
 }
 
 UCode ZenohRpcClient::term() noexcept {
-    if (false == init_) {
-        spdlog::error("ZenohRpcClient is not initialized");
-        return UCode::UNAVAILABLE;
+
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    refCount_.fetch_sub(1);
+
+    if (0 == refCount_) {
+
+        threadPool_->term();
+
+        if (UCode::OK != ZenohSessionManager::instance().term()) {
+            spdlog::error("zenohSessionManager::instance().term() failed");
+            return UCode::UNAVAILABLE;
+        }
     }
-
-    if (UCode::OK != ZenohSessionManager::instance().term()) {
-        spdlog::error("zenohSessionManager::instance().term() failed");
-        return UCode::UNAVAILABLE;
-    }
-
-    threadPool_->term();
-
-    init_ = false; 
 
     return UCode::OK;
 } 
 
-UPayload ZenohRpcClient::handleInvokeMethod(const z_owned_session_t &session,
-                                            const UUri &uri, 
-                                            const UPayload &payload, 
-                                            const UAttributes &attributes) {
+std::future<UPayload> ZenohRpcClient::invokeMethod(const UUri &uri, 
+                                                   const UPayload &payload, 
+                                                   const UAttributes &attributes) noexcept {
+    std::future<UPayload> future;
 
+    if (0 == refCount_) {
+        spdlog::error("ZenohRpcClient is not initialized");
+        return std::move(future);
+    }
+    
+    if (UMessageType::REQUEST != attributes.type()) {
+        spdlog::error("Wrong message type = {}", UMessageTypeToString(attributes.type()).value());
+        return std::move(future);
+    }
+    
     auto uriHash = std::hash<std::string>{}(LongUriSerializer::serialize(uri));
 
     if (UMessageType::REQUEST != attributes.type()) {
-        spdlog::error("Wrong message type = {}",
-                      UMessageTypeToString(attributes.type()).value());
-
-         return UPayload(nullptr,
-                         0, 
-                         UPayloadType::VALUE);
+        spdlog::error("Wrong message type = {}", UMessageTypeToString(attributes.type()).value());
+        return std::move(future);
     }
   
-    auto message = MessageBuilder::instance().build(uri,
-                                                    attributes,
-                                                    payload);
+    auto message = MessageBuilder::build(attributes, payload);
     if (0 == message.size()) {
         spdlog::error("MessageBuilder failure");
-
-        return UPayload(nullptr,
-                        0, 
-                        UPayloadType::VALUE);
+        return std::move(future);
     }
 
     z_owned_reply_channel_t channel = zc_reply_fifo_new(16);
-    
     z_get_options_t opts = z_get_options_default();
+
     opts.timeout_ms = requestTimeoutMs_;
 
     opts.value.payload = (z_bytes_t){.len =  message.size(), .start = (uint8_t *)message.data()};
 
     auto uuidStr = UuidSerializer::serializeToString(attributes.id());
 
-    spdlog::debug("sending query with uid = {}", 
-                  uuidStr);
-
-    if (0 != z_get(z_loan(session), 
-                   z_keyexpr(std::to_string(uriHash).c_str()),
-                   "",
-                   z_move(channel.send), 
-                   &opts)) {
+    if (0 != z_get(z_loan(session_), z_keyexpr(std::to_string(uriHash).c_str()), "", z_move(channel.send), &opts)) {
         spdlog::error("z_get failure");
-
-        return UPayload(nullptr,
-                        0, 
-                        UPayloadType::VALUE);
+        return std::move(future);
     }  
     
+    future = threadPool_->submit(handleReply, z_move(channel));
+
+    if (false == future.valid()) {
+        spdlog::error("failed to invoke method");
+    }
+   
+    return future; 
+}
+
+UPayload ZenohRpcClient::handleReply(z_owned_reply_channel_t *channel) {
+
     z_owned_reply_t reply = z_reply_null();
+    UPayload response (nullptr, 0, UPayloadType::VALUE);
         
-    //TTL exipred 
-    for (z_call(channel.recv, &reply); z_check(reply); z_call(channel.recv, &reply)) {
+    for (z_call(channel->recv, &reply); z_check(reply); z_call(channel->recv, &reply)) {
 
         if (z_reply_is_ok(&reply)) {
             z_sample_t sample = z_reply_ok(&reply);
@@ -136,62 +170,31 @@ UPayload ZenohRpcClient::handleInvokeMethod(const z_owned_session_t &session,
 
             z_drop(z_move(keystr));
 
-            auto tlvVector = MessageParser::instance().getAllTlv(sample.payload.start, 
-                                                                 sample.payload.len);
+            auto tlvVector = MessageParser::getAllTlv(sample.payload.start, sample.payload.len);
      
             if (false == tlvVector.has_value()) {
+
                 spdlog::error("getAllTlv failure");
-
-                return UPayload(nullptr,
-                                0, 
-                                UPayloadType::VALUE);
+                return response;
             }
 
-            auto payload = MessageParser::instance().getPayload(tlvVector.value());    
-            if (false == payload.has_value()) {
+            auto respOpt = MessageParser::getPayload(tlvVector.value());    
+            if (false == respOpt.has_value()) {
                 spdlog::error("getPayload failure");
-
-                return UPayload(nullptr,
-                                0, 
-                                UPayloadType::VALUE);
+                return response;
             }
 
-            spdlog::debug("response received");
-            return std::move(payload.value());
+            response = std::move(respOpt.value());
         } else {
+
             spdlog::error("error received");
-            
-            return UPayload(nullptr,
-                            0, 
-                            UPayloadType::VALUE);
+            z_drop(z_move(reply));
+            z_drop((channel)); 
         }
     }
 
     z_drop(z_move(reply));
-    z_drop(z_move(channel));    
+    z_drop((channel));    
 
-    return UPayload(nullptr,
-                    0, 
-                    UPayloadType::VALUE);
-}
-
-std::future<UPayload> ZenohRpcClient::invokeMethod(const UUri &uri, 
-                                                   const UPayload &payload, 
-                                                   const UAttributes &attributes) noexcept {
-    
-    if (UMessageType::REQUEST != attributes.type()) {
-        spdlog::error("Wrong message type = {}",
-                      UMessageTypeToString(attributes.type()).value());
-    }
-    
-    auto future = threadPool_->submit(handleInvokeMethod, 
-                                      std::ref(session_),
-                                      std::ref(uri), 
-                                      std::ref(payload),
-                                      std::ref(attributes));
-    if (false == future.valid()) {
-        spdlog::error("failed to invoke method");
-    }
-   
-    return future; 
+    return response;
 }
