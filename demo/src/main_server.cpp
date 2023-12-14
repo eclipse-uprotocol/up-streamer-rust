@@ -1,6 +1,6 @@
 #include <uprotocol-platform-linux-zenoh/transport/zenohUTransport.h>
 #include <csignal>
-#include <ustatus.pb.h>
+#include <src/main/proto/ustatus.pb.h>
 
 using namespace uprotocol::utransport;
 using namespace uprotocol::uri;

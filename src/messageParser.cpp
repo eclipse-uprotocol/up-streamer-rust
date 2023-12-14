@@ -23,12 +23,12 @@
  */
 
 #include <uprotocol-platform-linux-zenoh/message/messageParser.h>
-#include <uprotocol/tools/base64.h>
-#include <uprotocol/uri/datamodel/UUri.h>
-#include <uprotocol/transport/datamodel/UPayload.h>
-#include <uprotocol/transport/datamodel/UAttributes.h>
-#include <uprotocol/uri/serializer/LongUriSerializer.h>
-#include <uprotocol/uuid/serializer/UuidSerializer.h>
+#include <uprotocol-cpp/tools/base64.h>
+#include <uprotocol-cpp/uri/datamodel/UUri.h>
+#include <uprotocol-cpp/transport/datamodel/UPayload.h>
+#include <uprotocol-cpp/transport/datamodel/UAttributes.h>
+#include <uprotocol-cpp/uri/serializer/LongUriSerializer.h>
+#include <uprotocol-cpp/uuid/serializer/UuidSerializer.h>
 #include <spdlog/spdlog.h>
 
 using namespace uprotocol::utransport;

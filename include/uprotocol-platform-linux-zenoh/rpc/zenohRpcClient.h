@@ -25,10 +25,10 @@
 #ifndef _ZENOH_RPC_CLIENT_H_
 #define _ZENOH_RPC_CLIENT_H_
 
-#include <rpc/RpcClient.h>
+#include <uprotocol-cpp/rpc/RpcClient.h>
 #include <uprotocol-platform-linux-zenoh/utils/ThreadPool.h>
 #include <zenoh.h>
-#include <ustatus.pb.h>
+#include <src/main/proto/ustatus.pb.h>
 
 using namespace std;
 using namespace uprotocol::utransport;

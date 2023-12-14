@@ -23,9 +23,9 @@
  */
  
 #include <uprotocol-platform-linux-zenoh/message/messageBuilder.h>
-#include <uprotocol/tools/base64.h>
-#include <uprotocol/uuid/serializer/UuidSerializer.h>
-#include <uprotocol/uri/serializer/LongUriSerializer.h>
+#include <uprotocol-cpp/tools/base64.h>
+#include <uprotocol-cpp/uuid/serializer/UuidSerializer.h>
+#include <uprotocol-cpp/uri/serializer/LongUriSerializer.h>
 #include <spdlog/spdlog.h>
 
 using namespace uprotocol::uri;

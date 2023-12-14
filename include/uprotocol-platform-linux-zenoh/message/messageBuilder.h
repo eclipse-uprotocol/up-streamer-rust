@@ -27,12 +27,12 @@
 
 #include <cstdint>
 #include <cstring>
-#include <uprotocol/tools/base64.h>
-#include <uprotocol/uri/datamodel/UUri.h>
-#include <uprotocol/transport/datamodel/UPayload.h>
-#include <uprotocol/transport/datamodel/UAttributes.h>
+#include <uprotocol-cpp/tools/base64.h>
+#include <uprotocol-cpp/uri/datamodel/UUri.h>
+#include <uprotocol-cpp/transport/datamodel/UPayload.h>
+#include <uprotocol-cpp/transport/datamodel/UAttributes.h>
 #include <uprotocol-platform-linux-zenoh/message/messageCommon.h>
-#include <ustatus.pb.h>
+#include <src/main/proto/ustatus.pb.h>
 
 using namespace uprotocol::utransport;
 using namespace uprotocol::uri;

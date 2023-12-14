@@ -1,9 +1,9 @@
 #include <uprotocol-platform-linux-zenoh/transport/zenohUTransport.h>
-#include <uprotocol/uuid/serializer/UuidSerializer.h>
+#include <uprotocol-cpp/uuid/serializer/UuidSerializer.h>
 #include <csignal>
 #include <core/usubscription/v3/usubscription.pb.h>
 #include <uri.pb.h>
-#include <ustatus.pb.h>
+#include <src/main/proto/ustatus.pb.h>
 #include <google/protobuf/descriptor.h> // Include the descriptor header
 
 

@@ -27,8 +27,8 @@
 #include <spdlog/spdlog.h>
 #include <uprotocol-platform-linux-zenoh/transport/zenohUTransport.h>
 #include <uprotocol-platform-linux-zenoh/session/zenohSessionManager.h>
-#include <uprotocol/uuid/serializer/UuidSerializer.h>
-#include <uprotocol/uri/serializer/LongUriSerializer.h>
+#include <uprotocol-cpp/uuid/serializer/UuidSerializer.h>
+#include <uprotocol-cpp/uri/serializer/LongUriSerializer.h>
 #include <zenoh.h>
 
 using namespace std;

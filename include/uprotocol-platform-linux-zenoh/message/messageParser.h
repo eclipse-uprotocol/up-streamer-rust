@@ -28,10 +28,10 @@
 #include <unordered_map>
 #include <vector>
 #include <uprotocol-platform-linux-zenoh/message/messageCommon.h>
-#include <uprotocol/tools/base64.h>
-#include <uprotocol/uri/datamodel/UUri.h>
-#include <uprotocol/transport/datamodel/UPayload.h>
-#include <uprotocol/transport/datamodel/UAttributes.h>
+#include <uprotocol-cpp/tools/base64.h>
+#include <uprotocol-cpp/uri/datamodel/UUri.h>
+#include <uprotocol-cpp/transport/datamodel/UPayload.h>
+#include <uprotocol-cpp/transport/datamodel/UAttributes.h>
 
 using namespace uprotocol::utransport;
 using namespace uprotocol::uri;
