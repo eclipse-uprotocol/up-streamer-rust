@@ -40,7 +40,6 @@ cd build
 cmake ../
 make
 ```
-
 ## Show your support
 
 Give a ⭐️ if this project helped you!
