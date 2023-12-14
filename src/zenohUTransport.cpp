@@ -234,7 +234,7 @@ UCode ZenohUTransport::sendPublish(const UUri &uri,
 
         auto message = MessageBuilder::build(attributes, payload);
         if (0 == message.size()) {
-            spdlog::error("MessageBuilder::instance().build failed");
+            spdlog::error("MessageBuilder::build failed");
             break;
         }
         
@@ -474,7 +474,7 @@ void ZenohUTransport::SubHandler(const z_sample_t* sample,
     auto tlvVector = MessageParser::getAllTlv(sample->payload.start, sample->payload.len);
     
     if (false == tlvVector.has_value()) {
-        spdlog::error("MessageParser::instance().getAllTlv failure");
+        spdlog::error("MessageParser::getAllTlv failure");
         return;
     }
 

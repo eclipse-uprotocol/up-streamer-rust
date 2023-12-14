@@ -1,4 +1,4 @@
-project(ZenohUTransport LANGUAGES CXX)
+project(uprotocol-platform-linux-zenoh LANGUAGES CXX)
 
 include_directories(include)
 
@@ -10,6 +10,8 @@ find_library(ZENOH_LIB zenohc)
 find_package(spdlog REQUIRED)
 
 add_definitions(-DSPDLOG_FMT_EXTERNAL)
+
+add_subdirectory(examples)
 
 add_library(
     ${PROJECT_NAME} SHARED 

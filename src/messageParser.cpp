@@ -60,7 +60,7 @@ std::optional<std::unordered_map<Tag,TLV>> MessageParser::getAllTlv(const uint8_
         
         pos += 1;
 
-        if (size > pos) {
+        if (size < pos) {
             return std::nullopt;
         }
 
@@ -68,17 +68,13 @@ std::optional<std::unordered_map<Tag,TLV>> MessageParser::getAllTlv(const uint8_
 
         pos += sizeof(tlv.length);
         
-        if (size > pos) {
+        if (size < pos) {
             return std::nullopt;
         }
 
         tlv.value.insert(tlv.value.end(), data + pos, data + (pos + tlv.length));
 
         pos += tlv.length;
-
-        if (size > pos) {
-            return std::nullopt;
-        }
 
         umap[tlv.type] = tlv;
     }

@@ -134,7 +134,10 @@ std::future<UPayload> ZenohRpcClient::invokeMethod(const UUri &uri,
         return std::move(future);
     }
 
-    z_owned_reply_channel_t channel = zc_reply_fifo_new(16);
+    z_owned_reply_channel_t *channel = new z_owned_reply_channel_t;
+
+   *channel = zc_reply_fifo_new(16);
+
     z_get_options_t opts = z_get_options_default();
 
     opts.timeout_ms = requestTimeoutMs_;
@@ -143,12 +146,12 @@ std::future<UPayload> ZenohRpcClient::invokeMethod(const UUri &uri,
 
     auto uuidStr = UuidSerializer::serializeToString(attributes.id());
 
-    if (0 != z_get(z_loan(session_), z_keyexpr(std::to_string(uriHash).c_str()), "", z_move(channel.send), &opts)) {
+    if (0 != z_get(z_loan(session_), z_keyexpr(std::to_string(uriHash).c_str()), "", z_move(channel->send), &opts)) {
         spdlog::error("z_get failure");
         return std::move(future);
     }  
     
-    future = threadPool_->submit(handleReply, z_move(channel));
+    future = threadPool_->submit(handleReply, channel);
 
     if (false == future.valid()) {
         spdlog::error("failed to invoke method");
@@ -195,6 +198,8 @@ UPayload ZenohRpcClient::handleReply(z_owned_reply_channel_t *channel) {
 
     z_drop(z_move(reply));
     z_drop((channel));    
+
+    delete channel;
 
     return response;
 }
