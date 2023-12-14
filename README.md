@@ -1,4 +1,4 @@
-# Uprotocol C++ SDK 
+# Uprotocol-platform-linux-zenoh
 
 ## Welcome!
 
@@ -23,7 +23,6 @@ At first to make it working, you have to install zenoh-c , using the following i
 ```
 $ git clone https://github.com/eclipse-uprotocol/uprotocol-cpp.git
 $ git clone https://github.com/eclipse-uprotocol/uprotocol-core-api
-
 ```
 ### Setup main CMAKE file, build and test
 ```
@@ -34,6 +33,14 @@ add_subdirectory(uprotocol-core-api)
 add_subdirectory(uprotocol-cpp)
 add_subdirectory(uprotocol-platform-linux-zenoh)
 ```
+### compile
+```
+mkdir build
+cd build
+cmake ../
+make
+```
+
 ## Show your support
 
 Give a ⭐️ if this project helped you!
