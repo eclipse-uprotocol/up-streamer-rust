@@ -24,11 +24,11 @@
 
 #include <uprotocol-platform-linux-zenoh/message/messageBuilder.h>
 #include <uprotocol-platform-linux-zenoh/message/messageParser.h>
-#include <spdlog/spdlog.h>
 #include <uprotocol-platform-linux-zenoh/transport/zenohUTransport.h>
 #include <uprotocol-platform-linux-zenoh/session/zenohSessionManager.h>
 #include <uprotocol-cpp/uuid/serializer/UuidSerializer.h>
 #include <uprotocol-cpp/uri/serializer/LongUriSerializer.h>
+#include <spdlog/spdlog.h>
 #include <zenoh.h>
 
 using namespace std;
@@ -43,8 +43,10 @@ ZenohUTransport& ZenohUTransport::instance(void) noexcept {
     return zenohUtransport;
 }
 
-UCode ZenohUTransport::init() noexcept {
+UStatus ZenohUTransport::init() noexcept {
     
+    UStatus status;
+
     if (0 == refCount_) {
 
         std::lock_guard<std::mutex> lock(mutex_);
@@ -56,13 +58,15 @@ UCode ZenohUTransport::init() noexcept {
 
             if (UCode::OK != ZenohSessionManager::instance().init(sessionConfig)) {
                 spdlog::error("zenohSessionManager::instance().init() failed");
-                return UCode::UNAVAILABLE;
+                status.set_code(UCode::INTERNAL);
+                return status;
             }
 
             if (ZenohSessionManager::instance().getSession().has_value()) {
                 session_ = ZenohSessionManager::instance().getSession().value();
             } else {
-                return UCode::UNAVAILABLE;
+                status.set_code(UCode::INTERNAL);
+                return status;
             }
         }
 
@@ -74,10 +78,14 @@ UCode ZenohUTransport::init() noexcept {
     
     spdlog::info("ZenohUTransport init done refCount = {}", refCount_);
 
-    return UCode::OK;
+    status.set_code(UCode::OK);
+
+    return status;
 }
 
-UCode ZenohUTransport::term() noexcept {
+UStatus ZenohUTransport::term() noexcept {
+
+    UStatus status;
 
     std::lock_guard<std::mutex> lock(mutex_);
 
@@ -98,14 +106,16 @@ UCode ZenohUTransport::term() noexcept {
 
         if (termMaxRetries_ == retries) {
             spdlog::error("timeout elapsed while trying to terminate");
-            return UCode::UNAVAILABLE;
+            status.set_code(UCode::INTERNAL);
+            return status;
         }
 
         for (auto pub : pubHandleMap_) {
             if (0 != z_undeclare_publisher(z_move(pub.second))) {
                 //TODO - print the URI that failed 
                 spdlog::error("z_undeclare_publisher failed");
-                return UCode::INVALID_ARGUMENT;
+                status.set_code(UCode::INVALID_ARGUMENT);
+                return status;
             }
         }
 
@@ -115,7 +125,8 @@ UCode ZenohUTransport::term() noexcept {
             for (auto sub : listenerInfo.second->subVector_) {
                 if (0 != z_undeclare_subscriber(z_move(sub))) {
                     spdlog::error("z_undeclare_publisher failed");
-                    return UCode::INVALID_ARGUMENT;
+                    status.set_code(UCode::INVALID_ARGUMENT);
+                    return status;
                 } else {
                     spdlog::debug("z_undeclare_subscriber done");
                 }
@@ -130,57 +141,53 @@ UCode ZenohUTransport::term() noexcept {
 
         if (UCode::OK != ZenohSessionManager::instance().term()) {
             spdlog::error("zenohSessionManager::instance().term() failed");
-            return UCode::UNAVAILABLE;
+            status.set_code(UCode::INTERNAL);
+            return status;
         }
 
         spdlog::info("ZenohUTransport term done");
     }
 
-    return UCode::OK;
+    status.set_code(UCode::OK);
+
+    return status;
 }
 
-UCode ZenohUTransport::authenticate(const UEntity &uEntity) {
-    
+UStatus ZenohUTransport::send(const UUri &uri, 
+                              const UPayload &payload,
+                              const UAttributes &attributes) noexcept {
+
+    UStatus status;
+
     if (0 == refCount_) {
         spdlog::error("ZenohUTransport is not initialized");
-        return UCode::UNAVAILABLE;
+        status.set_code(UCode::UNAVAILABLE);
+        return status;
     }
 
     if (true == termPending_) {
         spdlog::error("ZenohUTransport is marked for termination");
-        return UCode::UNAVAILABLE;
-    }
-
-    return UCode::UNIMPLEMENTED;
-}
-
-UCode ZenohUTransport::send(const UUri &uri, 
-                            const UPayload &payload,
-                            const UAttributes &attributes) noexcept {
-                 
-    if (0 == refCount_) {
-        spdlog::error("ZenohUTransport is not initialized");
-        return UCode::UNAVAILABLE;
-    }
-
-    if (true == termPending_) {
-        spdlog::error("ZenohUTransport is marked for termination");
-        return UCode::UNAVAILABLE;
+        status.set_code(UCode::UNAVAILABLE);
+        return status;
     }
     
     /* determine according to the URI is the send is and RPC response or a regular publish */
     if (false == uri.getUResource().isRPCMethod()) {
-        return sendPublish(uri, payload, attributes);
+        status.set_code(sendPublish(uri, payload, attributes));
     } else {
-        return sendQueryable(uri, payload, attributes); 
+        status.set_code(sendQueryable(uri, payload, attributes));
     }
+
+    return status;
 }
 
 UCode ZenohUTransport::sendPublish(const UUri &uri, 
                                    const UPayload &payload,
                                    const UAttributes &attributes) noexcept {
 
-    UCode status = UCode::UNAVAILABLE;
+    UCode status;
+
+    status = UCode::UNAVAILABLE;
    
     do {
 
@@ -243,7 +250,7 @@ UCode ZenohUTransport::sendPublish(const UUri &uri,
             break;
         }
         
-        status = UCode::OK;
+       status = UCode::OK;
 
     } while(0);
         
@@ -253,9 +260,8 @@ UCode ZenohUTransport::sendPublish(const UUri &uri,
 }
 
 UCode ZenohUTransport::sendQueryable(const UUri &uri, 
-                                     const UPayload &payload,
-                                     const UAttributes &attributes) noexcept
-{
+                                       const UPayload &payload,
+                                       const UAttributes &attributes) noexcept {
 
     if (UMessageType::RESPONSE != attributes.type()) {
         spdlog::error("a Wrong message type = {}", UMessageTypeToString(attributes.type()).value());
@@ -291,7 +297,7 @@ UCode ZenohUTransport::sendQueryable(const UUri &uri,
 
     if (0 != z_query_reply(query, z_query_keyexpr(query), message.data(), message.size(), &options)) {
         spdlog::error("z_query_reply failed");
-        return UCode::UNAVAILABLE;  
+        return UCode::INTERNAL;
     }
  
     auto keyStr = z_keyexpr_to_string(z_query_keyexpr(query));
@@ -306,26 +312,29 @@ UCode ZenohUTransport::sendQueryable(const UUri &uri,
     return UCode::OK;
 }
 
-UCode ZenohUTransport::registerListener(const UUri &uri,
-                                        const UListener &listener) noexcept {
+UStatus ZenohUTransport::registerListener(const UUri &uri,
+                                          const UListener &listener) noexcept {
    
-    UCode status;
+    UStatus status;
+
     cbArgumentType* arg;
     std::shared_ptr<ListenerContainer> listenerContainer;
 
     if (0 == refCount_) {
         spdlog::error("ZenohUTransport is not initialized");
-        return UCode::UNAVAILABLE;
+        status.set_code(UCode::UNAVAILABLE);
+        return status;
     }
 
     if (true == termPending_) {
         spdlog::error("ZenohUTransport is marked for termination");
-        return UCode::UNAVAILABLE;
+        status.set_code(UCode::UNAVAILABLE);
+        return status;
     }
 
     do {
 
-        status = UCode::INVALID_ARGUMENT;
+        status.set_code(UCode::OK);
         arg = nullptr;
         listenerContainer = nullptr;
 
@@ -341,11 +350,12 @@ UCode ZenohUTransport::registerListener(const UUri &uri,
             for (const UListener *existingListenerPtr : listenerContainer->listenerVector_) {
                 if (existingListenerPtr == &listener) {
                     spdlog::error("listener already set for URI");
+                    status.set_code(UCode::INVALID_ARGUMENT);
                     break;
                 }
             }
             
-            if (UCode::OK != status) {
+            if (UCode::OK != status.code()) {
                break;
             }
         }
@@ -354,6 +364,7 @@ UCode ZenohUTransport::registerListener(const UUri &uri,
             listenerContainer = make_shared<ListenerContainer>();
             if (nullptr == listenerContainer) {
                 spdlog::error("listenerContainer allocation failure");
+                status.set_code(UCode::INTERNAL);
                 break;
             }
         }
@@ -361,6 +372,7 @@ UCode ZenohUTransport::registerListener(const UUri &uri,
         arg = new cbArgumentType(uri, this, listener);
         if (nullptr == arg) {
             spdlog::error("failed to allocate arguments for callback");
+            status.set_code(UCode::INTERNAL);
             break;
         }
 
@@ -372,6 +384,7 @@ UCode ZenohUTransport::registerListener(const UUri &uri,
             auto sub = z_declare_subscriber(z_loan(session_), z_keyexpr(std::to_string(uriHash).c_str()), z_move(callback), nullptr);
             if (!z_check(sub)) {
                 spdlog::error("z_declare_subscriber failed");
+                status.set_code(UCode::INTERNAL);
                 break;
             }
             
@@ -387,6 +400,7 @@ UCode ZenohUTransport::registerListener(const UUri &uri,
             auto qable = z_declare_queryable(z_loan(session_), z_keyexpr(std::to_string(uriHash).c_str()), z_move(callback), nullptr);
             if (!z_check(qable)) {
                 spdlog::error("failed to create queryable");
+                status.set_code(UCode::INTERNAL);
                 break;
             }
 
@@ -396,11 +410,11 @@ UCode ZenohUTransport::registerListener(const UUri &uri,
 
         listenerMap_[uriHash] = listenerContainer;
 
-        status = UCode::OK;
+        status.set_code(UCode::OK);
 
     } while(0);
 
-    if (UCode::OK != status) {
+    if (UCode::OK != status.code()) {
         
         if (nullptr != listenerContainer) {
             listenerContainer.reset();
@@ -414,26 +428,30 @@ UCode ZenohUTransport::registerListener(const UUri &uri,
     return status;
 }
 
-UCode ZenohUTransport::unregisterListener(const UUri &uri, 
-                                          const UListener &listener) noexcept {
+UStatus ZenohUTransport::unregisterListener(const UUri &uri, 
+                                            const UListener &listener) noexcept {
+
+    UStatus status;
 
     std::shared_ptr<ListenerContainer> listenerContainer;
 
     if (0 == refCount_) {
         spdlog::error("ZenohUTransport is not initialized");
-        return UCode::UNAVAILABLE;
+        status.set_code(UCode::UNAVAILABLE);
+        return status;
     }
 
     if (true == termPending_) {
         spdlog::error("ZenohUTransport is marked for termination");
-        return UCode::UNAVAILABLE;
+        status.set_code(UCode::UNAVAILABLE);
+        return status;
     }
 
     auto uriHash = std::hash<std::string>{}(LongUriSerializer::serialize(uri));
 
     if (listenerMap_.find(uriHash) == listenerMap_.end()) {
-        spdlog::error("uri is not registered");
-        return UCode::INVALID_ARGUMENT;
+        status.set_code(UCode::INVALID_ARGUMENT);
+        return status;
     }
 
     listenerContainer = listenerMap_[uriHash];
@@ -460,7 +478,8 @@ UCode ZenohUTransport::unregisterListener(const UUri &uri,
         ++index;
     }
 
-    return UCode::OK;
+    status.set_code(UCode::OK);
+    return status;
 }
 
 void ZenohUTransport::SubHandler(const z_sample_t* sample,
@@ -490,7 +509,7 @@ void ZenohUTransport::SubHandler(const z_sample_t* sample,
         return;
     }
 
-    if (UCode::OK != listener->onReceive(uri, payload.value(), attributes.value())) {
+    if (UCode::OK != listener->onReceive(uri, payload.value(), attributes.value()).code()) {
         /*TODO error handling*/
         spdlog::error("listener->onReceive failed");
         return;
@@ -536,7 +555,7 @@ void ZenohUTransport::QueryHandler(const z_query_t *query,
         return;
     }
   
-    if (UCode::OK != listener->onReceive(uri, payload.value(), attributes.value())) {
+    if (UCode::OK != listener->onReceive(uri, payload.value(), attributes.value()).code()) {
        /*TODO error handling*/
        spdlog::error("onReceive failure");
        return;
@@ -572,10 +591,11 @@ UCode ZenohUTransport::mapEncoding(const USerializationHint &encodingIn,
     return UCode::OK;
 }
 
-UCode ZenohUTransport::receive(
-    const UUri &uri, 
-    const UPayload &payload, 
-    const UAttributes &attributes) noexcept {
+UStatus ZenohUTransport::receive(const UUri &uri, 
+                                 const UPayload &payload, 
+                                 const UAttributes &attributes) noexcept {
+
+    UStatus status;
 
     (void)uri;
     (void)payload;
@@ -583,7 +603,9 @@ UCode ZenohUTransport::receive(
 
     spdlog::error("not implemented");
 
-    return UCode::UNAVAILABLE;
+    status.set_code(UCode::UNAVAILABLE);
+
+    return status;
 }
 
 void ZenohUTransport::OnSubscriberClose(void *arg) {

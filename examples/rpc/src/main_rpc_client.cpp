@@ -77,7 +77,7 @@ int main(int argc, char **argv)
         }
     }
 
-    if (UCode::OK != ZenohRpcClient::instance().init())
+    if (UCode::OK != ZenohRpcClient::instance().init().code())
     {
         spdlog::error("ZenohRpcClient::instance().init failed");
         return -1;
@@ -100,7 +100,7 @@ int main(int argc, char **argv)
         sleep(1);
     }
 
-    if (UCode::OK != ZenohRpcClient::instance().term()) {
+    if (UCode::OK != ZenohRpcClient::instance().term().code()) {
         spdlog::error("ZenohRpcClient::instance().term() failed");
         return -1;
     }

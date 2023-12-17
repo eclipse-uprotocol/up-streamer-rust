@@ -43,9 +43,9 @@ void signalHandler(int signal) {
 
 class TimeListener : public UListener {
     
-    UCode onReceive(const uprotocol::uri::UUri &uri, 
-                    const UPayload &payload, 
-                    const UAttributes &attributes) const {
+    UStatus onReceive(const uprotocol::uri::UUri &uri, 
+                      const UPayload &payload, 
+                      const UAttributes &attributes) const {
                         
         (void)uri;
 
@@ -55,15 +55,19 @@ class TimeListener : public UListener {
 
         spdlog::info("time = {}", timeInMilliseconds);
 
-        return UCode::OK;
+        UStatus status;
+
+        status.set_code(UCode::OK);
+
+        return status;
     }
 };
 
 class RandomListener : public UListener {
 
-    UCode onReceive(const uprotocol::uri::UUri &uri, 
-                    const UPayload &payload, 
-                    const UAttributes &attributes) const {
+    UStatus onReceive(const uprotocol::uri::UUri &uri, 
+                      const UPayload &payload, 
+                      const UAttributes &attributes) const {
 
         (void)uri;
 
@@ -73,15 +77,19 @@ class RandomListener : public UListener {
 
         spdlog::info("random = {}", random);
 
-        return UCode::OK;
+        UStatus status;
+        
+        status.set_code(UCode::OK);
+
+        return status;
     }
 };
 
 class CounterListener : public UListener {
 
-    UCode onReceive(const uprotocol::uri::UUri &uri, 
-                    const UPayload &payload, 
-                    const UAttributes &attributes) const {
+    UStatus onReceive(const uprotocol::uri::UUri &uri, 
+                      const UPayload &payload, 
+                      const UAttributes &attributes) const {
 
         (void)uri;
 
@@ -91,7 +99,11 @@ class CounterListener : public UListener {
 
         spdlog::info("counter = {}", counter);
 
-        return UCode::OK;
+        UStatus status;
+        
+        status.set_code(UCode::OK);
+
+        return status;
     }
 };
 
@@ -109,7 +121,7 @@ int main(int argc, char **argv) {
         }
     }
 
-    if (UCode::OK != ZenohUTransport::instance().init()) {
+    if (UCode::OK != ZenohUTransport::instance().init().code()) {
         spdlog::error("ZenohUTransport::instance().init failed");
         return -1;
     }
@@ -120,19 +132,19 @@ int main(int argc, char **argv) {
     
     auto counterUri = UUri(UAuthority::local(), UEntity::longFormat("test.app"), UResource::longFormat("counter"));
 
-    if (UCode::OK != ZenohUTransport::instance().registerListener(timeUri, timeListener)) {
+    if (UCode::OK != ZenohUTransport::instance().registerListener(timeUri, timeListener).code()) {
 
         spdlog::error("ZenohUTransport::instance().registerListener failed");
         return -1;
     }
        
-    if (UCode::OK != ZenohUTransport::instance().registerListener(randomUri, randomListener)) {
+    if (UCode::OK != ZenohUTransport::instance().registerListener(randomUri, randomListener).code()) {
 
         spdlog::error("ZenohUTransport::instance().registerListener failed");
         return -1;
     }
 
-    if (UCode::OK != ZenohUTransport::instance().registerListener(counterUri, counterListener)) {
+    if (UCode::OK != ZenohUTransport::instance().registerListener(counterUri, counterListener).code()) {
 
         spdlog::error("ZenohUTransport::instance().registerListener failed");
         return -1;
@@ -142,25 +154,25 @@ int main(int argc, char **argv) {
         sleep(1);
     }
    
-    if (UCode::OK != ZenohUTransport::instance().unregisterListener(timeUri, timeListener)) {
+    if (UCode::OK != ZenohUTransport::instance().unregisterListener(timeUri, timeListener).code()) {
 
         spdlog::error("ZenohUTransport::instance().unregisterListener failed");
         return -1;
     }
 
-    if (UCode::OK != ZenohUTransport::instance().unregisterListener(randomUri, randomListener)) {
+    if (UCode::OK != ZenohUTransport::instance().unregisterListener(randomUri, randomListener).code()) {
 
         spdlog::error("ZenohUTransport::instance().unregisterListener failed");
         return -1;
     }
 
-    if (UCode::OK != ZenohUTransport::instance().unregisterListener(counterUri, counterListener)) {
+    if (UCode::OK != ZenohUTransport::instance().unregisterListener(counterUri, counterListener).code()) {
 
         spdlog::error("ZenohUTransport::instance().unregisterListener failed");
         return -1;
     }
 
-    if (UCode::OK != ZenohUTransport::instance().term()) {
+    if (UCode::OK != ZenohUTransport::instance().term().code()) {
         spdlog::error("ZenohUTransport::instance().term failed");
         return -1;
     }

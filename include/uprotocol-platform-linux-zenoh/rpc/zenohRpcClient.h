@@ -49,13 +49,13 @@ class ZenohRpcClient : public RpcClient {
         * init the zenohRpcClient 
         * @return Returns OK on SUCCESS and ERROR on failure
         */
-        UCode init() noexcept;
+        UStatus init() noexcept;
 
         /**
         * Terminates the zenoh RPC client  - the API should be called by any class that called init
         * @return Returns OK on SUCCESS and ERROR on failure
         */
-        UCode term() noexcept; 
+        UStatus term() noexcept; 
 
         /**
         * Support for RPC method invocation.

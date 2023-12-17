@@ -41,10 +41,11 @@ void signalHandler(int signal) {
 
 class RpcListener : public UListener {
 
-    UCode onReceive(const UUri &uri, 
-                    const UPayload &payload, 
-                    const UAttributes &attributes) const {
+    UStatus onReceive(const UUri &uri, 
+                      const UPayload &payload, 
+                      const UAttributes &attributes) const {
 
+        
         auto currentTime = std::chrono::system_clock::now();
         auto duration = currentTime.time_since_epoch();
         
@@ -63,7 +64,10 @@ class RpcListener : public UListener {
 
         ZenohUTransport::instance().send(uri, response, builder.build());
 
-        return UCode::OK;
+        UStatus status;
+        status.set_code(UCode::OK);
+
+        return status;
     }
     
 };
@@ -80,14 +84,14 @@ int main(int argc, char **argv)
         }
     }
 
-    if (UCode::OK != ZenohUTransport::instance().init()) {
+    if (UCode::OK != ZenohUTransport::instance().init().code()) {
         spdlog::error("ZenohRpcServer::instance().init failed");
         return -1;
     }
 
     auto rpcUri = UUri(UAuthority::local(), UEntity::longFormat("test_rpc.app"), UResource::forRpcRequest("getTime"));;
 
-    if (UCode::OK != ZenohUTransport::instance().registerListener(rpcUri, rpcListener)) {
+    if (UCode::OK != ZenohUTransport::instance().registerListener(rpcUri, rpcListener).code()) {
         spdlog::error("ZenohRpcServer::instance().registerListener failed");
         return -1;
     }
@@ -96,12 +100,12 @@ int main(int argc, char **argv)
         sleep(1);
     }
 
-    if (UCode::OK != ZenohUTransport::instance().unregisterListener(rpcUri, rpcListener)) {
+    if (UCode::OK != ZenohUTransport::instance().unregisterListener(rpcUri, rpcListener).code()) {
         spdlog::error("ZenohRpcServer::instance().unregisterListener failed");
         return -1;
     }
 
-    if (UCode::OK != ZenohUTransport::instance().term()) {
+    if (UCode::OK != ZenohUTransport::instance().term().code()) {
         spdlog::error("ZenohUTransport::instance().term failed");
         return -1;
     }

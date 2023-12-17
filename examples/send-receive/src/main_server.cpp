@@ -86,7 +86,7 @@ UCode sendMessage(UUri &uri,
 
     UPayload payload(buffer, size, UPayloadType::VALUE);
    
-    if (UCode::OK != ZenohUTransport::instance().send(uri, payload, attributes)) {
+    if (UCode::OK != ZenohUTransport::instance().send(uri, payload, attributes).code()) {
         spdlog::error("ZenohUTransport::instance().send failed");
         return UCode::UNAVAILABLE;
     }
@@ -104,7 +104,7 @@ int main(int argc, char **argv) {
         }
     }
 
-    if (UCode::OK != ZenohUTransport::instance().init()) {
+    if (UCode::OK != ZenohUTransport::instance().init().code()) {
         spdlog::error("ZenohUTransport::instance().init failed");
         return -1;
     }
@@ -135,7 +135,7 @@ int main(int argc, char **argv) {
          sleep(1);
     }
 
-    if (UCode::OK != ZenohUTransport::instance().term()) {
+    if (UCode::OK != ZenohUTransport::instance().term().code()) {
         spdlog::error("ZenohUTransport::instance().term() failed");
         return -1;
     }

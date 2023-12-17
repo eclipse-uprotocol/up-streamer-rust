@@ -56,22 +56,13 @@ class ZenohUTransport : public UTransport {
         * init the zenohUTransport 
         * @return Returns OK on SUCCESS and ERROR on failure
         */
-        UCode init() noexcept;
+        UStatus init() noexcept;
 
         /**
         * Terminates the zenoh utransport  - the API should be called by any class that called init
         * @return Returns OK on SUCCESS and ERROR on failure
         */
-        UCode term() noexcept; 
-
-        /**
-        * API used to authenticate with the underlining transport layer that the uEntity passed
-        * matches the transport specific identity. MUST pass a resolved UUri.
-        * @param uEntity Resolved UEntity
-        * @return Returns OKSTATUS if authenticate was successful, FAILSTATUS if the calling uE 
-        * is not authenticated.
-        */
-        UCode authenticate(const UEntity &uEntity);
+        UStatus term() noexcept; 
 
         /**
         * Transmit UPayload to the topic using the attributes defined in UTransportAttributes.
@@ -81,9 +72,9 @@ class ZenohUTransport : public UTransport {
         * @return Returns OKSTATUS if the payload has been successfully sent (ACK'ed), otherwise it
         * returns FAILSTATUS with the appropriate failure.
         */
-        UCode send(const UUri &uri, 
-                   const UPayload &payload,
-                   const UAttributes &attributes) noexcept;
+        UStatus send(const UUri &uri, 
+                     const UPayload &payload,
+                     const UAttributes &attributes) noexcept;
 
         /**
         * Register listener to be called when UPayload is received for the specific topic.
@@ -92,8 +83,8 @@ class ZenohUTransport : public UTransport {
         * @return Returns OKSTATUS if the listener is unregistered correctly, otherwise it returns FAILSTATUS
         * with the appropriate failure.
         */ 
-        UCode registerListener(const UUri &uri,
-                               const UListener &listener) noexcept;
+        UStatus registerListener(const UUri &uri,
+                                 const UListener &listener) noexcept;
 
         /**
         * Unregister a listener for a given topic. Messages arriving on this topic will no longer be processed
@@ -103,12 +94,12 @@ class ZenohUTransport : public UTransport {
         * @return Returns OKSTATUS if the listener is unregistered correctly, otherwise it returns FAILSTATUS
         * with the appropriate failure.
         */
-        UCode unregisterListener(const UUri &uri, 
-                                 const UListener &listener) noexcept;
+        UStatus unregisterListener(const UUri &uri, 
+                                   const UListener &listener) noexcept;
 
-        UCode receive(const UUri &uri, 
-                      const UPayload &payload, 
-                      const UAttributes &attributes) noexcept;
+        UStatus receive(const UUri &uri, 
+                        const UPayload &payload, 
+                        const UAttributes &attributes) noexcept;
 
     private:
 

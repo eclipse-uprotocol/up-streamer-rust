@@ -48,7 +48,9 @@ ZenohRpcClient& ZenohRpcClient::instance(void) noexcept {
     return rpcClient;
 }
 
-UCode ZenohRpcClient::init() noexcept {
+UStatus ZenohRpcClient::init() noexcept {
+
+    UStatus status;
 
     if (0 == refCount_) {
 
@@ -60,19 +62,22 @@ UCode ZenohRpcClient::init() noexcept {
 
             if (UCode::OK != ZenohSessionManager::instance().init(config)) {
                 spdlog::error("zenohSessionManager::instance().init() failed");
-                return UCode::UNAVAILABLE;
+                status.set_code(UCode::UNAVAILABLE);
+                return status;
             }
 
             if (ZenohSessionManager::instance().getSession().has_value()) {
                 session_ = ZenohSessionManager::instance().getSession().value();
             } else {
-                return UCode::UNAVAILABLE;
+                status.set_code(UCode::UNAVAILABLE);
+                return status;
             }
 
             threadPool_ = make_shared<ThreadPool>(threadPoolSize_);
             if (nullptr == threadPool_) {
                 spdlog::error("failed to create thread pool");
-                return UCode::UNAVAILABLE;
+                status.set_code(UCode::UNAVAILABLE);
+                return status;
             }
 
             threadPool_->init();
@@ -84,11 +89,15 @@ UCode ZenohRpcClient::init() noexcept {
         refCount_.fetch_add(1);
     }
 
-    return UCode::OK;
+    status.set_code(UCode::OK);
+
+    return status;
 }
 
-UCode ZenohRpcClient::term() noexcept {
+UStatus ZenohRpcClient::term() noexcept {
 
+    UStatus status;
+    
     std::lock_guard<std::mutex> lock(mutex_);
 
     refCount_.fetch_sub(1);
@@ -99,11 +108,14 @@ UCode ZenohRpcClient::term() noexcept {
 
         if (UCode::OK != ZenohSessionManager::instance().term()) {
             spdlog::error("zenohSessionManager::instance().term() failed");
-            return UCode::UNAVAILABLE;
+            status.set_code(UCode::UNAVAILABLE);
+            return status;
         }
     }
 
-    return UCode::OK;
+    status.set_code(UCode::OK);
+
+    return status;
 } 
 
 std::future<UPayload> ZenohRpcClient::invokeMethod(const UUri &uri, 
