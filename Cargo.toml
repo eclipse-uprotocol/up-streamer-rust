@@ -1,0 +1,63 @@
+# Copyright (c) 2024 Contributors to the Eclipse Foundation
+#
+# See the NOTICE file(s) distributed with this work for additional
+# information regarding copyright ownership.
+#
+# This program and the accompanying materials are made available under the
+# terms of the Apache License Version 2.0 which is available at
+# https://www.apache.org/licenses/LICENSE-2.0
+#
+# SPDX-License-Identifier: Apache-2.0
+
+[workspace]
+resolver = "2"
+members = [
+    "up-streamer",
+]
+
+[workspace.package]
+rust-version = "1.66.1"
+version = "0.1.5-dev" # uProtocol version
+repository = "https://github.com/eclipse-uprotocol/uprotocol-platform-linux-zenoh"
+homepage = "https://github.com/eclipse-uprotocol"
+authors = [
+    "Pete LeVasseur <plevasseur@gmail.com>",
+]
+edition = "2021"
+keywords = ["uProtocol", "SDK"]
+license = "Apache-2.0"
+
+[workspace.dependencies]
+async-std = { version = "1.12.0", features = ["unstable", "attributes"] } # unstable feature needed for task::spawn_local()
+async-trait = { version = "0.1" }
+env_logger = { version = "0.10.1" }
+futures = { version = "0.3.30" }
+log = { version = "0.4.20" }
+prost = { version = "0.12" }
+prost-types = { version = "0.12" }
+serde_json = { version = "1.0.111" }
+uuid = { version = "1.7.0" }
+# pete version with hashable uuris
+up-rust = { git = "https://github.com/PLeVasseur/uprotocol-rust_fork", branch = "feature/hashable_uuris" }
+# upstream
+# up-rust = { git = "https://github.com/eclipse-uprotocol/up-rust", rev = "68c8a1d94f0006daf4ba135c9cbbfddcd793108d" }
+
+
+[profile.dev]
+debug = true
+opt-level = 0
+
+[profile.fast]
+inherits = "release"
+opt-level = 3
+debug = true
+debug-assertions = true
+overflow-checks = true
+lto = false
+
+[profile.release]
+debug = false     # If you want debug symbol in release mode, set the env variable: RUSTFLAGS=-g
+lto = "fat"
+codegen-units = 1
+opt-level = 3
+panic = "abort"
