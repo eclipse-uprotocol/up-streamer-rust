@@ -1,0 +1,57 @@
+# Copyright (c) 2024 Contributors to the Eclipse Foundation
+#
+# See the NOTICE file(s) distributed with this work for additional
+# information regarding copyright ownership.
+#
+# This program and the accompanying materials are made available under the
+# terms of the Apache License Version 2.0 which is available at
+# https://www.apache.org/licenses/LICENSE-2.0
+#
+# SPDX-License-Identifier: Apache-2.0
+
+[workspace]
+resolver = "2"
+members = [
+    "up-streamer",
+]
+
+[workspace.package]
+rust-version = "1.76.0"
+version = "0.1.5-dev" # uProtocol version
+repository = "https://github.com/eclipse-uprotocol/up-streamer-rust"
+homepage = "https://github.com/eclipse-uprotocol"
+edition = "2021"
+keywords = ["uProtocol", "SDV", "routing", "streamer"]
+license = "Apache-2.0"
+
+[workspace.dependencies]
+async-std = { version = "1.12.0", features = ["attributes"] }
+async-trait = { version = "0.1" }
+env_logger = { version = "0.10.1" }
+futures = { version = "0.3.30" }
+log = { version = "0.4.20" }
+prost = { version = "0.12" }
+prost-types = { version = "0.12" }
+serde_json = { version = "1.0.111" }
+uuid = { version = "1.7.0" }
+up-rust = { default-features = false, git = "https://github.com/eclipse-uprotocol/up-rust", rev = "f5248a89cf1db6232f463ee3ce7b1cb20d79cfdb" }
+
+
+[profile.dev]
+debug = true
+opt-level = 0
+
+[profile.fast]
+inherits = "release"
+opt-level = 3
+debug = true
+debug-assertions = true
+overflow-checks = true
+lto = false
+
+[profile.release]
+debug = false     # If you want debug symbol in release mode, set the env variable: RUSTFLAGS=-g
+lto = "fat"
+codegen-units = 1
+opt-level = 3
+panic = "abort"
