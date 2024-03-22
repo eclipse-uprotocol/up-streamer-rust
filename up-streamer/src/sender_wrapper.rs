@@ -19,7 +19,7 @@ use up_rust::{UUIDBuilder, UUID};
 
 #[derive(Clone)]
 pub(crate) struct SenderWrapper<T> {
-    id: UUID,
+    pub(crate) id: UUID,
     sender: Arc<Sender<T>>,
 }
 

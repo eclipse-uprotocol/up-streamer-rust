@@ -19,6 +19,7 @@ use async_std::sync::{Arc, Mutex};
 use async_std::task;
 use futures::select;
 use futures::FutureExt;
+use log::*;
 use std::collections::HashMap;
 use std::hash::Hash;
 use std::rc::Rc;
@@ -26,6 +27,12 @@ use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
 use up_rust::{UAuthority, UCode, UMessage, UStatus, UTransport, UUri};
+
+const UTRANSPORT_ROUTER_TAG: &str = "UTransportRouter";
+
+const UTRANSPORT_ROUTER_HANDLE_TAG: &str = "UTransportRouterHandle:";
+const UTRANSPORT_ROUTER_HANDLE_FN_REGISTER_TAG: &str = "register():";
+const UTRANSPORT_ROUTER_HANDLE_FN_UNREGISTER_TAG: &str = "unregister():";
 
 /// A [`UTransportRouterHandle`] which is returned from starting a [`UTransportRouter`]
 ///
@@ -43,7 +50,17 @@ impl UTransportRouterHandle {
         out_authority: UAuthority,
         out_sender_wrapper: SenderWrapper<UMessage>,
     ) -> Result<(), UStatus> {
-        println!("{}: inside of register", &self.name);
+        if log_enabled!(Level::Debug) {
+            debug!(
+                "{}:{}:{} Sending registration request for: ({:?}, {:?}, {})",
+                &self.name,
+                &UTRANSPORT_ROUTER_HANDLE_TAG,
+                &UTRANSPORT_ROUTER_HANDLE_FN_REGISTER_TAG,
+                &in_authority,
+                &out_authority,
+                &out_sender_wrapper.id
+            );
+        }
         let (tx_result, rx_result) = bounded(1);
         match self
             .command_sender
@@ -101,7 +118,17 @@ impl UTransportRouterHandle {
         out_authority: UAuthority,
         out_sender_wrapper: SenderWrapper<UMessage>,
     ) -> Result<(), UStatus> {
-        println!("{}: inside of unregister", &self.name);
+        if log_enabled!(Level::Debug) {
+            debug!(
+                "{}:{}:{} Sending unregistration request for: ({:?}, {:?}, {})",
+                &self.name,
+                &UTRANSPORT_ROUTER_HANDLE_TAG,
+                &UTRANSPORT_ROUTER_HANDLE_FN_UNREGISTER_TAG,
+                &in_authority,
+                &out_authority,
+                &out_sender_wrapper.id
+            );
+        }
         let (tx_result, rx_result) = bounded(1);
         self.command_sender
             .send(UTransportRouterCommand::Unregister(
@@ -277,6 +304,7 @@ impl UTransportRouter {
     where
         T: UTransportBuilder + 'static,
     {
+        let name = format!("{UTRANSPORT_ROUTER_TAG}:{name}");
         let (tx, rx) = mpsc::channel();
 
         println!("{name}: before spawning thread");

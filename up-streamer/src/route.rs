@@ -12,8 +12,12 @@
  ********************************************************************************/
 
 use crate::utransport_router::UTransportRouterHandle;
+use log::*;
 use std::sync::Arc;
 use up_rust::UAuthority;
+
+const ROUTE_TAG: &str = "Route:";
+const ROUTEFN_NEW_TAG: &str = "new():";
 
 ///
 /// [`Route`] is defined as a combination of [`UAuthority`][up_rust::UAuthority] and
@@ -117,6 +121,22 @@ impl Route {
         authority: &UAuthority,
         transport_router_handle: &Arc<UTransportRouterHandle>,
     ) -> Self {
+        // Try to initiate logging.
+        // Required in case of dynamic lib, otherwise no logs.
+        // But cannot be done twice in case of static link.
+        let _ = env_logger::try_init();
+        if log_enabled!(Level::Debug) {
+            debug!(
+                "{}:{}:{} Creating Route from: ({:?}, {})",
+                &transport_router_handle.name,
+                &ROUTE_TAG,
+                &ROUTEFN_NEW_TAG,
+                &authority,
+                &transport_router_handle.name
+            );
+        }
+        // TODO: May want to consider having a failure path for new() as well
+        //  Have to consider if there's conditions that can occur
         Self {
             authority: authority.clone(),
             transport_router_handle: transport_router_handle.clone(),

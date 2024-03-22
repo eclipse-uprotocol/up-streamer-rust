@@ -12,9 +12,14 @@
  ********************************************************************************/
 
 use crate::route::Route;
+use log::*;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use up_rust::UStatus;
+
+const USTREAMER_TAG: &str = "UStreamer:";
+const USTREAMER_FN_ADD_FORWARDING_RULE_TAG: &str = "add_forwarding_rule():";
+const USTREAMER_FN_DELETE_FORWARDING_RULE_TAG: &str = "delete_forwarding_rule():";
 
 /// A [`UStreamer`] is used to coordinate the addition and deletion of forwarding rules between
 /// [`Route`][crate::Route]s
@@ -232,11 +237,12 @@ pub struct UStreamer {
 
 impl UStreamer {
     pub fn new(name: &str) -> Self {
-        // Try to initiate login.
+        let name = format!("{USTREAMER_TAG}:{name}:");
+        // Try to initiate logging.
         // Required in case of dynamic lib, otherwise no logs.
         // But cannot be done twice in case of static link.
         let _ = env_logger::try_init();
-        log::debug!("UStreamer started: {}", &name);
+        debug!("{}: UStreamer started", &name);
 
         Self {
             name: name.to_string(),
@@ -260,14 +266,29 @@ impl UStreamer {
     /// * already have this forwarding rule registered
     /// * attempting to forward onto the same [`Route`][crate::Route]
     pub async fn add_forwarding_rule(&self, r#in: Route, out: Route) -> Result<(), UStatus> {
-        println!("UStreamer::add_forwarding_rule()");
         let out_message_sender = &out.get_transport_router_handle().clone().message_sender;
-        println!("r#in.get_authority(): {:#}", &r#in.get_authority());
 
-        let mut hasher = DefaultHasher::new();
-        out_message_sender.hash(&mut hasher);
-        let hash = hasher.finish();
-        println!("in_message_sender hash: {}", hash);
+        if log_enabled!(Level::Debug) {
+            let mut hasher = DefaultHasher::new();
+            out_message_sender.hash(&mut hasher);
+            let hash = hasher.finish();
+            debug!(
+                "{}:{} r#in.get_authority(): {:?}",
+                &self.name,
+                &USTREAMER_FN_ADD_FORWARDING_RULE_TAG,
+                &r#in.get_authority()
+            );
+            debug!(
+                "{}:{} out.get_authority(): {:?}",
+                &self.name,
+                &USTREAMER_FN_ADD_FORWARDING_RULE_TAG,
+                &out.get_authority()
+            );
+            debug!(
+                "{}:{} out_message_sender hash: {}",
+                &self.name, &USTREAMER_FN_ADD_FORWARDING_RULE_TAG, hash
+            );
+        }
 
         r#in.get_transport_router_handle()
             .register(
@@ -296,6 +317,29 @@ impl UStreamer {
     /// * attempting to delete a forwarding rule where we would forward onto the same [`Route`][crate::Route]
     pub async fn delete_forwarding_rule(&self, r#in: Route, out: Route) -> Result<(), UStatus> {
         let out_message_sender = &out.get_transport_router_handle().clone().message_sender;
+
+        if log_enabled!(Level::Debug) {
+            let mut hasher = DefaultHasher::new();
+            out_message_sender.hash(&mut hasher);
+            let hash = hasher.finish();
+            debug!(
+                "{}:{} r#in.get_authority(): {:?}",
+                &self.name,
+                &USTREAMER_FN_DELETE_FORWARDING_RULE_TAG,
+                &r#in.get_authority()
+            );
+            debug!(
+                "{}:{} out.get_authority(): {:?}",
+                &self.name,
+                &USTREAMER_FN_DELETE_FORWARDING_RULE_TAG,
+                &out.get_authority()
+            );
+            debug!(
+                "{}:{} out_message_sender hash: {}",
+                &self.name, &USTREAMER_FN_DELETE_FORWARDING_RULE_TAG, hash
+            );
+        }
+
         r#in.get_transport_router_handle()
             .unregister(
                 r#in.get_authority(),
