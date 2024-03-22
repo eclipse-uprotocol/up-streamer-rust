@@ -41,7 +41,7 @@ impl UTransportRouterHandle {
         &self,
         in_authority: UAuthority,
         out_authority: UAuthority,
-        in_sender_wrapper: SenderWrapper<UMessage>,
+        out_sender_wrapper: SenderWrapper<UMessage>,
     ) -> Result<(), UStatus> {
         println!("{}: inside of register", &self.name);
         let (tx_result, rx_result) = bounded(1);
@@ -51,7 +51,7 @@ impl UTransportRouterHandle {
                 RegisterUnregisterControl {
                     in_authority,
                     out_authority,
-                    in_sender_wrapper,
+                    out_sender_wrapper,
                     result_sender: tx_result,
                 },
             ))
@@ -99,7 +99,7 @@ impl UTransportRouterHandle {
         &self,
         in_authority: UAuthority,
         out_authority: UAuthority,
-        in_sender_wrapper: SenderWrapper<UMessage>,
+        out_sender_wrapper: SenderWrapper<UMessage>,
     ) -> Result<(), UStatus> {
         println!("{}: inside of unregister", &self.name);
         let (tx_result, rx_result) = bounded(1);
@@ -108,7 +108,7 @@ impl UTransportRouterHandle {
                 RegisterUnregisterControl {
                     in_authority,
                     out_authority,
-                    in_sender_wrapper,
+                    out_sender_wrapper,
                     result_sender: tx_result,
                 },
             ))
@@ -152,7 +152,7 @@ impl UTransportRouterHandle {
 pub(crate) struct RegisterUnregisterControl {
     in_authority: UAuthority,
     out_authority: UAuthority,
-    in_sender_wrapper: SenderWrapper<UMessage>,
+    out_sender_wrapper: SenderWrapper<UMessage>,
     result_sender: Sender<Result<(), UStatus>>,
 }
 
@@ -325,7 +325,7 @@ impl UTransportRouter {
 pub(crate) struct ListenerMapKey {
     in_authority: UAuthority,
     out_authority: UAuthority,
-    in_sender_wrapper: SenderWrapper<UMessage>,
+    out_sender_wrapper: SenderWrapper<UMessage>,
 }
 
 struct UTransportRouterInner {
@@ -449,12 +449,12 @@ impl UTransportRouterInner {
                 let RegisterUnregisterControl {
                     in_authority,
                     out_authority,
-                    in_sender_wrapper,
+                    out_sender_wrapper,
                     result_sender,
                 } = register_control;
 
                 println!("{}: Register command", &self.name);
-                if self.message_sender == in_sender_wrapper {
+                if self.message_sender == out_sender_wrapper {
                     let result_send_res = result_sender
                         .send(Err(UStatus::fail_with_code(
                             UCode::INVALID_ARGUMENT,
@@ -475,7 +475,7 @@ impl UTransportRouterInner {
                 let lister_map_key = ListenerMapKey {
                     in_authority: in_authority.clone(),
                     out_authority: out_authority.clone(),
-                    in_sender_wrapper: in_sender_wrapper.clone(),
+                    out_sender_wrapper: out_sender_wrapper.clone(),
                 };
 
                 if listener_map.get(&lister_map_key.clone()).is_some() {
@@ -496,15 +496,15 @@ impl UTransportRouterInner {
 
                 let closure_name = self.name.clone();
                 if listener_map.get(&lister_map_key.clone()).is_none() {
-                    let in_sender_wrapper_closure = in_sender_wrapper.clone();
+                    let out_sender_wrapper_closure = out_sender_wrapper.clone();
                     let callback_closure: Box<
                         dyn Fn(Result<UMessage, UStatus>) + Send + Sync + 'static,
                     > = Box::new(move |received: Result<UMessage, UStatus>| {
-                        let in_sender_wrapper_closure = in_sender_wrapper_closure.clone();
+                        let out_sender_wrapper_closure = out_sender_wrapper_closure.clone();
                         task::spawn_local(forwarding_callback(
                             closure_name.clone(),
                             received,
-                            in_sender_wrapper_closure.clone(),
+                            out_sender_wrapper_closure.clone(),
                         ));
                     });
 
@@ -531,12 +531,12 @@ impl UTransportRouterInner {
                 let RegisterUnregisterControl {
                     in_authority,
                     out_authority,
-                    in_sender_wrapper,
+                    out_sender_wrapper,
                     result_sender,
                 } = unregister_control;
 
                 println!("{}: Unregister command", &self.name);
-                if self.message_sender == in_sender_wrapper {
+                if self.message_sender == out_sender_wrapper {
                     let result_send_res = result_sender
                         .send(Err(UStatus::fail_with_code(
                             UCode::INVALID_ARGUMENT,
@@ -557,7 +557,7 @@ impl UTransportRouterInner {
                 let lister_map_key = ListenerMapKey {
                     in_authority: in_authority.clone(),
                     out_authority: out_authority.clone(),
-                    in_sender_wrapper: in_sender_wrapper.clone(),
+                    out_sender_wrapper: out_sender_wrapper.clone(),
                 };
 
                 if listener_map.remove(&lister_map_key).is_none() {
@@ -602,11 +602,11 @@ impl UTransportRouterInner {
 async fn forwarding_callback(
     name: Arc<String>,
     received: Result<UMessage, UStatus>,
-    in_sender_wrapper: SenderWrapper<UMessage>,
+    out_sender_wrapper: SenderWrapper<UMessage>,
 ) {
     // println!("{}: inside of forwarding_callback", name);
     if let Ok(msg) = received {
-        let forward_result = in_sender_wrapper.send(msg).await;
+        let forward_result = out_sender_wrapper.send(msg).await;
         if let Err(e) = forward_result {
             println!(
                 "{}: unable to forwarding_callback(), with error: {:?}",

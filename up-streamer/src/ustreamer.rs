@@ -246,26 +246,19 @@ impl UStreamer {
     /// * attempting to forward onto the same [`Route`][crate::Route]
     pub async fn add_forwarding_rule(&self, r#in: Route, out: Route) -> Result<(), UStatus> {
         println!("UStreamer::add_forwarding_rule()");
-        let in_message_sender = &r#in.get_transport_router_handle().clone().message_sender;
+        let out_message_sender = &out.get_transport_router_handle().clone().message_sender;
         println!("r#in.get_authority(): {:#}", &r#in.get_authority());
 
-        // Create a hasher
         let mut hasher = DefaultHasher::new();
-
-        // Hash the instance of SenderWrapper
-        in_message_sender.hash(&mut hasher);
-
-        // Obtain the hash
+        out_message_sender.hash(&mut hasher);
         let hash = hasher.finish();
         println!("in_message_sender hash: {}", hash);
 
-        // ah okay, so I need to include not only the in authority but the out authority
-
-        out.get_transport_router_handle()
+        r#in.get_transport_router_handle()
             .register(
                 r#in.get_authority(),
                 out.get_authority(),
-                in_message_sender.clone(),
+                out_message_sender.clone(),
             )
             .await
     }
@@ -287,12 +280,12 @@ impl UStreamer {
     /// * No such route has been added
     /// * attempting to delete a forwarding rule where we would forward onto the same [`Route`][crate::Route]
     pub async fn delete_forwarding_rule(&self, r#in: Route, out: Route) -> Result<(), UStatus> {
-        let in_message_sender = &r#in.get_transport_router_handle().clone().message_sender;
-        out.get_transport_router_handle()
+        let out_message_sender = &out.get_transport_router_handle().clone().message_sender;
+        r#in.get_transport_router_handle()
             .unregister(
                 r#in.get_authority(),
                 out.get_authority(),
-                in_message_sender.clone(),
+                out_message_sender.clone(),
             )
             .await
     }
