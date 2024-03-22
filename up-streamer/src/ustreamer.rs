@@ -169,7 +169,7 @@ use up_rust::UStatus;
 /// };
 /// let remote_route = Route::new(&remote_authority, &remote_transport_router_handle);
 ///
-/// let streamer = UStreamer;
+/// let streamer = UStreamer::new("hoge");
 ///
 /// // Add forwarding rules to route local<->remote
 /// assert_eq!(
@@ -225,9 +225,24 @@ use up_rust::UStatus;
 /// # }
 /// ```
 #[derive(Clone)]
-pub struct UStreamer;
+pub struct UStreamer {
+    #[allow(dead_code)]
+    name: String,
+}
 
 impl UStreamer {
+    pub fn new(name: &str) -> Self {
+        // Try to initiate login.
+        // Required in case of dynamic lib, otherwise no logs.
+        // But cannot be done twice in case of static link.
+        let _ = env_logger::try_init();
+        log::debug!("UStreamer started: {}", &name);
+
+        Self {
+            name: name.to_string(),
+        }
+    }
+
     /// Adds a forwarding rule to the [`UStreamer`] based on an in [`Route`][crate::Route] and an
     /// out [`Route`][crate::Route]
     ///
@@ -448,7 +463,7 @@ mod tests {
         };
         let remote_route = Route::new(&remote_authority, &remote_transport_router_handle);
 
-        let streamer = UStreamer;
+        let streamer = UStreamer::new("hoge");
 
         // Add forwarding rules to route local<->remote
         assert_eq!(
@@ -548,7 +563,7 @@ mod tests {
         };
         let remote_route_2 = Route::new(&remote_authority_2, &remote_transport_router_handle_2);
 
-        let streamer = UStreamer;
+        let streamer = UStreamer::new("hoge");
 
         // Add forwarding rules to route local_route<->remote_route_1
         assert_eq!(
@@ -620,7 +635,7 @@ mod tests {
         };
         let remote_route_2 = Route::new(&remote_authority_2, &remote_transport_router_handle);
 
-        let streamer = UStreamer;
+        let streamer = UStreamer::new("hoge");
 
         // Add forwarding rules to route local_route<->remote_route_1
         assert_eq!(
