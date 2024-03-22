@@ -12,6 +12,8 @@
  ********************************************************************************/
 
 use async_std::channel::Sender;
+use std::fmt;
+use std::fmt::Debug;
 use std::hash::{Hash, Hasher};
 use std::ops::Deref;
 use std::sync::Arc;
@@ -21,6 +23,12 @@ use up_rust::{UUIDBuilder, UUID};
 pub(crate) struct SenderWrapper<T> {
     pub(crate) id: UUID,
     sender: Arc<Sender<T>>,
+}
+
+impl<T> Debug for SenderWrapper<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "SenderWrapper {{ id: {} }}", self.id)
+    }
 }
 
 impl<T> SenderWrapper<T> {

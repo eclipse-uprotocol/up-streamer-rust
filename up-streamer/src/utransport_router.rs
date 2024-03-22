@@ -20,7 +20,9 @@ use async_std::task;
 use futures::select;
 use futures::FutureExt;
 use log::*;
+use std::any::Any;
 use std::collections::HashMap;
+use std::fmt::Debug;
 use std::hash::Hash;
 use std::rc::Rc;
 use std::sync::mpsc;
@@ -29,6 +31,14 @@ use std::time::Duration;
 use up_rust::{UAuthority, UCode, UMessage, UStatus, UTransport, UUri};
 
 const UTRANSPORT_ROUTER_TAG: &str = "UTransportRouter";
+const UTRANSPORT_ROUTER_FN_START_TAG: &str = "start()";
+
+const UTRANSPORT_ROUTER_INNER_TAG: &str = "UTransportRouterInner:";
+const UTRANSPORT_ROUTER_INNER_FN_START_TAG: &str = "start()";
+const UTRANSPORT_ROUTER_INNER_FN_LAUNCH_TAG: &str = "launch()";
+const UTRANSPORT_ROUTER_INNER_FN_HANDLE_COMMAND_TAG: &str = "handle_command():";
+const UTRANSPORT_ROUTER_INNER_FN_SEND_OVER_TRANSPORT_TAG: &str = "send_over_utransport():";
+const UTRANSPORT_ROUTER_INNER_FN_FORWARDING_CALLBACK_TAG: &str = "forwarding_callback():";
 
 const UTRANSPORT_ROUTER_HANDLE_TAG: &str = "UTransportRouterHandle:";
 const UTRANSPORT_ROUTER_HANDLE_FN_REGISTER_TAG: &str = "register():";
@@ -76,7 +86,6 @@ impl UTransportRouterHandle {
         {
             Ok(_) => {}
             Err(e) => {
-                eprintln!("Failed to send register command: {:?}", e);
                 return Err(UStatus::fail_with_code(
                     UCode::INTERNAL,
                     format!("{}: Unable to forward: {:?}", &self.name, e),
@@ -176,6 +185,7 @@ impl UTransportRouterHandle {
     }
 }
 
+#[derive(Debug)]
 pub(crate) struct RegisterUnregisterControl {
     in_authority: UAuthority,
     out_authority: UAuthority,
@@ -183,6 +193,7 @@ pub(crate) struct RegisterUnregisterControl {
     result_sender: Sender<Result<(), UStatus>>,
 }
 
+#[derive(Debug)]
 pub(crate) enum UTransportRouterCommand {
     Register(RegisterUnregisterControl),
     Unregister(RegisterUnregisterControl),
@@ -304,10 +315,20 @@ impl UTransportRouter {
     where
         T: UTransportBuilder + 'static,
     {
-        let name = format!("{UTRANSPORT_ROUTER_TAG}:{name}");
+        let name = format!("{name}:{UTRANSPORT_ROUTER_TAG}");
         let (tx, rx) = mpsc::channel();
 
-        println!("{name}: before spawning thread");
+        if log_enabled!(Level::Debug) {
+            debug!(
+                "{}:{}:{} Starting UTransportRouter with this configuration: ({:?}, {}, {})",
+                &name,
+                &UTRANSPORT_ROUTER_TAG,
+                &UTRANSPORT_ROUTER_FN_START_TAG,
+                utransport_builder.type_id(),
+                &command_queue_size,
+                &message_queue_size
+            );
+        }
 
         let (command_sender, command_receiver) = bounded(command_queue_size);
         let (message_sender, message_receiver) = bounded(message_queue_size);
@@ -320,24 +341,38 @@ impl UTransportRouter {
             message_receiver,
         };
 
+        debug!(
+            "{}:{}:{} Before starting UTransportRouterInner",
+            &name, &UTRANSPORT_ROUTER_TAG, &UTRANSPORT_ROUTER_FN_START_TAG,
+        );
+
         let name_clone = name.clone();
-        println!("{name_clone}: inside spawned thread");
         let name_clone_clone = name_clone.clone();
         task::block_on(async move {
-            println!("{name_clone_clone}: inside task::block_on()");
+            debug!(
+                "{}:{}:{} Inside task::block_on()",
+                &name_clone_clone, &UTRANSPORT_ROUTER_TAG, &UTRANSPORT_ROUTER_FN_START_TAG,
+            );
             let result = UTransportRouterInner::start(
                 name_clone_clone.clone(),
                 utransport_builder,
                 utransport_channels,
             )
             .await;
-            println!("{name_clone_clone}: after UTransportRouterInner::new()");
+            debug!(
+                "{}:{}:{} After UTransportRouterInner::start()",
+                &name_clone_clone, &UTRANSPORT_ROUTER_TAG, &UTRANSPORT_ROUTER_FN_START_TAG,
+            );
             tx.send(result).unwrap();
-            println!("{name_clone_clone}: after tx.send()");
+            debug!(
+                "{}:{}:{} After Transmitting result back from task",
+                &name_clone_clone, &UTRANSPORT_ROUTER_TAG, &UTRANSPORT_ROUTER_FN_START_TAG,
+            );
         });
-        println!("{name_clone}: came back from task::block_on()");
-
-        println!("after thread::spawn()");
+        debug!(
+            "{}:{}:{} Came back from task::block_on()",
+            &name_clone, &UTRANSPORT_ROUTER_TAG, &UTRANSPORT_ROUTER_FN_START_TAG,
+        );
 
         rx.recv().unwrap()?;
 
@@ -387,16 +422,36 @@ impl UTransportRouterInner {
         T: UTransportBuilder + 'static,
     {
         let name = name.clone();
-        println!("{name}: inside UTransportRouterInner");
+        if log_enabled!(Level::Debug) {
+            debug!(
+                "{}:{}:{} Starting UTransportRouterInner with this configuration: ({:?})",
+                &name,
+                &UTRANSPORT_ROUTER_INNER_TAG,
+                &UTRANSPORT_ROUTER_INNER_FN_START_TAG,
+                utransport_builder.type_id(),
+            );
+        }
 
         let (tx, rx) = mpsc::channel::<Result<(), UStatus>>();
 
-        // Move the clone into the async block.
         thread::spawn(move || {
+            if log_enabled!(Level::Debug) {
+                debug!(
+                    "{}:{}:{} Inside of thread::spawn()",
+                    &name, &UTRANSPORT_ROUTER_INNER_TAG, &UTRANSPORT_ROUTER_INNER_FN_START_TAG,
+                );
+            }
             let mut result = Ok(());
             match utransport_builder.build() {
                 Ok(utransport) => {
-                    println!("{name}: before creating UTransportRouterInner");
+                    if log_enabled!(Level::Debug) {
+                        debug!(
+                            "{}:{}:{} Before creating UTransportRouterInner",
+                            &name,
+                            &UTRANSPORT_ROUTER_INNER_TAG,
+                            &UTRANSPORT_ROUTER_INNER_FN_START_TAG,
+                        );
+                    }
                     let utransport_router_inner = Rc::new(UTransportRouterInner {
                         name: Arc::new(name.to_string()),
                         utransport,
@@ -407,13 +462,26 @@ impl UTransportRouterInner {
                         message_receiver: utransport_channels.message_receiver.clone(),
                     });
 
-                    println!("{name}: after creating UTransportRouterInner");
+                    if log_enabled!(Level::Debug) {
+                        debug!(
+                            "{}:{}:{} After creating UTransportRouterInner",
+                            &name,
+                            &UTRANSPORT_ROUTER_INNER_TAG,
+                            &UTRANSPORT_ROUTER_INNER_FN_START_TAG,
+                        );
+                    }
 
                     let utransport_router_inner_clone = utransport_router_inner.clone();
-                    let name_clone = name.clone();
                     tx.send(result).unwrap();
                     task::block_on(async move {
-                        println!("{name_clone}: inside of task::spawn_local to launch");
+                        if log_enabled!(Level::Debug) {
+                            debug!(
+                                "{}:{}:{} Calling into launch() which will block the newly spawned OS thread",
+                                &name,
+                                &UTRANSPORT_ROUTER_INNER_TAG,
+                                &UTRANSPORT_ROUTER_INNER_FN_START_TAG,
+                            );
+                        }
                         utransport_router_inner_clone
                             .launch(
                                 utransport_channels.command_receiver,
@@ -445,29 +513,80 @@ impl UTransportRouterInner {
         let mut command_fut = command_receiver.recv().fuse();
         let mut message_fut = message_receiver.recv().fuse();
 
-        println!("{}: inside of launch", &self.name);
+        if log_enabled!(Level::Debug) {
+            debug!(
+                "{}:{}:{} Reached launch()",
+                &self.name, &UTRANSPORT_ROUTER_INNER_TAG, &UTRANSPORT_ROUTER_INNER_FN_LAUNCH_TAG,
+            );
+        }
 
         loop {
-            println!("{}: top of loop before select!", &self.name);
+            if log_enabled!(Level::Debug) {
+                debug!(
+                    "{}:{}:{} Top of loop before select!",
+                    &self.name,
+                    &UTRANSPORT_ROUTER_INNER_TAG,
+                    &UTRANSPORT_ROUTER_INNER_FN_LAUNCH_TAG,
+                );
+            }
             select! {
                 command = command_fut => match command {
                     Ok(command) => {
-                        println!("{}: received command", &self.name);
+                        if log_enabled!(Level::Debug) {
+                            debug!(
+                                "{}:{}:{} Received command: ({:?})",
+                                &self.name,
+                                &UTRANSPORT_ROUTER_INNER_TAG,
+                                &UTRANSPORT_ROUTER_INNER_FN_LAUNCH_TAG,
+                                &command
+                            );
+                        }
                         self.handle_command(command).await;
                         command_fut = command_receiver.recv().fuse(); // Re-arm future for the next iteration
                     },
-                    Err(e) => println!("{}: Error receiving a command: {:?}", &self.name, e),
+                    Err(e) => {
+                        error!(
+                            "{}:{}:{} Unable to receive command: error: ({:?})",
+                            &self.name,
+                            &UTRANSPORT_ROUTER_INNER_TAG,
+                            &UTRANSPORT_ROUTER_INNER_FN_LAUNCH_TAG,
+                            e
+                        );
+                    },
                 },
                 message = message_fut => match message {
                     Ok(msg) => {
-                        println!("{}: received message", &self.name);
-                        self.handle_message(msg).await;
+                        if log_enabled!(Level::Debug) {
+                            debug!(
+                                "{}:{}:{} Received a message intended to be sent out over our UTransport: message: {:?}",
+                                &self.name,
+                                &UTRANSPORT_ROUTER_INNER_TAG,
+                                &UTRANSPORT_ROUTER_INNER_FN_LAUNCH_TAG,
+                                &msg
+                            );
+                        }
+                        self.send_over_utransport(msg).await;
                         message_fut = message_receiver.recv().fuse(); // Re-arm future for the next iteration
                     },
-                    Err(e) => println!("{}: Error receiving a message: {:?}", &self.name, e),
+                    Err(e) => {
+                        error!(
+                            "{}:{}:{} Unable to receive message: error: ({:?})",
+                            &self.name,
+                            &UTRANSPORT_ROUTER_INNER_TAG,
+                            &UTRANSPORT_ROUTER_INNER_FN_LAUNCH_TAG,
+                            e
+                        );
+                    },
                 },
             }
-            println!("{}: bottom of launch loop", &self.name);
+            if log_enabled!(Level::Debug) {
+                debug!(
+                    "{}:{}:{} Bottom of loop",
+                    &self.name,
+                    &UTRANSPORT_ROUTER_INNER_TAG,
+                    &UTRANSPORT_ROUTER_INNER_FN_LAUNCH_TAG,
+                );
+            }
         }
     }
 
@@ -481,7 +600,18 @@ impl UTransportRouterInner {
                     result_sender,
                 } = register_control;
 
-                println!("{}: Register command", &self.name);
+                if log_enabled!(Level::Debug) {
+                    debug!(
+                        "{}:{}:{} Received registration request for: ({:?}, {:?}, {})",
+                        &self.name,
+                        &UTRANSPORT_ROUTER_INNER_TAG,
+                        &UTRANSPORT_ROUTER_INNER_FN_HANDLE_COMMAND_TAG,
+                        &in_authority,
+                        &out_authority,
+                        &out_sender_wrapper.id
+                    );
+                }
+
                 if self.message_sender == out_sender_wrapper {
                     let result_send_res = result_sender
                         .send(Err(UStatus::fail_with_code(
@@ -490,9 +620,15 @@ impl UTransportRouterInner {
                         )))
                         .await;
                     if let Err(e) = result_send_res {
-                        println!(
-                            "{}: Unable to return result from handle_command: {:?}",
-                            &self.name, e
+                        error!(
+                            "{}:{}:{} Unable to return result: ({:?}, {:?}, {}), error: {:?}",
+                            &self.name,
+                            &UTRANSPORT_ROUTER_INNER_TAG,
+                            &UTRANSPORT_ROUTER_INNER_FN_HANDLE_COMMAND_TAG,
+                            &in_authority,
+                            &out_authority,
+                            &out_sender_wrapper.id,
+                            e,
                         );
                     }
                     return;
@@ -514,9 +650,15 @@ impl UTransportRouterInner {
                         )))
                         .await;
                     if let Err(e) = result_send_res {
-                        println!(
-                            "{}: Unable to return result from handle_command: {:?}",
-                            &self.name, e
+                        error!(
+                            "{}:{}:{} Unable to return result: ({:?}, {:?}, {}), error: {:?}",
+                            &self.name,
+                            &UTRANSPORT_ROUTER_INNER_TAG,
+                            &UTRANSPORT_ROUTER_INNER_FN_HANDLE_COMMAND_TAG,
+                            &in_authority,
+                            &out_authority,
+                            &out_sender_wrapper.id,
+                            e,
                         );
                     }
                     return;
@@ -549,9 +691,15 @@ impl UTransportRouterInner {
 
                 let result_send_res = result_sender.send(Ok(())).await;
                 if let Err(e) = result_send_res {
-                    println!(
-                        "{}: Unable to return result from handle_command: {:?}",
-                        &self.name, e
+                    error!(
+                        "{}:{}:{} Unable to return result: ({:?}, {:?}, {}), error: {:?}",
+                        &self.name,
+                        &UTRANSPORT_ROUTER_INNER_TAG,
+                        &UTRANSPORT_ROUTER_INNER_FN_HANDLE_COMMAND_TAG,
+                        &in_authority,
+                        &out_authority,
+                        &out_sender_wrapper.id,
+                        e,
                     );
                 }
             }
@@ -563,7 +711,18 @@ impl UTransportRouterInner {
                     result_sender,
                 } = unregister_control;
 
-                println!("{}: Unregister command", &self.name);
+                if log_enabled!(Level::Debug) {
+                    debug!(
+                        "{}:{}:{} Received unregistration request for: ({:?}, {:?}, {})",
+                        &self.name,
+                        &UTRANSPORT_ROUTER_INNER_TAG,
+                        &UTRANSPORT_ROUTER_INNER_FN_HANDLE_COMMAND_TAG,
+                        &in_authority,
+                        &out_authority,
+                        &out_sender_wrapper.id
+                    );
+                }
+
                 if self.message_sender == out_sender_wrapper {
                     let result_send_res = result_sender
                         .send(Err(UStatus::fail_with_code(
@@ -572,9 +731,15 @@ impl UTransportRouterInner {
                         )))
                         .await;
                     if let Err(e) = result_send_res {
-                        println!(
-                            "{}: Unable to return result from handle_command: {:?}",
-                            &self.name, e
+                        error!(
+                            "{}:{}:{} Unable to return result: ({:?}, {:?}, {}), error: {:?}",
+                            &self.name,
+                            &UTRANSPORT_ROUTER_INNER_TAG,
+                            &UTRANSPORT_ROUTER_INNER_FN_HANDLE_COMMAND_TAG,
+                            &in_authority,
+                            &out_authority,
+                            &out_sender_wrapper.id,
+                            e,
                         );
                     }
                     return;
@@ -596,9 +761,15 @@ impl UTransportRouterInner {
                         )))
                         .await;
                     if let Err(e) = result_send_res {
-                        println!(
-                            "{}: Unable to return result from handle_command: {:?}",
-                            &self.name, e
+                        error!(
+                            "{}:{}:{} Unable to return result: ({:?}, {:?}, {}), error: {:?}",
+                            &self.name,
+                            &UTRANSPORT_ROUTER_INNER_TAG,
+                            &UTRANSPORT_ROUTER_INNER_FN_HANDLE_COMMAND_TAG,
+                            &in_authority,
+                            &out_authority,
+                            &out_sender_wrapper.id,
+                            e,
                         );
                     }
                     return;
@@ -606,22 +777,43 @@ impl UTransportRouterInner {
 
                 let result_send_res = result_sender.send(Ok(())).await;
                 if let Err(e) = result_send_res {
-                    println!(
-                        "{}: Unable to return result from handle_command: {:?}",
-                        &self.name, e
+                    error!(
+                        "{}:{}:{} Unable to return result: ({:?}, {:?}, {}), error: {:?}",
+                        &self.name,
+                        &UTRANSPORT_ROUTER_INNER_TAG,
+                        &UTRANSPORT_ROUTER_INNER_FN_HANDLE_COMMAND_TAG,
+                        &in_authority,
+                        &out_authority,
+                        &out_sender_wrapper.id,
+                        e,
                     );
                 }
             }
         }
     }
 
-    async fn handle_message(&self, message: UMessage) {
-        println!("{}: inside handle_message", &self.name);
+    async fn send_over_utransport(&self, message: UMessage) {
+        if log_enabled!(Level::Debug) {
+            debug!(
+                "{}:{}:{} Sending message over UTransport: {:?}",
+                &self.name,
+                &UTRANSPORT_ROUTER_INNER_TAG,
+                &UTRANSPORT_ROUTER_INNER_FN_SEND_OVER_TRANSPORT_TAG,
+                &message.clone(),
+            );
+        }
         let send_result = self.utransport.send(message).await;
+        // unfortunately because send() takes ownership of message, it would be required to clone()
+        // before calling send(). However, that feels wasteful to do for some small percentage of
+        // times that send() doesn't succeed
+        // that's why for now we don't include the message itself in the error!()
         if let Err(e) = send_result {
-            println!(
-                "{}: unable to handle_message(), with error: {:?}",
-                &self.name, e
+            error!(
+                "{}:{}:{} Failed to send message over UTransport: error: {:?}",
+                &self.name,
+                &UTRANSPORT_ROUTER_INNER_TAG,
+                &UTRANSPORT_ROUTER_INNER_FN_SEND_OVER_TRANSPORT_TAG,
+                e
             );
         }
     }
@@ -632,13 +824,25 @@ async fn forwarding_callback(
     received: Result<UMessage, UStatus>,
     out_sender_wrapper: SenderWrapper<UMessage>,
 ) {
-    // println!("{}: inside of forwarding_callback", name);
+    if log_enabled!(Level::Debug) {
+        debug!(
+            "{}:{}:{} Forwarding message from this UTransportRouter onto another UTransportRouter's Receiver<UMessage>: {}",
+            &name,
+            &UTRANSPORT_ROUTER_INNER_TAG,
+            &UTRANSPORT_ROUTER_INNER_FN_FORWARDING_CALLBACK_TAG,
+            &out_sender_wrapper.id
+        );
+    }
     if let Ok(msg) = received {
         let forward_result = out_sender_wrapper.send(msg).await;
         if let Err(e) = forward_result {
-            println!(
-                "{}: unable to forwarding_callback(), with error: {:?}",
-                name, e
+            debug!(
+                "{}:{}:{} Forwarding message from this UTransportRouter onto another UTransportRouter's Receiver<UMessage> failed: {}; error: {:?}",
+                &name,
+                &UTRANSPORT_ROUTER_INNER_TAG,
+                &UTRANSPORT_ROUTER_INNER_FN_FORWARDING_CALLBACK_TAG,
+                &out_sender_wrapper.id,
+                e
             );
         }
     }
