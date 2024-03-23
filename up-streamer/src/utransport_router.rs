@@ -11,7 +11,6 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
-use crate::sender_wrapper::SenderWrapper;
 use crate::utransport_builder::UTransportBuilder;
 use async_std::channel::{bounded, Receiver, Sender};
 use async_std::future::timeout;
@@ -23,12 +22,13 @@ use log::*;
 use std::any::Any;
 use std::collections::HashMap;
 use std::fmt::Debug;
-use std::hash::Hash;
+use std::hash::{Hash, Hasher};
+use std::ops::Deref;
 use std::rc::Rc;
 use std::sync::mpsc;
-use std::thread;
 use std::time::Duration;
-use up_rust::{UAuthority, UCode, UMessage, UStatus, UTransport, UUri};
+use std::{fmt, thread};
+use up_rust::{UAuthority, UCode, UMessage, UStatus, UTransport, UUIDBuilder, UUri, UUID};
 
 const UTRANSPORT_ROUTER_TAG: &str = "UTransportRouter";
 const UTRANSPORT_ROUTER_FN_START_TAG: &str = "start()";
@@ -44,13 +44,55 @@ const UTRANSPORT_ROUTER_HANDLE_TAG: &str = "UTransportRouterHandle:";
 const UTRANSPORT_ROUTER_HANDLE_FN_REGISTER_TAG: &str = "register():";
 const UTRANSPORT_ROUTER_HANDLE_FN_UNREGISTER_TAG: &str = "unregister():";
 
+#[derive(Clone)]
+pub(crate) struct ComparableSender<T> {
+    pub(crate) id: UUID,
+    sender: Arc<Sender<T>>,
+}
+
+impl<T> Debug for ComparableSender<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "SenderWrapper {{ id: {} }}", self.id)
+    }
+}
+
+impl<T> ComparableSender<T> {
+    pub fn new(sender: Sender<T>) -> Self {
+        let id = UUIDBuilder::new().build();
+        let sender = Arc::new(sender);
+        Self { id, sender }
+    }
+}
+
+impl<T> Deref for ComparableSender<T> {
+    type Target = Sender<T>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.sender
+    }
+}
+
+impl<T> Hash for ComparableSender<T> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.id.hash(state);
+    }
+}
+
+impl<T> PartialEq for ComparableSender<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
+}
+
+impl<T> Eq for ComparableSender<T> {}
+
 /// A [`UTransportRouterHandle`] which is returned from starting a [`UTransportRouter`]
 ///
 /// Used to build a [`Route`][crate::Route]
 pub struct UTransportRouterHandle {
     pub(crate) name: String,
     pub(crate) command_sender: Sender<UTransportRouterCommand>,
-    pub(crate) message_sender: SenderWrapper<UMessage>,
+    pub(crate) message_sender: ComparableSender<UMessage>,
 }
 
 impl UTransportRouterHandle {
@@ -58,7 +100,7 @@ impl UTransportRouterHandle {
         &self,
         in_authority: UAuthority,
         out_authority: UAuthority,
-        out_sender_wrapper: SenderWrapper<UMessage>,
+        out_sender_wrapper: ComparableSender<UMessage>,
     ) -> Result<(), UStatus> {
         if log_enabled!(Level::Debug) {
             debug!(
@@ -125,7 +167,7 @@ impl UTransportRouterHandle {
         &self,
         in_authority: UAuthority,
         out_authority: UAuthority,
-        out_sender_wrapper: SenderWrapper<UMessage>,
+        out_sender_wrapper: ComparableSender<UMessage>,
     ) -> Result<(), UStatus> {
         if log_enabled!(Level::Debug) {
             debug!(
@@ -189,7 +231,7 @@ impl UTransportRouterHandle {
 pub(crate) struct RegisterUnregisterControl {
     in_authority: UAuthority,
     out_authority: UAuthority,
-    out_sender_wrapper: SenderWrapper<UMessage>,
+    out_sender_wrapper: ComparableSender<UMessage>,
     result_sender: Sender<Result<(), UStatus>>,
 }
 
@@ -202,7 +244,7 @@ pub(crate) enum UTransportRouterCommand {
 pub(crate) struct UTransportChannels {
     command_sender: Sender<UTransportRouterCommand>,
     command_receiver: Receiver<UTransportRouterCommand>,
-    message_sender: SenderWrapper<UMessage>,
+    message_sender: ComparableSender<UMessage>,
     message_receiver: Receiver<UMessage>,
 }
 
@@ -332,7 +374,7 @@ impl UTransportRouter {
 
         let (command_sender, command_receiver) = bounded(command_queue_size);
         let (message_sender, message_receiver) = bounded(message_queue_size);
-        let message_sender = SenderWrapper::new(message_sender);
+        let message_sender = ComparableSender::new(message_sender);
 
         let utransport_channels = UTransportChannels {
             command_sender: command_sender.clone(),
@@ -388,7 +430,7 @@ impl UTransportRouter {
 pub(crate) struct ListenerMapKey {
     in_authority: UAuthority,
     out_authority: UAuthority,
-    out_sender_wrapper: SenderWrapper<UMessage>,
+    out_sender_wrapper: ComparableSender<UMessage>,
 }
 
 struct UTransportRouterInner {
@@ -400,7 +442,7 @@ struct UTransportRouterInner {
     #[allow(dead_code)] // allow us flexibility in the future
     command_receiver: Receiver<UTransportRouterCommand>,
     #[allow(dead_code)] // allow us flexibility in the future
-    message_sender: SenderWrapper<UMessage>,
+    message_sender: ComparableSender<UMessage>,
     #[allow(dead_code)] // allow us flexibility in the future
     message_receiver: Receiver<UMessage>,
 }
@@ -822,7 +864,7 @@ impl UTransportRouterInner {
 async fn forwarding_callback(
     name: Arc<String>,
     received: Result<UMessage, UStatus>,
-    out_sender_wrapper: SenderWrapper<UMessage>,
+    out_sender_wrapper: ComparableSender<UMessage>,
 ) {
     if log_enabled!(Level::Debug) {
         debug!(
