@@ -1307,6 +1307,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "simple-example"
+version = "0.1.5-dev"
+dependencies = [
+ "async-std",
+ "async-trait",
+ "env_logger",
+ "futures",
+ "log",
+ "prost",
+ "serde_json",
+ "up-rust",
+ "up-streamer",
+ "uuid",
+]
+
+[[package]]
 name = "slab"
 version = "0.4.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
