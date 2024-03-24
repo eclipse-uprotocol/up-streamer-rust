@@ -101,16 +101,44 @@ impl UPClientFoo {
                                 }
                                 UMessageType::UMESSAGE_TYPE_REQUEST => {
                                     let sink_uuri = attr.sink.as_ref();
+                                    println!("{}: Request sink uuri: {sink_uuri:?}", &name_clone);
                                     match sink_uuri {
                                         None => {
-                                            println!("No source uuri!");
+                                            println!("{}: No sink uuri!", &name_clone);
                                         }
                                         Some(topic) => {
+                                            let authority_listeners =
+                                                authority_listeners_clone.lock().await;
+                                            if let Some(authority) = topic.authority.as_ref() {
+                                                println!(
+                                                    "{}: Request: authority: {authority:?}",
+                                                    &name_clone
+                                                );
+
+                                                let authority_listeners =
+                                                    authority_listeners.get(authority);
+                                                match authority_listeners {
+                                                    None => {
+                                                        println!("{}: Request: No authority listeners for topic!", &name_clone);
+                                                    }
+                                                    Some(authority_listeners) => {
+                                                        println!("{}: Request: Found authority listeners for topic!", &name_clone);
+                                                        for al in authority_listeners.iter() {
+                                                            println!("{}: sending out over registration_string: {}", &name_clone, al.0);
+                                                            al.1(Ok(msg.clone()))
+                                                        }
+                                                    }
+                                                }
+                                            }
+
                                             let listeners = listeners_clone.lock().await;
                                             let topic_listeners = listeners.get(topic);
                                             match topic_listeners {
                                                 None => {
-                                                    println!("Request: No listeners for topic!");
+                                                    println!(
+                                                        "{}: Request: No listeners for topic!",
+                                                        &name_clone
+                                                    );
                                                 }
                                                 Some(topic_listeners) => {
                                                     for tl in topic_listeners.iter() {
@@ -189,7 +217,11 @@ impl UTransport for UPClientFoo {
         topic: UUri,
         listener: Box<dyn Fn(Result<UMessage, UStatus>) + Send + Sync + 'static>,
     ) -> Result<String, UStatus> {
+        println!("registering listener for: {topic:?}");
+
         return if topic.resource.is_none() && topic.entity.is_none() {
+            println!("registering authority listener");
+
             let mut authority_listeners = self.authority_listeners.lock().await;
             let Some(authority) = topic.authority.as_ref() else {
                 return Err(UStatus::fail_with_code(
@@ -209,6 +241,8 @@ impl UTransport for UPClientFoo {
                 )),
             }
         } else {
+            println!("registering regular listener");
+
             let mut listeners = self.listeners.lock().await;
             let topic_listeners = listeners.entry(topic).or_default();
             let registration_string = self.uuid_builder.build().to_string();

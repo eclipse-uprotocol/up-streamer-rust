@@ -2,7 +2,7 @@ use crate::up_client_foo::{UPClientFoo, UTransportBuilderFoo};
 use async_std::{channel, task};
 use std::sync::Arc;
 use std::time::Duration;
-use up_rust::UMessageType::UMESSAGE_TYPE_PUBLISH;
+use up_rust::UMessageType::{UMESSAGE_TYPE_PUBLISH, UMESSAGE_TYPE_REQUEST};
 use up_rust::{
     Number, UAttributes, UAuthority, UEntity, UMessage, UPayload, UStatus, UTransport, UUri,
 };
@@ -100,7 +100,7 @@ async fn main() {
         panic!("Unable to register!");
     };
 
-    let message_from_client_1_for_client_2 = UMessage {
+    let publish_from_client_1_for_client_2 = UMessage {
         attributes: Some(UAttributes {
             source: Some(client_1_uuri.clone()).into(),
             type_: UMESSAGE_TYPE_PUBLISH.into(),
@@ -117,8 +117,29 @@ async fn main() {
         ..Default::default()
     };
 
-    let send_res = client_1.send(message_from_client_1_for_client_2).await;
+    let send_res = client_1.send(publish_from_client_1_for_client_2).await;
     assert!(send_res.is_ok());
 
-    task::sleep(Duration::from_millis(1000)).await;
+    let request_from_client_1_for_client_2 = UMessage {
+        attributes: Some(UAttributes {
+            source: Some(client_1_uuri.clone()).into(),
+            sink: Some(client_2_uuri.clone()).into(),
+            type_: UMESSAGE_TYPE_REQUEST.into(),
+            ..Default::default()
+        })
+        .into(),
+        payload: Some(UPayload {
+            length: None,
+            format: Default::default(),
+            data: None,
+            special_fields: Default::default(),
+        })
+        .into(),
+        ..Default::default()
+    };
+
+    // let send_res = client_1.send(request_from_client_1_for_client_2).await;
+    // assert!(send_res.is_ok());
+
+    task::sleep(Duration::from_millis(3000)).await;
 }
