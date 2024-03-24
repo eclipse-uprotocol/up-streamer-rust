@@ -1,6 +1,7 @@
 use crate::up_client_foo::{UPClientFoo, UTransportBuilderFoo};
-use async_std::channel;
+use async_std::{channel, task};
 use std::sync::Arc;
+use std::time::Duration;
 use up_rust::UMessageType::UMESSAGE_TYPE_PUBLISH;
 use up_rust::{
     Number, UAttributes, UAuthority, UEntity, UMessage, UPayload, UStatus, UTransport, UUri,
@@ -12,23 +13,27 @@ mod up_client_foo;
 pub type UtransportListener = Box<dyn Fn(Result<UMessage, UStatus>) + Send + Sync + 'static>;
 
 pub fn listener_fn(received: Result<UMessage, UStatus>) {
-    println!("within listener_fn!");
+    println!("within listener_fn! received: {:?}", received);
 }
 
 #[async_std::main]
 async fn main() {
     let (tx_1, rx_1) = channel::bounded(100);
     let (tx_2, rx_2) = channel::bounded(100);
+    let (tx_3, rx_3) = channel::bounded(100);
+    let (_tx_4, rx_4) = channel::bounded(100);
 
-    let client_1 = UPClientFoo::new(rx_1.clone(), tx_1.clone()).await;
-    let client_2 = UPClientFoo::new(rx_2.clone(), tx_2.clone()).await;
+    let client_1 = UPClientFoo::new("client_1", rx_4.clone(), tx_1.clone()).await;
+    let client_2 = UPClientFoo::new("client_2", rx_3.clone(), tx_2.clone()).await;
 
-    let utransport_builder_1 = UTransportBuilderFoo::new(rx_1.clone(), tx_2.clone());
+    let utransport_builder_1 =
+        UTransportBuilderFoo::new("utransport_builder_1", rx_1.clone(), tx_2.clone());
     let utransport_router_handle_1 = Arc::new(
         UTransportRouter::start("foo_1".to_string(), utransport_builder_1, 100, 100).unwrap(),
     );
 
-    let utransport_builder_2 = UTransportBuilderFoo::new(rx_2.clone(), tx_1.clone());
+    let utransport_builder_2 =
+        UTransportBuilderFoo::new("utransport_builder_2", rx_2.clone(), tx_3.clone());
     let utransport_router_handle_2 = Arc::new(
         UTransportRouter::start("foo_2".to_string(), utransport_builder_2, 100, 100).unwrap(),
     );
@@ -84,14 +89,14 @@ async fn main() {
     let register_res = client_1
         .register_listener(client_2_uuri.clone(), Box::new(listener_fn))
         .await;
-    let (registration_string_client_1) = register_res else {
+    let Ok(_registration_string_client_1) = register_res else {
         panic!("Unable to register!");
     };
 
     let register_res = client_2
         .register_listener(client_1_uuri.clone(), Box::new(listener_fn))
         .await;
-    let (registration_string_client_2) = register_res else {
+    let Ok(_registration_string_client_2) = register_res else {
         panic!("Unable to register!");
     };
 
@@ -114,4 +119,6 @@ async fn main() {
 
     let send_res = client_1.send(message_from_client_1_for_client_2).await;
     assert!(send_res.is_ok());
+
+    task::sleep(Duration::from_millis(1000)).await;
 }

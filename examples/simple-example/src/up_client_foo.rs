@@ -5,27 +5,39 @@ use async_std::task;
 use async_trait::async_trait;
 use std::collections::HashMap;
 use std::sync::Arc;
-use up_rust::{UCode, UMessage, UMessageType, UStatus, UTransport, UUIDBuilder, UUri};
+use up_rust::{UAuthority, UCode, UMessage, UMessageType, UStatus, UTransport, UUIDBuilder, UUri};
 use up_streamer::UTransportBuilder;
 
 pub struct UPClientFoo {
+    #[allow(dead_code)]
+    name: Arc<String>,
+    #[allow(dead_code)]
     protocol_receiver: Receiver<Result<UMessage, UStatus>>,
     protocol_sender: Sender<Result<UMessage, UStatus>>,
     uuid_builder: UUIDBuilder,
     listeners: Arc<Mutex<HashMap<UUri, HashMap<String, UtransportListener>>>>,
+    authority_listeners: Arc<Mutex<HashMap<UAuthority, HashMap<String, UtransportListener>>>>,
 }
 
 impl UPClientFoo {
     pub async fn new(
+        name: &str,
         protocol_receiver: Receiver<Result<UMessage, UStatus>>,
         protocol_sender: Sender<Result<UMessage, UStatus>>,
     ) -> Self {
+        let name = Arc::new(name.to_string());
         let listeners: Arc<Mutex<HashMap<UUri, HashMap<String, UtransportListener>>>> =
             Arc::new(Mutex::new(HashMap::new()));
+        let authority_listeners: Arc<
+            Mutex<HashMap<UAuthority, HashMap<String, UtransportListener>>>,
+        > = Arc::new(Mutex::new(HashMap::new()));
 
+        let name_clone = name.clone();
+        let authority_listeners_clone = authority_listeners.clone();
         let listeners_clone = listeners.clone();
         let protocol_receiver_clone = protocol_receiver.clone();
         task::spawn(async move {
+            let name_clone = name_clone.clone();
             let protocol_receiver_clone = protocol_receiver_clone.clone();
             let listeners_clone = listeners_clone.clone();
 
@@ -34,27 +46,49 @@ impl UPClientFoo {
                     Ok(msg) => {
                         let UMessage { attributes, .. } = &msg;
                         let Some(attr) = attributes.as_ref() else {
-                            println!("No UAttributes!");
+                            println!("{}: No UAttributes!", &name_clone);
                             continue;
                         };
 
                         match attr.type_.enum_value() {
                             Ok(enum_value) => match enum_value {
                                 UMessageType::UMESSAGE_TYPE_UNSPECIFIED => {
-                                    println!("Type unspecified! Fail!");
+                                    println!("{}: Type unspecified! Fail!", &name_clone);
                                 }
                                 UMessageType::UMESSAGE_TYPE_PUBLISH => {
                                     let src_uuri = attr.source.as_ref();
                                     match src_uuri {
                                         None => {
-                                            println!("No source uuri!");
+                                            println!("{}: No source uuri!", &name_clone);
                                         }
                                         Some(topic) => {
+                                            let authority_listeners =
+                                                authority_listeners_clone.lock().await;
+                                            if let Some(authority) = topic.authority.as_ref() {
+                                                let authority_listeners =
+                                                    authority_listeners.get(authority);
+                                                match authority_listeners {
+                                                    None => {
+                                                        println!("{}: Publish: No authority listeners for topic!", &name_clone);
+                                                    }
+                                                    Some(authority_listeners) => {
+                                                        println!("{}: Publish: Found authority listeners for topic!", &name_clone);
+                                                        for al in authority_listeners.iter() {
+                                                            println!("{}: sending out over registration_string: {}", &name_clone, al.0);
+                                                            al.1(Ok(msg.clone()))
+                                                        }
+                                                    }
+                                                }
+                                            }
+
                                             let listeners = listeners_clone.lock().await;
                                             let topic_listeners = listeners.get(topic);
                                             match topic_listeners {
                                                 None => {
-                                                    println!("No listeners for topic!");
+                                                    println!(
+                                                        "{}: Publish: No listeners for topic!",
+                                                        &name_clone
+                                                    );
                                                 }
                                                 Some(topic_listeners) => {
                                                     for tl in topic_listeners.iter() {
@@ -76,7 +110,7 @@ impl UPClientFoo {
                                             let topic_listeners = listeners.get(topic);
                                             match topic_listeners {
                                                 None => {
-                                                    println!("No listeners for topic!");
+                                                    println!("Request: No listeners for topic!");
                                                 }
                                                 Some(topic_listeners) => {
                                                     for tl in topic_listeners.iter() {
@@ -98,7 +132,7 @@ impl UPClientFoo {
                                             let topic_listeners = listeners.get(topic);
                                             match topic_listeners {
                                                 None => {
-                                                    println!("No listeners for topic!");
+                                                    println!("Request: No listeners for topic!");
                                                 }
                                                 Some(topic_listeners) => {
                                                     for tl in topic_listeners.iter() {
@@ -123,10 +157,12 @@ impl UPClientFoo {
         });
 
         Self {
+            name,
             protocol_sender,
             protocol_receiver,
             uuid_builder: UUIDBuilder::new(),
             listeners,
+            authority_listeners,
         }
     }
 }
@@ -134,6 +170,7 @@ impl UPClientFoo {
 #[async_trait]
 impl UTransport for UPClientFoo {
     async fn send(&self, message: UMessage) -> Result<(), UStatus> {
+        println!("sending: {message:?}");
         match self.protocol_sender.send(Ok(message)).await {
             Ok(_) => Ok(()),
             Err(_) => Err(UStatus::fail_with_code(
@@ -152,17 +189,38 @@ impl UTransport for UPClientFoo {
         topic: UUri,
         listener: Box<dyn Fn(Result<UMessage, UStatus>) + Send + Sync + 'static>,
     ) -> Result<String, UStatus> {
-        let mut listeners = self.listeners.lock().await;
-        let topic_listeners = listeners.entry(topic).or_default();
-        let registration_string = self.uuid_builder.build().to_string();
-        let inserted = topic_listeners.insert(registration_string.clone(), listener);
+        return if topic.resource.is_none() && topic.entity.is_none() {
+            let mut authority_listeners = self.authority_listeners.lock().await;
+            let Some(authority) = topic.authority.as_ref() else {
+                return Err(UStatus::fail_with_code(
+                    UCode::INVALID_ARGUMENT,
+                    "No authority provided!",
+                ));
+            };
+            let authority_listeners = authority_listeners.entry(authority.clone()).or_default();
+            let registration_string = self.uuid_builder.build().to_string();
+            let inserted = authority_listeners.insert(registration_string.clone(), listener);
 
-        return match inserted {
-            None => Ok(registration_string),
-            Some(_) => Err(UStatus::fail_with_code(
-                UCode::ALREADY_EXISTS,
-                "UUri and listener already registered!",
-            )),
+            match inserted {
+                None => Ok(registration_string),
+                Some(_) => Err(UStatus::fail_with_code(
+                    UCode::ALREADY_EXISTS,
+                    "UUri and listener already registered!",
+                )),
+            }
+        } else {
+            let mut listeners = self.listeners.lock().await;
+            let topic_listeners = listeners.entry(topic).or_default();
+            let registration_string = self.uuid_builder.build().to_string();
+            let inserted = topic_listeners.insert(registration_string.clone(), listener);
+
+            match inserted {
+                None => Ok(registration_string),
+                Some(_) => Err(UStatus::fail_with_code(
+                    UCode::ALREADY_EXISTS,
+                    "UUri and listener already registered!",
+                )),
+            }
         };
     }
 
@@ -187,16 +245,20 @@ impl UTransport for UPClientFoo {
 }
 
 pub struct UTransportBuilderFoo {
+    name: Arc<String>,
     protocol_receiver: Receiver<Result<UMessage, UStatus>>,
     protocol_sender: Sender<Result<UMessage, UStatus>>,
 }
 
 impl UTransportBuilderFoo {
     pub fn new(
+        name: &str,
         protocol_receiver: Receiver<Result<UMessage, UStatus>>,
         protocol_sender: Sender<Result<UMessage, UStatus>>,
     ) -> Self {
+        let name = Arc::new(name.to_string());
         Self {
+            name,
             protocol_receiver,
             protocol_sender,
         }
@@ -206,6 +268,7 @@ impl UTransportBuilderFoo {
 impl UTransportBuilder for UTransportBuilderFoo {
     fn build(&self) -> Result<Box<dyn UTransport>, UStatus> {
         let utransport: Box<dyn UTransport> = Box::new(task::block_on(UPClientFoo::new(
+            &self.name,
             self.protocol_receiver.clone(),
             self.protocol_sender.clone(),
         )));

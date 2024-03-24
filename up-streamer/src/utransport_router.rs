@@ -357,6 +357,11 @@ impl UTransportRouter {
     where
         T: UTransportBuilder + 'static,
     {
+        // Try to initiate logging.
+        // Required in case of dynamic lib, otherwise no logs.
+        // But cannot be done twice in case of static link.
+        let _ = env_logger::try_init();
+
         let name = format!("{name}:{UTRANSPORT_ROUTER_TAG}");
         let (tx, rx) = mpsc::channel();
 
