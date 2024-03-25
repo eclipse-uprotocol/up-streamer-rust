@@ -965,6 +965,8 @@ impl UTransportRouterInner {
                 &UTRANSPORT_ROUTER_INNER_FN_SEND_OVER_TRANSPORT_TAG,
                 e
             );
+        } else {
+            // TODO: Explicitly log that it succeeded
         }
     }
 }
