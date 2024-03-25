@@ -10,27 +10,95 @@ use up_rust::{
 };
 use up_streamer::{Route, UStreamer, UTransportRouter};
 
-pub fn client_1_authority() -> UAuthority {
+#[async_std::main]
+async fn main() {
+    // using async_broadcast to simulate communication protocol
+    let (tx_1, rx_1) = broadcast(100);
+    let (tx_2, rx_2) = broadcast(100);
+
+    // kicking off a UTransportRouter for protocol "foo" and retrieving its UTransportRouterHandle
+    let utransport_builder_foo =
+        UTransportBuilderFoo::new("utransport_builder_foo", rx_1.clone(), tx_1.clone());
+    let utransport_router_handle_foo = Arc::new(
+        UTransportRouter::start("foo".to_string(), utransport_builder_foo, 100, 100).unwrap(),
+    );
+
+    // kicking off a UTransportRouter for protocol "bar" and retrieving its UTransportRouterHandle
+    let utransport_builder_bar =
+        UTransportBuilderFoo::new("utransport_builder_bar", rx_2.clone(), tx_2.clone());
+    let utransport_router_handle_bar = Arc::new(
+        UTransportRouter::start("bar".to_string(), utransport_builder_bar, 100, 100).unwrap(),
+    );
+
+    // setting up streamer to bridge between "foo" and "bar"
+    let ustreamer = UStreamer::new("foo_bar_streamer");
+
+    // setting up routes between authorities and protocols
+    let local_route = Route::new(&local_authority(), &utransport_router_handle_foo);
+    let remote_route = Route::new(&remote_authority(), &utransport_router_handle_bar);
+
+    // adding local to remote routing
+    let add_forwarding_rule_res = ustreamer
+        .add_forwarding_rule(local_route.clone(), remote_route.clone())
+        .await;
+    assert!(add_forwarding_rule_res.is_ok());
+
+    // adding remote to local routing
+    let add_forwarding_rule_res = ustreamer
+        .add_forwarding_rule(remote_route.clone(), local_route.clone())
+        .await;
+    assert!(add_forwarding_rule_res.is_ok());
+
+    // kicking off a "local_foo_client" and "remote_bar_client" in order to keep exercising
+    // the streamer periodically
+    run_client(
+        "local_foo_client".to_string(),
+        remote_client_uuri(),
+        local_client_listener,
+        tx_1.clone(),
+        rx_1.clone(),
+        publish_from_local_client_for_remote_client(),
+        request_from_local_client_for_remote_client(),
+        response_from_local_client_for_remote_client(),
+    )
+    .await;
+    run_client(
+        "remote_bar_client".to_string(),
+        local_client_uuri(),
+        remote_client_listener,
+        tx_2.clone(),
+        rx_2.clone(),
+        publish_from_remote_client_for_local_client(),
+        request_from_remote_client_for_local_client(),
+        response_from_remote_client_for_local_client(),
+    )
+    .await;
+
+    // pause current task and wait forever
+    future::pending::<()>().await;
+}
+
+pub fn local_authority() -> UAuthority {
     UAuthority {
-        name: Some("client_1_authority".to_string()),
+        name: Some("local_authority".to_string()),
         number: Number::Ip(vec![192, 168, 1, 100]).into(),
         ..Default::default()
     }
 }
 
-pub fn client_2_authority() -> UAuthority {
+pub fn remote_authority() -> UAuthority {
     UAuthority {
-        name: Some("client_2_authority".to_string()),
+        name: Some("remote_authority".to_string()),
         number: Number::Ip(vec![192, 168, 1, 200]).into(),
         ..Default::default()
     }
 }
 
-pub fn client_1_uuri() -> UUri {
+pub fn local_client_uuri() -> UUri {
     UUri {
-        authority: Some(client_1_authority()).into(),
+        authority: Some(local_authority()).into(),
         entity: Some(UEntity {
-            name: "entity_1".to_string(),
+            name: "local_entity".to_string(),
             id: Some(10),
             version_major: Some(1),
             ..Default::default()
@@ -40,11 +108,11 @@ pub fn client_1_uuri() -> UUri {
     }
 }
 
-pub fn client_2_uuri() -> UUri {
+pub fn remote_client_uuri() -> UUri {
     UUri {
-        authority: Some(client_2_authority()).into(),
+        authority: Some(remote_authority()).into(),
         entity: Some(UEntity {
-            name: "entity_2".to_string(),
+            name: "remote_entity".to_string(),
             id: Some(10),
             version_major: Some(1),
             ..Default::default()
@@ -54,10 +122,10 @@ pub fn client_2_uuri() -> UUri {
     }
 }
 
-pub fn publish_from_client_1_for_client_2() -> UMessage {
+pub fn publish_from_local_client_for_remote_client() -> UMessage {
     UMessage {
         attributes: Some(UAttributes {
-            source: Some(client_1_uuri()).into(),
+            source: Some(local_client_uuri()).into(),
             type_: UMESSAGE_TYPE_PUBLISH.into(),
             ..Default::default()
         })
@@ -73,11 +141,11 @@ pub fn publish_from_client_1_for_client_2() -> UMessage {
     }
 }
 
-pub fn request_from_client_1_for_client_2() -> UMessage {
+pub fn request_from_local_client_for_remote_client() -> UMessage {
     UMessage {
         attributes: Some(UAttributes {
-            source: Some(client_1_uuri()).into(),
-            sink: Some(client_2_uuri()).into(),
+            source: Some(local_client_uuri()).into(),
+            sink: Some(remote_client_uuri()).into(),
             type_: UMESSAGE_TYPE_REQUEST.into(),
             ..Default::default()
         })
@@ -93,11 +161,11 @@ pub fn request_from_client_1_for_client_2() -> UMessage {
     }
 }
 
-pub fn response_from_client_1_for_client_2() -> UMessage {
+pub fn response_from_local_client_for_remote_client() -> UMessage {
     UMessage {
         attributes: Some(UAttributes {
-            source: Some(client_1_uuri()).into(),
-            sink: Some(client_2_uuri()).into(),
+            source: Some(local_client_uuri()).into(),
+            sink: Some(remote_client_uuri()).into(),
             type_: UMESSAGE_TYPE_RESPONSE.into(),
             ..Default::default()
         })
@@ -113,10 +181,10 @@ pub fn response_from_client_1_for_client_2() -> UMessage {
     }
 }
 
-pub fn publish_from_client_2_for_client_1() -> UMessage {
+pub fn publish_from_remote_client_for_local_client() -> UMessage {
     UMessage {
         attributes: Some(UAttributes {
-            source: Some(client_2_uuri()).into(),
+            source: Some(remote_client_uuri()).into(),
             type_: UMESSAGE_TYPE_PUBLISH.into(),
             ..Default::default()
         })
@@ -132,11 +200,11 @@ pub fn publish_from_client_2_for_client_1() -> UMessage {
     }
 }
 
-pub fn request_from_client_2_for_client_1() -> UMessage {
+pub fn request_from_remote_client_for_local_client() -> UMessage {
     UMessage {
         attributes: Some(UAttributes {
-            source: Some(client_2_uuri()).into(),
-            sink: Some(client_1_uuri()).into(),
+            source: Some(remote_client_uuri()).into(),
+            sink: Some(local_client_uuri()).into(),
             type_: UMESSAGE_TYPE_REQUEST.into(),
             ..Default::default()
         })
@@ -152,11 +220,11 @@ pub fn request_from_client_2_for_client_1() -> UMessage {
     }
 }
 
-pub fn response_from_client_2_for_client_1() -> UMessage {
+pub fn response_from_remote_client_for_local_client() -> UMessage {
     UMessage {
         attributes: Some(UAttributes {
-            source: Some(client_2_uuri()).into(),
-            sink: Some(client_1_uuri()).into(),
+            source: Some(remote_client_uuri()).into(),
+            sink: Some(local_client_uuri()).into(),
             type_: UMESSAGE_TYPE_RESPONSE.into(),
             ..Default::default()
         })
@@ -172,12 +240,12 @@ pub fn response_from_client_2_for_client_1() -> UMessage {
     }
 }
 
-pub fn client_1_listener(received: Result<UMessage, UStatus>) {
-    println!("within client_1_listener! received: {:?}", received);
+pub fn local_client_listener(received: Result<UMessage, UStatus>) {
+    println!("within local_client_listener! received: {:?}", received);
 }
 
-pub fn client_2_listener(received: Result<UMessage, UStatus>) {
-    println!("within client_2_listener! received: {:?}", received);
+pub fn remote_client_listener(received: Result<UMessage, UStatus>) {
+    println!("within remote_client_listener! received: {:?}", received);
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -222,63 +290,4 @@ pub async fn run_client(
             }
         });
     });
-}
-
-#[async_std::main]
-async fn main() {
-    let (tx_1, rx_1) = broadcast(100);
-    let (tx_2, rx_2) = broadcast(100);
-
-    let utransport_builder_1 =
-        UTransportBuilderFoo::new("utransport_builder_1", rx_1.clone(), tx_1.clone());
-    let utransport_router_handle_1 = Arc::new(
-        UTransportRouter::start("foo_1".to_string(), utransport_builder_1, 100, 100).unwrap(),
-    );
-
-    let utransport_builder_2 =
-        UTransportBuilderFoo::new("utransport_builder_2", rx_2.clone(), tx_2.clone());
-    let utransport_router_handle_2 = Arc::new(
-        UTransportRouter::start("foo_2".to_string(), utransport_builder_2, 100, 100).unwrap(),
-    );
-
-    let route_a = Route::new(&client_1_authority(), &utransport_router_handle_1);
-
-    let route_b = Route::new(&client_2_authority(), &utransport_router_handle_2);
-
-    let ustreamer = UStreamer::new("my_streamer");
-
-    let add_forwarding_rule_res = ustreamer
-        .add_forwarding_rule(route_a.clone(), route_b.clone())
-        .await;
-    assert!(add_forwarding_rule_res.is_ok());
-
-    let add_forwarding_rule_res = ustreamer
-        .add_forwarding_rule(route_b.clone(), route_a.clone())
-        .await;
-    assert!(add_forwarding_rule_res.is_ok());
-
-    run_client(
-        "client_1".to_string(),
-        client_2_uuri(),
-        client_1_listener,
-        tx_1.clone(),
-        rx_1.clone(),
-        publish_from_client_1_for_client_2(),
-        request_from_client_1_for_client_2(),
-        response_from_client_1_for_client_2(),
-    )
-    .await;
-    run_client(
-        "client_2".to_string(),
-        client_1_uuri(),
-        client_2_listener,
-        tx_2.clone(),
-        rx_2.clone(),
-        publish_from_client_2_for_client_1(),
-        request_from_client_2_for_client_1(),
-        response_from_client_2_for_client_1(),
-    )
-    .await;
-
-    future::pending::<()>().await;
 }
