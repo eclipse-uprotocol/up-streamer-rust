@@ -49,6 +49,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "async-broadcast"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "258b52a1aa741b9f09783b2d86cf0aeeb617bbf847f6933340a39644227acbdb"
+dependencies = [
+ "event-listener 5.2.0",
+ "event-listener-strategy 0.5.0",
+ "futures-core",
+ "pin-project-lite",
+]
+
+[[package]]
 name = "async-channel"
 version = "1.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -457,6 +469,23 @@ dependencies = [
  "prost-types",
  "protoc-bin-vendored",
  "ureq",
+]
+
+[[package]]
+name = "example-up-client-foo"
+version = "0.1.5-dev"
+dependencies = [
+ "async-broadcast",
+ "async-std",
+ "async-trait",
+ "env_logger",
+ "futures",
+ "log",
+ "prost",
+ "serde_json",
+ "up-rust",
+ "up-streamer",
+ "uuid",
 ]
 
 [[package]]
@@ -1310,9 +1339,11 @@ dependencies = [
 name = "simple-example"
 version = "0.1.5-dev"
 dependencies = [
+ "async-broadcast",
  "async-std",
  "async-trait",
  "env_logger",
+ "example-up-client-foo",
  "futures",
  "log",
  "prost",

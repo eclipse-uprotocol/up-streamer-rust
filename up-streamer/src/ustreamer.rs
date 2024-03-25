@@ -273,20 +273,12 @@ impl UStreamer {
             out_message_sender.hash(&mut hasher);
             let hash = hasher.finish();
             debug!(
-                "{}:{} r#in.get_authority(): {:?}",
+                "{}:{} adding forwarding rule: ({:?}, {:?}, {})",
                 &self.name,
                 &USTREAMER_FN_ADD_FORWARDING_RULE_TAG,
-                &r#in.get_authority()
-            );
-            debug!(
-                "{}:{} out.get_authority(): {:?}",
-                &self.name,
-                &USTREAMER_FN_ADD_FORWARDING_RULE_TAG,
-                &out.get_authority()
-            );
-            debug!(
-                "{}:{} out_message_sender hash: {}",
-                &self.name, &USTREAMER_FN_ADD_FORWARDING_RULE_TAG, hash
+                &r#in.get_authority(),
+                &out.get_authority(),
+                hash
             );
         }
 
@@ -323,20 +315,12 @@ impl UStreamer {
             out_message_sender.hash(&mut hasher);
             let hash = hasher.finish();
             debug!(
-                "{}:{} r#in.get_authority(): {:?}",
+                "{}:{} deleting forwarding rule: ({:?}, {:?}, {})",
                 &self.name,
                 &USTREAMER_FN_DELETE_FORWARDING_RULE_TAG,
-                &r#in.get_authority()
-            );
-            debug!(
-                "{}:{} out.get_authority(): {:?}",
-                &self.name,
-                &USTREAMER_FN_DELETE_FORWARDING_RULE_TAG,
-                &out.get_authority()
-            );
-            debug!(
-                "{}:{} out_message_sender hash: {}",
-                &self.name, &USTREAMER_FN_DELETE_FORWARDING_RULE_TAG, hash
+                &r#in.get_authority(),
+                &out.get_authority(),
+                hash
             );
         }
 
