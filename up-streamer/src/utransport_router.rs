@@ -20,7 +20,7 @@ use futures::select;
 use futures::FutureExt;
 use log::*;
 use std::any::Any;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::hash::{Hash, Hasher};
 use std::ops::Deref;
@@ -39,7 +39,9 @@ const UTRANSPORT_ROUTER_INNER_FN_START_TAG: &str = "start()";
 const UTRANSPORT_ROUTER_INNER_FN_LAUNCH_TAG: &str = "launch()";
 const UTRANSPORT_ROUTER_INNER_FN_HANDLE_COMMAND_TAG: &str = "handle_command():";
 const UTRANSPORT_ROUTER_INNER_FN_SEND_OVER_TRANSPORT_TAG: &str = "send_over_utransport():";
-const UTRANSPORT_ROUTER_INNER_FN_FORWARDING_CALLBACK_TAG: &str = "forwarding_callback():";
+const UTRANSPORT_ROUTER_INNER_FN_REQUEST_RESPONSE_NOTIFICATION_CALLBACK_TAG: &str =
+    "request_response_notification_forwarding_callback():";
+const UTRANSPORT_ROUTER_INNER_FN_PUBLISH_CALLBACK_TAG: &str = "publish_forwarding_callback():";
 
 const UTRANSPORT_ROUTER_HANDLE_TAG: &str = "UTransportRouterHandle:";
 const UTRANSPORT_ROUTER_HANDLE_FN_REGISTER_TAG: &str = "register():";
@@ -436,13 +438,15 @@ impl UTransportRouter {
 pub(crate) struct ListenerMapKey {
     in_authority: UAuthority,
     out_authority: UAuthority,
-    out_sender_wrapper: ComparableSender<UMessage>,
+    out_comparable_sender: ComparableSender<UMessage>,
 }
 
 struct UTransportRouterInner {
     name: Arc<String>,
     utransport: Box<dyn UTransport>,
     listener_map: Arc<Mutex<HashMap<ListenerMapKey, String>>>,
+    comparable_sender_active_registrations: Arc<Mutex<HashMap<ComparableSender<UMessage>, usize>>>,
+    comparable_senders: Arc<Mutex<HashSet<ComparableSender<UMessage>>>>,
     #[allow(dead_code)] // allow us flexibility in the future
     command_sender: Sender<UTransportRouterCommand>,
     #[allow(dead_code)] // allow us flexibility in the future
@@ -504,6 +508,10 @@ impl UTransportRouterInner {
                         name: Arc::new(name.to_string()),
                         utransport,
                         listener_map: Arc::new(Mutex::new(HashMap::new())),
+                        comparable_sender_active_registrations: Arc::new(
+                            Mutex::new(HashMap::new()),
+                        ),
+                        comparable_senders: Arc::new(Mutex::new(HashSet::new())),
                         command_sender: utransport_channels.command_sender.clone(),
                         command_receiver: utransport_channels.command_receiver.clone(),
                         message_sender: utransport_channels.message_sender.clone(),
@@ -684,13 +692,13 @@ impl UTransportRouterInner {
 
                 let mut listener_map = self.listener_map.lock().await;
 
-                let lister_map_key = ListenerMapKey {
+                let listener_map_key = ListenerMapKey {
                     in_authority: in_authority.clone(),
                     out_authority: out_authority.clone(),
-                    out_sender_wrapper: out_sender_wrapper.clone(),
+                    out_comparable_sender: out_sender_wrapper.clone(),
                 };
 
-                if listener_map.get(&lister_map_key.clone()).is_some() {
+                if listener_map.get(&listener_map_key.clone()).is_some() {
                     let result_send_res = result_sender
                         .send(Err(UStatus::fail_with_code(
                             UCode::ALREADY_EXISTS,
@@ -712,7 +720,7 @@ impl UTransportRouterInner {
                     return;
                 }
 
-                if listener_map.get(&lister_map_key.clone()).is_none() {
+                if listener_map.get(&listener_map_key.clone()).is_none() {
                     let out_sender_wrapper_rrn_closure = out_sender_wrapper.clone();
                     let rrn_closure_name = self.name.clone();
                     let request_response_notification_closure: Box<
@@ -730,25 +738,27 @@ impl UTransportRouterInner {
                         });
                     });
 
-                    let out_sender_wrapper_p_closure = out_sender_wrapper.clone();
                     let p_closure_name = self.name.clone();
+                    let comparable_senders_closure = self.comparable_senders.clone();
                     let publish_closure: Box<
                         dyn Fn(Result<UMessage, UStatus>) + Send + Sync + 'static,
                     > = Box::new(move |received: Result<UMessage, UStatus>| {
-                        let out_sender_wrapper_closure = out_sender_wrapper_p_closure.clone();
+                        let comparable_senders_closure = comparable_senders_closure.clone();
                         let closure_name = p_closure_name.clone();
                         task::spawn_local(async move {
                             publish_forwarding_callback(
                                 closure_name.clone(),
                                 received,
-                                out_sender_wrapper_closure.clone(),
+                                comparable_senders_closure,
                             )
                             .await;
                         });
                     });
 
+                    // let request_response_notification_registration_uuri =
+                    //     UTransportRouterInner::uauthority_to_uuri(in_authority.clone());
                     let request_response_notification_registration_uuri =
-                        UTransportRouterInner::uauthority_to_uuri(in_authority.clone());
+                        UTransportRouterInner::uauthority_to_uuri(out_authority.clone());
                     let request_response_notification_registration_result = self
                         .utransport
                         .register_listener(
@@ -756,8 +766,10 @@ impl UTransportRouterInner {
                             request_response_notification_closure,
                         )
                         .await;
+                    // let publish_uuri =
+                    //     UTransportRouterInner::uauthority_to_uuri(out_authority.clone());
                     let publish_uuri =
-                        UTransportRouterInner::uauthority_to_uuri(out_authority.clone());
+                        UTransportRouterInner::uauthority_to_uuri(in_authority.clone());
                     let publish_registration_result = self
                         .utransport
                         .register_listener(publish_uuri, publish_closure)
@@ -768,8 +780,21 @@ impl UTransportRouterInner {
                         publish_registration_result,
                     ) {
                         (Ok(rrn_reg_string), Ok(p_reg_string)) => {
-                            listener_map
-                                .insert(lister_map_key, format!("{rrn_reg_string}_{p_reg_string}"));
+                            listener_map.insert(
+                                listener_map_key,
+                                format!("{rrn_reg_string}_{p_reg_string}"),
+                            );
+
+                            let mut comparable_senders = self.comparable_senders.lock().await;
+                            comparable_senders.insert(out_sender_wrapper.clone());
+
+                            let mut comparable_sender_active_registrations =
+                                self.comparable_sender_active_registrations.lock().await;
+                            let this_comparable_sender_slot =
+                                comparable_sender_active_registrations
+                                    .entry(out_sender_wrapper.clone())
+                                    .or_insert(0);
+                            *this_comparable_sender_slot += 1usize;
                         }
                         (_, _) => {
                             // TODO: Need to explicitly handle the error case
@@ -838,7 +863,7 @@ impl UTransportRouterInner {
                 let lister_map_key = ListenerMapKey {
                     in_authority: in_authority.clone(),
                     out_authority: out_authority.clone(),
-                    out_sender_wrapper: out_sender_wrapper.clone(),
+                    out_comparable_sender: out_sender_wrapper.clone(),
                 };
 
                 if listener_map.remove(&lister_map_key).is_none() {
@@ -861,6 +886,41 @@ impl UTransportRouterInner {
                         );
                     }
                     return;
+                } else {
+                    let mut comparable_sender_active_registrations =
+                        self.comparable_sender_active_registrations.lock().await;
+                    let this_comparable_sender_slot = comparable_sender_active_registrations
+                        .entry(out_sender_wrapper.clone())
+                        .or_insert(0);
+                    if *this_comparable_sender_slot < 1usize {
+                        error!(
+                            "{}:{}:{} No active comparable senders",
+                            &self.name,
+                            &UTRANSPORT_ROUTER_INNER_TAG,
+                            &UTRANSPORT_ROUTER_INNER_FN_HANDLE_COMMAND_TAG,
+                        );
+                    }
+                    *this_comparable_sender_slot -= 1usize;
+                    if *this_comparable_sender_slot < 1usize {
+                        let mut comparable_senders = self.comparable_senders.lock().await;
+                        if log_enabled!(Level::Debug) {
+                            debug!(
+                                "{}:{}:{} Last active registration for comparable sender",
+                                &self.name,
+                                &UTRANSPORT_ROUTER_INNER_TAG,
+                                &UTRANSPORT_ROUTER_INNER_FN_HANDLE_COMMAND_TAG,
+                            );
+                        }
+                        let removed = comparable_senders.remove(&out_sender_wrapper);
+                        if !removed {
+                            error!(
+                                "{}:{}:{} Unable to remove comparable sender",
+                                &self.name,
+                                &UTRANSPORT_ROUTER_INNER_TAG,
+                                &UTRANSPORT_ROUTER_INNER_FN_HANDLE_COMMAND_TAG,
+                            );
+                        }
+                    }
                 }
 
                 let result_send_res = result_sender.send(Ok(())).await;
@@ -895,6 +955,7 @@ impl UTransportRouterInner {
         // before calling send(). However, that feels wasteful to do for some small percentage of
         // times that send() doesn't succeed
         // that's why for now we don't include the message itself in the error!()
+        // TODO: Consider including just the UMessage.id as a compromise? Cheaper to clone
         if let Err(e) = send_result {
             error!(
                 "{}:{}:{} Failed to send message over UTransport: error: {:?}",
@@ -914,39 +975,62 @@ async fn request_response_notification_forwarding_callback(
 ) {
     if log_enabled!(Level::Debug) {
         debug!(
-            "{}:{}:{} Forwarding message from this UTransportRouter onto another UTransportRouter's Receiver<UMessage>: {}",
+            "{}:{}:{} Forwarding Request | Response | Notification message from this UTransportRouter onto another UTransportRouter's Receiver<UMessage>: {}",
             &name,
             &UTRANSPORT_ROUTER_INNER_TAG,
-            &UTRANSPORT_ROUTER_INNER_FN_FORWARDING_CALLBACK_TAG,
+            &UTRANSPORT_ROUTER_INNER_FN_REQUEST_RESPONSE_NOTIFICATION_CALLBACK_TAG,
             &out_sender_wrapper.id
         );
     }
     if let Ok(msg) = received {
+        if log_enabled!(Level::Debug) {
+            debug!(
+                "{}:{}:{} Contains message: {:?}",
+                &name,
+                &UTRANSPORT_ROUTER_INNER_TAG,
+                &UTRANSPORT_ROUTER_INNER_FN_REQUEST_RESPONSE_NOTIFICATION_CALLBACK_TAG,
+                msg.clone()
+            );
+        }
         // TODO: Bail if message id matches one in our cache of transmitted messages
 
         // TODO: Bail if we see we got a PUBLISH
         let UMessage { attributes, .. } = &msg;
         let Some(attr) = attributes.as_ref() else {
-            // TODO: Explicitly handle error by logging
+            warn!(
+                "{}:{}:{} No UAttributes attached, cannot proceed",
+                &name,
+                &UTRANSPORT_ROUTER_INNER_TAG,
+                &UTRANSPORT_ROUTER_INNER_FN_REQUEST_RESPONSE_NOTIFICATION_CALLBACK_TAG,
+            );
             return;
         };
         let type_ = attr.type_.enum_value_or(UMESSAGE_TYPE_UNSPECIFIED);
         if type_ == UMESSAGE_TYPE_UNSPECIFIED {
-            // TODO: Explicitly handle error by logging
+            warn!(
+                "{}:{}:{} Message type is not specified, cannot proceed",
+                &name,
+                &UTRANSPORT_ROUTER_INNER_TAG,
+                &UTRANSPORT_ROUTER_INNER_FN_REQUEST_RESPONSE_NOTIFICATION_CALLBACK_TAG,
+            );
             return;
         }
         if type_ == UMESSAGE_TYPE_PUBLISH {
-            // TODO: Explicitly handle error by logging
+            debug!(
+                "{}:{}:{} Is a Publish message, no need to handle",
+                &name,
+                &UTRANSPORT_ROUTER_INNER_TAG,
+                &UTRANSPORT_ROUTER_INNER_FN_REQUEST_RESPONSE_NOTIFICATION_CALLBACK_TAG,
+            );
             return;
         }
-
         let forward_result = out_sender_wrapper.send(msg).await;
         if let Err(e) = forward_result {
-            debug!(
+            error!(
                 "{}:{}:{} Forwarding message from this UTransportRouter onto another UTransportRouter's Receiver<UMessage> failed: {}; error: {:?}",
                 &name,
                 &UTRANSPORT_ROUTER_INNER_TAG,
-                &UTRANSPORT_ROUTER_INNER_FN_FORWARDING_CALLBACK_TAG,
+                &UTRANSPORT_ROUTER_INNER_FN_REQUEST_RESPONSE_NOTIFICATION_CALLBACK_TAG,
                 &out_sender_wrapper.id,
                 e
             );
@@ -958,49 +1042,73 @@ async fn request_response_notification_forwarding_callback(
 async fn publish_forwarding_callback(
     name: Arc<String>,
     received: Result<UMessage, UStatus>,
-    out_sender_wrapper: ComparableSender<UMessage>,
+    comparable_senders: Arc<Mutex<HashSet<ComparableSender<UMessage>>>>,
 ) {
     if log_enabled!(Level::Debug) {
         debug!(
-            "{}:{}:{} Forwarding message from this UTransportRouter onto another UTransportRouter's Receiver<UMessage>: {}",
+            "{}:{}:{} Forwarding Publish message from this UTransportRouter onto all other active comparable senders",
             &name,
             &UTRANSPORT_ROUTER_INNER_TAG,
-            &UTRANSPORT_ROUTER_INNER_FN_FORWARDING_CALLBACK_TAG,
-            &out_sender_wrapper.id
+            &UTRANSPORT_ROUTER_INNER_FN_PUBLISH_CALLBACK_TAG,
         );
     }
     if let Ok(msg) = received {
+        if log_enabled!(Level::Debug) {
+            debug!(
+                "{}:{}:{} Contains message: {:?}",
+                &name,
+                &UTRANSPORT_ROUTER_INNER_TAG,
+                &UTRANSPORT_ROUTER_INNER_FN_PUBLISH_CALLBACK_TAG,
+                msg.clone()
+            );
+        }
         // TODO: Bail if message id matches one in our cache of transmitted messages
 
         // TODO: Bail if we see we got anything other than a PUBLISH
         let UMessage { attributes, .. } = &msg;
         let Some(attr) = attributes.as_ref() else {
-            // TODO: Explicitly handle error by logging
+            warn!(
+                "{}:{}:{} No UAttributes attached, cannot proceed",
+                &name,
+                &UTRANSPORT_ROUTER_INNER_TAG,
+                &UTRANSPORT_ROUTER_INNER_FN_PUBLISH_CALLBACK_TAG,
+            );
             return;
         };
         let type_ = attr.type_.enum_value_or(UMESSAGE_TYPE_UNSPECIFIED);
         if type_ == UMESSAGE_TYPE_UNSPECIFIED {
-            // TODO: Explicitly handle error by logging
+            warn!(
+                "{}:{}:{} Message type is not specified, cannot proceed",
+                &name,
+                &UTRANSPORT_ROUTER_INNER_TAG,
+                &UTRANSPORT_ROUTER_INNER_FN_PUBLISH_CALLBACK_TAG,
+            );
             return;
         }
         if type_ != UMESSAGE_TYPE_PUBLISH {
-            // TODO: Explicitly handle error by logging
+            debug!(
+                "{}:{}:{} Not a Publish message, no need to handle",
+                &name,
+                &UTRANSPORT_ROUTER_INNER_TAG,
+                &UTRANSPORT_ROUTER_INNER_FN_PUBLISH_CALLBACK_TAG,
+            );
             return;
         }
 
-        // TODO: Send out over all sender_wrapper that belong to another UTransportRouter
-        // TODO: Means we need to keep track of these when registering
-        let forward_result = out_sender_wrapper.send(msg).await;
+        let comparable_senders = comparable_senders.lock().await;
+        for cs in comparable_senders.iter() {
+            let forward_result = cs.send(msg.clone()).await;
 
-        if let Err(e) = forward_result {
-            debug!(
-                "{}:{}:{} Forwarding message from this UTransportRouter onto another UTransportRouter's Receiver<UMessage> failed: {}; error: {:?}",
-                &name,
-                &UTRANSPORT_ROUTER_INNER_TAG,
-                &UTRANSPORT_ROUTER_INNER_FN_FORWARDING_CALLBACK_TAG,
-                &out_sender_wrapper.id,
-                e
-            );
+            if let Err(e) = forward_result {
+                error!(
+                    "{}:{}:{} Forwarding message from this UTransportRouter onto another UTransportRouter's Receiver<UMessage> failed: {}; error: {:?}",
+                    &name,
+                    &UTRANSPORT_ROUTER_INNER_TAG,
+                    &UTRANSPORT_ROUTER_INNER_FN_PUBLISH_CALLBACK_TAG,
+                    &cs.id,
+                    e
+                );
+            }
         }
     }
     // TODO: Explicitly handle the error case

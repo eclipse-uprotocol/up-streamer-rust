@@ -5,9 +5,7 @@ use example_up_client_foo::{UPClientFoo, UTransportBuilderFoo};
 use std::sync::Arc;
 use std::time::Duration;
 use up_rust::UMessageType::{UMESSAGE_TYPE_PUBLISH, UMESSAGE_TYPE_REQUEST, UMESSAGE_TYPE_RESPONSE};
-use up_rust::{
-    Number, UAttributes, UAuthority, UEntity, UMessage, UPayload, UStatus, UTransport, UUri,
-};
+use up_rust::{Number, UAttributes, UAuthority, UEntity, UMessage, UStatus, UTransport, UUri};
 use up_streamer::{Route, UStreamer, UTransportRouter};
 
 #[async_std::main]
@@ -74,7 +72,7 @@ async fn main() {
         publish_from_remote_client_for_local_client(20),
         request_from_remote_client_for_local_client(20, 10),
         response_from_remote_client_for_local_client(20, 10),
-        false,
+        true,
     )
     .await;
 
@@ -234,15 +232,15 @@ pub async fn run_client(
                 panic!("Unable to register!");
             };
 
-            // let register_res = client
-            //     .register_listener(other_client_uuri.clone(), Box::new(listener))
-            //     .await;
-            // let Ok(_registration_string) = register_res else {
-            //     panic!("Unable to register!");
-            // };
+            let register_res = client
+                .register_listener(other_client_uuri.clone(), Box::new(listener))
+                .await;
+            let Ok(_registration_string) = register_res else {
+                panic!("Unable to register!");
+            };
 
             loop {
-                task::sleep(Duration::from_millis(10000)).await;
+                task::sleep(Duration::from_millis(5000)).await;
 
                 println!("-----------------------------------------------------------------------");
 
@@ -250,20 +248,20 @@ pub async fn run_client(
                     continue;
                 }
 
-                // let send_res = client.send(publish_msg.clone()).await;
-                // if send_res.is_err() {
-                //     panic!("Unable to send from client: {}", &name);
-                // }
+                let send_res = client.send(publish_msg.clone()).await;
+                if send_res.is_err() {
+                    panic!("Unable to send from client: {}", &name);
+                }
 
                 let send_res = client.send(request_msg.clone()).await;
                 if send_res.is_err() {
                     panic!("Unable to send from client: {}", &name);
                 }
 
-                // let send_res = client.send(response_msg.clone()).await;
-                // if send_res.is_err() {
-                //     panic!("Unable to send from client: {}", &name);
-                // }
+                let send_res = client.send(response_msg.clone()).await;
+                if send_res.is_err() {
+                    panic!("Unable to send from client: {}", &name);
+                }
             }
         });
     });

@@ -72,9 +72,9 @@ impl UPClientFoo {
                                                         println!("{}: Publish: No authority listeners for topic!: {:?}", &name_clone, &topic);
                                                     }
                                                     Some(authority_listeners) => {
-                                                        println!("{}: Publish: Found authority listeners for topic!", &name_clone);
+                                                        println!("{}: Publish: Found authority listeners for topic! authority: {:?}", &name_clone, &authority);
                                                         for al in authority_listeners.iter() {
-                                                            println!("{}: sending out over registration_string: {}", &name_clone, al.0);
+                                                            println!("{}: Publish: sending out over registration_string: {}", &name_clone, al.0);
                                                             al.1(Ok(msg.clone()))
                                                         }
                                                     }
@@ -122,9 +122,9 @@ impl UPClientFoo {
                                                         println!("{}: Request: No authority listeners for topic! {:?}", &name_clone, &topic);
                                                     }
                                                     Some(authority_listeners) => {
-                                                        println!("{}: Request: Found authority listeners for topic!", &name_clone);
+                                                        println!("{}: Request: Found authority listeners for topic! authority: {:?}", &name_clone, &authority);
                                                         for al in authority_listeners.iter() {
-                                                            println!("{}: sending out over registration_string: {}", &name_clone, al.0);
+                                                            println!("{}: Request: sending out over registration_string: {}", &name_clone, al.0);
                                                             al.1(Ok(msg.clone()))
                                                         }
                                                     }
@@ -172,9 +172,9 @@ impl UPClientFoo {
                                                         println!("{}: Response: No authority listeners for topic! {:?}", &name_clone, &topic);
                                                     }
                                                     Some(authority_listeners) => {
-                                                        println!("{}: Response: Found authority listeners for topic!", &name_clone);
+                                                        println!("{}: Response: Found authority listeners for topic! authority: {:?}", &name_clone, &authority);
                                                         for al in authority_listeners.iter() {
-                                                            println!("{}: sending out over registration_string: {}", &name_clone, al.0);
+                                                            println!("{}: Response: sending out over registration_string: {}", &name_clone, al.0);
                                                             al.1(Ok(msg.clone()))
                                                         }
                                                     }
