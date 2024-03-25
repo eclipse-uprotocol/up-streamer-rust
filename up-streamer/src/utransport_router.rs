@@ -28,6 +28,7 @@ use std::rc::Rc;
 use std::sync::mpsc;
 use std::time::Duration;
 use std::{fmt, thread};
+use up_rust::UMessageType::{UMESSAGE_TYPE_PUBLISH, UMESSAGE_TYPE_UNSPECIFIED};
 use up_rust::{UAuthority, UCode, UMessage, UStatus, UTransport, UUIDBuilder, UUri, UUID};
 
 const UTRANSPORT_ROUTER_TAG: &str = "UTransportRouter";
@@ -711,28 +712,68 @@ impl UTransportRouterInner {
                     return;
                 }
 
-                let closure_name = self.name.clone();
                 if listener_map.get(&lister_map_key.clone()).is_none() {
-                    let out_sender_wrapper_closure = out_sender_wrapper.clone();
-                    let callback_closure: Box<
+                    let out_sender_wrapper_rrn_closure = out_sender_wrapper.clone();
+                    let rrn_closure_name = self.name.clone();
+                    let request_response_notification_closure: Box<
                         dyn Fn(Result<UMessage, UStatus>) + Send + Sync + 'static,
                     > = Box::new(move |received: Result<UMessage, UStatus>| {
-                        let out_sender_wrapper_closure = out_sender_wrapper_closure.clone();
-                        task::spawn_local(forwarding_callback(
-                            closure_name.clone(),
-                            received,
-                            out_sender_wrapper_closure.clone(),
-                        ));
+                        let out_sender_wrapper_closure = out_sender_wrapper_rrn_closure.clone();
+                        let closure_name = rrn_closure_name.clone();
+                        task::spawn_local(async move {
+                            request_response_notification_forwarding_callback(
+                                closure_name.clone(),
+                                received,
+                                out_sender_wrapper_closure.clone(),
+                            )
+                            .await;
+                        });
                     });
 
-                    let registration_uuri =
+                    let out_sender_wrapper_p_closure = out_sender_wrapper.clone();
+                    let p_closure_name = self.name.clone();
+                    let publish_closure: Box<
+                        dyn Fn(Result<UMessage, UStatus>) + Send + Sync + 'static,
+                    > = Box::new(move |received: Result<UMessage, UStatus>| {
+                        let out_sender_wrapper_closure = out_sender_wrapper_p_closure.clone();
+                        let closure_name = p_closure_name.clone();
+                        task::spawn_local(async move {
+                            publish_forwarding_callback(
+                                closure_name.clone(),
+                                received,
+                                out_sender_wrapper_closure.clone(),
+                            )
+                            .await;
+                        });
+                    });
+
+                    let request_response_notification_registration_uuri =
                         UTransportRouterInner::uauthority_to_uuri(in_authority.clone());
-                    let registration_result = self
+                    let request_response_notification_registration_result = self
                         .utransport
-                        .register_listener(registration_uuri, callback_closure)
+                        .register_listener(
+                            request_response_notification_registration_uuri,
+                            request_response_notification_closure,
+                        )
                         .await;
-                    if let Ok(registration_string) = registration_result {
-                        listener_map.insert(lister_map_key, registration_string);
+                    let publish_uuri =
+                        UTransportRouterInner::uauthority_to_uuri(out_authority.clone());
+                    let publish_registration_result = self
+                        .utransport
+                        .register_listener(publish_uuri, publish_closure)
+                        .await;
+
+                    match (
+                        request_response_notification_registration_result,
+                        publish_registration_result,
+                    ) {
+                        (Ok(rrn_reg_string), Ok(p_reg_string)) => {
+                            listener_map
+                                .insert(lister_map_key, format!("{rrn_reg_string}_{p_reg_string}"));
+                        }
+                        (_, _) => {
+                            // TODO: Need to explicitly handle the error case
+                        }
                     }
                 }
 
@@ -866,7 +907,7 @@ impl UTransportRouterInner {
     }
 }
 
-async fn forwarding_callback(
+async fn request_response_notification_forwarding_callback(
     name: Arc<String>,
     received: Result<UMessage, UStatus>,
     out_sender_wrapper: ComparableSender<UMessage>,
@@ -881,6 +922,24 @@ async fn forwarding_callback(
         );
     }
     if let Ok(msg) = received {
+        // TODO: Bail if message id matches one in our cache of transmitted messages
+
+        // TODO: Bail if we see we got a PUBLISH
+        let UMessage { attributes, .. } = &msg;
+        let Some(attr) = attributes.as_ref() else {
+            // TODO: Explicitly handle error by logging
+            return;
+        };
+        let type_ = attr.type_.enum_value_or(UMESSAGE_TYPE_UNSPECIFIED);
+        if type_ == UMESSAGE_TYPE_UNSPECIFIED {
+            // TODO: Explicitly handle error by logging
+            return;
+        }
+        if type_ == UMESSAGE_TYPE_PUBLISH {
+            // TODO: Explicitly handle error by logging
+            return;
+        }
+
         let forward_result = out_sender_wrapper.send(msg).await;
         if let Err(e) = forward_result {
             debug!(
@@ -893,4 +952,56 @@ async fn forwarding_callback(
             );
         }
     }
+    // TODO: Explicitly handle the error case
+}
+
+async fn publish_forwarding_callback(
+    name: Arc<String>,
+    received: Result<UMessage, UStatus>,
+    out_sender_wrapper: ComparableSender<UMessage>,
+) {
+    if log_enabled!(Level::Debug) {
+        debug!(
+            "{}:{}:{} Forwarding message from this UTransportRouter onto another UTransportRouter's Receiver<UMessage>: {}",
+            &name,
+            &UTRANSPORT_ROUTER_INNER_TAG,
+            &UTRANSPORT_ROUTER_INNER_FN_FORWARDING_CALLBACK_TAG,
+            &out_sender_wrapper.id
+        );
+    }
+    if let Ok(msg) = received {
+        // TODO: Bail if message id matches one in our cache of transmitted messages
+
+        // TODO: Bail if we see we got anything other than a PUBLISH
+        let UMessage { attributes, .. } = &msg;
+        let Some(attr) = attributes.as_ref() else {
+            // TODO: Explicitly handle error by logging
+            return;
+        };
+        let type_ = attr.type_.enum_value_or(UMESSAGE_TYPE_UNSPECIFIED);
+        if type_ == UMESSAGE_TYPE_UNSPECIFIED {
+            // TODO: Explicitly handle error by logging
+            return;
+        }
+        if type_ != UMESSAGE_TYPE_PUBLISH {
+            // TODO: Explicitly handle error by logging
+            return;
+        }
+
+        // TODO: Send out over all sender_wrapper that belong to another UTransportRouter
+        // TODO: Means we need to keep track of these when registering
+        let forward_result = out_sender_wrapper.send(msg).await;
+
+        if let Err(e) = forward_result {
+            debug!(
+                "{}:{}:{} Forwarding message from this UTransportRouter onto another UTransportRouter's Receiver<UMessage> failed: {}; error: {:?}",
+                &name,
+                &UTRANSPORT_ROUTER_INNER_TAG,
+                &UTRANSPORT_ROUTER_INNER_FN_FORWARDING_CALLBACK_TAG,
+                &out_sender_wrapper.id,
+                e
+            );
+        }
+    }
+    // TODO: Explicitly handle the error case
 }

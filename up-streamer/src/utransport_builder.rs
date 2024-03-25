@@ -104,6 +104,6 @@ use up_rust::{UStatus, UTransport};
 ///     }
 /// }
 /// ```
-pub trait UTransportBuilder: Send + Sync {
+pub trait UTransportBuilder: Send {
     fn build(&self) -> Result<Box<dyn UTransport>, UStatus>;
 }

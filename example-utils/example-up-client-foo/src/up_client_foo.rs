@@ -69,7 +69,7 @@ impl UPClientFoo {
                                                     authority_listeners.get(authority);
                                                 match authority_listeners {
                                                     None => {
-                                                        println!("{}: Publish: No authority listeners for topic!", &name_clone);
+                                                        println!("{}: Publish: No authority listeners for topic!: {:?}", &name_clone, &topic);
                                                     }
                                                     Some(authority_listeners) => {
                                                         println!("{}: Publish: Found authority listeners for topic!", &name_clone);
@@ -86,7 +86,7 @@ impl UPClientFoo {
                                             match topic_listeners {
                                                 None => {
                                                     println!(
-                                                        "{}: Publish: No listeners for topic!",
+                                                        "{}: Publish: No listeners for topic! message: {msg:?}",
                                                         &name_clone
                                                     );
                                                 }
@@ -119,7 +119,7 @@ impl UPClientFoo {
                                                     authority_listeners.get(authority);
                                                 match authority_listeners {
                                                     None => {
-                                                        println!("{}: Request: No authority listeners for topic!", &name_clone);
+                                                        println!("{}: Request: No authority listeners for topic! {:?}", &name_clone, &topic);
                                                     }
                                                     Some(authority_listeners) => {
                                                         println!("{}: Request: Found authority listeners for topic!", &name_clone);
@@ -136,7 +136,7 @@ impl UPClientFoo {
                                             match topic_listeners {
                                                 None => {
                                                     println!(
-                                                        "{}: Request: No listeners for topic!",
+                                                        "{}: Request: No listeners for topic! message: {msg:?}",
                                                         &name_clone
                                                     );
                                                 }
@@ -169,7 +169,7 @@ impl UPClientFoo {
                                                     authority_listeners.get(authority);
                                                 match authority_listeners {
                                                     None => {
-                                                        println!("{}: Response: No authority listeners for topic!", &name_clone);
+                                                        println!("{}: Response: No authority listeners for topic! {:?}", &name_clone, &topic);
                                                     }
                                                     Some(authority_listeners) => {
                                                         println!("{}: Response: Found authority listeners for topic!", &name_clone);
@@ -186,7 +186,7 @@ impl UPClientFoo {
                                             match topic_listeners {
                                                 None => {
                                                     println!(
-                                                        "{}: Reponse: No listeners for topic!",
+                                                        "{}: Reponse: No listeners for topic! message: {msg:?}",
                                                         &name_clone
                                                     );
                                                 }
@@ -245,10 +245,10 @@ impl UTransport for UPClientFoo {
         topic: UUri,
         listener: Box<dyn Fn(Result<UMessage, UStatus>) + Send + Sync + 'static>,
     ) -> Result<String, UStatus> {
-        println!("registering listener for: {topic:?}");
+        println!("{}: registering listener for: {topic:?}", &self.name);
 
         return if topic.resource.is_none() && topic.entity.is_none() {
-            println!("registering authority listener");
+            println!("{}: registering authority listener", &self.name);
 
             let mut authority_listeners = self.authority_listeners.lock().await;
             let Some(authority) = topic.authority.as_ref() else {
@@ -269,7 +269,7 @@ impl UTransport for UPClientFoo {
                 )),
             }
         } else {
-            println!("registering regular listener");
+            println!("{}: registering regular listener", &self.name);
 
             let mut listeners = self.listeners.lock().await;
             let topic_listeners = listeners.entry(topic).or_default();

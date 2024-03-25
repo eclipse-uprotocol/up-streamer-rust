@@ -53,24 +53,28 @@ async fn main() {
     // the streamer periodically
     run_client(
         "local_foo_client".to_string(),
-        remote_client_uuri(),
+        local_client_uuri(10),
+        remote_client_uuri(20),
         local_client_listener,
         tx_1.clone(),
         rx_1.clone(),
-        publish_from_local_client_for_remote_client(),
-        request_from_local_client_for_remote_client(),
-        response_from_local_client_for_remote_client(),
+        publish_from_local_client_for_remote_client(100),
+        request_from_local_client_for_remote_client(100, 200),
+        response_from_local_client_for_remote_client(100, 200),
+        true,
     )
     .await;
     run_client(
         "remote_bar_client".to_string(),
-        local_client_uuri(),
+        remote_client_uuri(200),
+        local_client_uuri(100),
         remote_client_listener,
         tx_2.clone(),
         rx_2.clone(),
-        publish_from_remote_client_for_local_client(),
-        request_from_remote_client_for_local_client(),
-        response_from_remote_client_for_local_client(),
+        publish_from_remote_client_for_local_client(20),
+        request_from_remote_client_for_local_client(20, 10),
+        response_from_remote_client_for_local_client(20, 10),
+        false,
     )
     .await;
 
@@ -94,12 +98,12 @@ pub fn remote_authority() -> UAuthority {
     }
 }
 
-pub fn local_client_uuri() -> UUri {
+pub fn local_client_uuri(id: u32) -> UUri {
     UUri {
         authority: Some(local_authority()).into(),
         entity: Some(UEntity {
-            name: "local_entity".to_string(),
-            id: Some(10),
+            name: format!("local_entity_{id}").to_string(),
+            id: Some(id),
             version_major: Some(1),
             ..Default::default()
         })
@@ -108,12 +112,12 @@ pub fn local_client_uuri() -> UUri {
     }
 }
 
-pub fn remote_client_uuri() -> UUri {
+pub fn remote_client_uuri(id: u32) -> UUri {
     UUri {
         authority: Some(remote_authority()).into(),
         entity: Some(UEntity {
-            name: "remote_entity".to_string(),
-            id: Some(10),
+            name: format!("remote_entity_{id}").to_string(),
+            id: Some(id),
             version_major: Some(1),
             ..Default::default()
         })
@@ -122,118 +126,76 @@ pub fn remote_client_uuri() -> UUri {
     }
 }
 
-pub fn publish_from_local_client_for_remote_client() -> UMessage {
+pub fn publish_from_local_client_for_remote_client(local_id: u32) -> UMessage {
     UMessage {
         attributes: Some(UAttributes {
-            source: Some(local_client_uuri()).into(),
+            source: Some(local_client_uuri(local_id)).into(),
             type_: UMESSAGE_TYPE_PUBLISH.into(),
             ..Default::default()
         })
         .into(),
-        payload: Some(UPayload {
-            length: None,
-            format: Default::default(),
-            data: None,
-            special_fields: Default::default(),
-        })
-        .into(),
         ..Default::default()
     }
 }
 
-pub fn request_from_local_client_for_remote_client() -> UMessage {
+pub fn request_from_local_client_for_remote_client(local_id: u32, remote_id: u32) -> UMessage {
     UMessage {
         attributes: Some(UAttributes {
-            source: Some(local_client_uuri()).into(),
-            sink: Some(remote_client_uuri()).into(),
+            source: Some(local_client_uuri(local_id)).into(),
+            sink: Some(remote_client_uuri(remote_id)).into(),
             type_: UMESSAGE_TYPE_REQUEST.into(),
             ..Default::default()
         })
         .into(),
-        payload: Some(UPayload {
-            length: None,
-            format: Default::default(),
-            data: None,
-            special_fields: Default::default(),
-        })
-        .into(),
         ..Default::default()
     }
 }
 
-pub fn response_from_local_client_for_remote_client() -> UMessage {
+pub fn response_from_local_client_for_remote_client(local_id: u32, remote_id: u32) -> UMessage {
     UMessage {
         attributes: Some(UAttributes {
-            source: Some(local_client_uuri()).into(),
-            sink: Some(remote_client_uuri()).into(),
+            source: Some(local_client_uuri(local_id)).into(),
+            sink: Some(remote_client_uuri(remote_id)).into(),
             type_: UMESSAGE_TYPE_RESPONSE.into(),
             ..Default::default()
         })
         .into(),
-        payload: Some(UPayload {
-            length: None,
-            format: Default::default(),
-            data: None,
-            special_fields: Default::default(),
-        })
-        .into(),
         ..Default::default()
     }
 }
 
-pub fn publish_from_remote_client_for_local_client() -> UMessage {
+pub fn publish_from_remote_client_for_local_client(remote_id: u32) -> UMessage {
     UMessage {
         attributes: Some(UAttributes {
-            source: Some(remote_client_uuri()).into(),
+            source: Some(remote_client_uuri(remote_id)).into(),
             type_: UMESSAGE_TYPE_PUBLISH.into(),
             ..Default::default()
         })
         .into(),
-        payload: Some(UPayload {
-            length: None,
-            format: Default::default(),
-            data: None,
-            special_fields: Default::default(),
-        })
-        .into(),
         ..Default::default()
     }
 }
 
-pub fn request_from_remote_client_for_local_client() -> UMessage {
+pub fn request_from_remote_client_for_local_client(remote_id: u32, local_id: u32) -> UMessage {
     UMessage {
         attributes: Some(UAttributes {
-            source: Some(remote_client_uuri()).into(),
-            sink: Some(local_client_uuri()).into(),
+            source: Some(remote_client_uuri(remote_id)).into(),
+            sink: Some(local_client_uuri(local_id)).into(),
             type_: UMESSAGE_TYPE_REQUEST.into(),
             ..Default::default()
         })
         .into(),
-        payload: Some(UPayload {
-            length: None,
-            format: Default::default(),
-            data: None,
-            special_fields: Default::default(),
-        })
-        .into(),
         ..Default::default()
     }
 }
 
-pub fn response_from_remote_client_for_local_client() -> UMessage {
+pub fn response_from_remote_client_for_local_client(remote_id: u32, local_id: u32) -> UMessage {
     UMessage {
         attributes: Some(UAttributes {
-            source: Some(remote_client_uuri()).into(),
-            sink: Some(local_client_uuri()).into(),
+            source: Some(remote_client_uuri(remote_id)).into(),
+            sink: Some(local_client_uuri(local_id)).into(),
             type_: UMESSAGE_TYPE_RESPONSE.into(),
             ..Default::default()
-        })
-        .into(),
-        payload: Some(UPayload {
-            length: None,
-            format: Default::default(),
-            data: None,
-            special_fields: Default::default(),
         })
         .into(),
         ..Default::default()
@@ -251,6 +213,7 @@ pub fn remote_client_listener(received: Result<UMessage, UStatus>) {
 #[allow(clippy::too_many_arguments)]
 pub async fn run_client(
     name: String,
+    my_client_uuri: UUri,
     other_client_uuri: UUri,
     listener: fn(Result<UMessage, UStatus>),
     tx: Sender<Result<UMessage, UStatus>>,
@@ -258,35 +221,49 @@ pub async fn run_client(
     publish_msg: UMessage,
     request_msg: UMessage,
     response_msg: UMessage,
+    send: bool,
 ) {
     std::thread::spawn(move || {
         task::block_on(async move {
             let client = UPClientFoo::new(&name, rx, tx).await;
 
             let register_res = client
-                .register_listener(other_client_uuri.clone(), Box::new(listener))
+                .register_listener(my_client_uuri.clone(), Box::new(listener))
                 .await;
             let Ok(_registration_string) = register_res else {
                 panic!("Unable to register!");
             };
 
+            // let register_res = client
+            //     .register_listener(other_client_uuri.clone(), Box::new(listener))
+            //     .await;
+            // let Ok(_registration_string) = register_res else {
+            //     panic!("Unable to register!");
+            // };
+
             loop {
-                let send_res = client.send(publish_msg.clone()).await;
-                if send_res.is_err() {
-                    panic!("Unable to send from client: {}", &name);
+                task::sleep(Duration::from_millis(10000)).await;
+
+                println!("-----------------------------------------------------------------------");
+
+                if !send {
+                    continue;
                 }
+
+                // let send_res = client.send(publish_msg.clone()).await;
+                // if send_res.is_err() {
+                //     panic!("Unable to send from client: {}", &name);
+                // }
 
                 let send_res = client.send(request_msg.clone()).await;
                 if send_res.is_err() {
                     panic!("Unable to send from client: {}", &name);
                 }
 
-                let send_res = client.send(response_msg.clone()).await;
-                if send_res.is_err() {
-                    panic!("Unable to send from client: {}", &name);
-                }
-
-                task::sleep(Duration::from_millis(1000)).await;
+                // let send_res = client.send(response_msg.clone()).await;
+                // if send_res.is_err() {
+                //     panic!("Unable to send from client: {}", &name);
+                // }
             }
         });
     });
