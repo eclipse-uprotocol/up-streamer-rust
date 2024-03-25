@@ -103,7 +103,7 @@ impl UTransportRouterHandle {
         &self,
         in_authority: UAuthority,
         out_authority: UAuthority,
-        out_sender_wrapper: ComparableSender<UMessage>,
+        out_comparable_sender: ComparableSender<UMessage>,
     ) -> Result<(), UStatus> {
         if log_enabled!(Level::Debug) {
             debug!(
@@ -113,7 +113,7 @@ impl UTransportRouterHandle {
                 &UTRANSPORT_ROUTER_HANDLE_FN_REGISTER_TAG,
                 &in_authority,
                 &out_authority,
-                &out_sender_wrapper.id
+                &out_comparable_sender.id
             );
         }
         let (tx_result, rx_result) = bounded(1);
@@ -123,7 +123,7 @@ impl UTransportRouterHandle {
                 RegisterUnregisterControl {
                     in_authority,
                     out_authority,
-                    out_sender_wrapper,
+                    out_comparable_sender,
                     result_sender: tx_result,
                 },
             ))
@@ -170,7 +170,7 @@ impl UTransportRouterHandle {
         &self,
         in_authority: UAuthority,
         out_authority: UAuthority,
-        out_sender_wrapper: ComparableSender<UMessage>,
+        out_comparable_sender: ComparableSender<UMessage>,
     ) -> Result<(), UStatus> {
         if log_enabled!(Level::Debug) {
             debug!(
@@ -180,7 +180,7 @@ impl UTransportRouterHandle {
                 &UTRANSPORT_ROUTER_HANDLE_FN_UNREGISTER_TAG,
                 &in_authority,
                 &out_authority,
-                &out_sender_wrapper.id
+                &out_comparable_sender.id
             );
         }
         let (tx_result, rx_result) = bounded(1);
@@ -189,7 +189,7 @@ impl UTransportRouterHandle {
                 RegisterUnregisterControl {
                     in_authority,
                     out_authority,
-                    out_sender_wrapper,
+                    out_comparable_sender,
                     result_sender: tx_result,
                 },
             ))
@@ -234,7 +234,7 @@ impl UTransportRouterHandle {
 pub(crate) struct RegisterUnregisterControl {
     in_authority: UAuthority,
     out_authority: UAuthority,
-    out_sender_wrapper: ComparableSender<UMessage>,
+    out_comparable_sender: ComparableSender<UMessage>,
     result_sender: Sender<Result<(), UStatus>>,
 }
 
@@ -652,7 +652,7 @@ impl UTransportRouterInner {
                 let RegisterUnregisterControl {
                     in_authority,
                     out_authority,
-                    out_sender_wrapper,
+                    out_comparable_sender,
                     result_sender,
                 } = register_control;
 
@@ -664,11 +664,11 @@ impl UTransportRouterInner {
                         &UTRANSPORT_ROUTER_INNER_FN_HANDLE_COMMAND_TAG,
                         &in_authority,
                         &out_authority,
-                        &out_sender_wrapper.id
+                        &out_comparable_sender.id
                     );
                 }
 
-                if self.message_sender == out_sender_wrapper {
+                if self.message_sender == out_comparable_sender {
                     let result_send_res = result_sender
                         .send(Err(UStatus::fail_with_code(
                             UCode::INVALID_ARGUMENT,
@@ -683,7 +683,7 @@ impl UTransportRouterInner {
                             &UTRANSPORT_ROUTER_INNER_FN_HANDLE_COMMAND_TAG,
                             &in_authority,
                             &out_authority,
-                            &out_sender_wrapper.id,
+                            &out_comparable_sender.id,
                             e,
                         );
                     }
@@ -695,7 +695,7 @@ impl UTransportRouterInner {
                 let listener_map_key = ListenerMapKey {
                     in_authority: in_authority.clone(),
                     out_authority: out_authority.clone(),
-                    out_comparable_sender: out_sender_wrapper.clone(),
+                    out_comparable_sender: out_comparable_sender.clone(),
                 };
 
                 if listener_map.get(&listener_map_key.clone()).is_some() {
@@ -713,7 +713,7 @@ impl UTransportRouterInner {
                             &UTRANSPORT_ROUTER_INNER_FN_HANDLE_COMMAND_TAG,
                             &in_authority,
                             &out_authority,
-                            &out_sender_wrapper.id,
+                            &out_comparable_sender.id,
                             e,
                         );
                     }
@@ -721,18 +721,19 @@ impl UTransportRouterInner {
                 }
 
                 if listener_map.get(&listener_map_key.clone()).is_none() {
-                    let out_sender_wrapper_rrn_closure = out_sender_wrapper.clone();
+                    let out_comparable_sender_rrn_closure = out_comparable_sender.clone();
                     let rrn_closure_name = self.name.clone();
                     let request_response_notification_closure: Box<
                         dyn Fn(Result<UMessage, UStatus>) + Send + Sync + 'static,
                     > = Box::new(move |received: Result<UMessage, UStatus>| {
-                        let out_sender_wrapper_closure = out_sender_wrapper_rrn_closure.clone();
+                        let out_comparable_sender_closure =
+                            out_comparable_sender_rrn_closure.clone();
                         let closure_name = rrn_closure_name.clone();
                         task::spawn_local(async move {
                             request_response_notification_forwarding_callback(
                                 closure_name.clone(),
                                 received,
-                                out_sender_wrapper_closure.clone(),
+                                out_comparable_sender_closure.clone(),
                             )
                             .await;
                         });
@@ -786,13 +787,13 @@ impl UTransportRouterInner {
                             );
 
                             let mut comparable_senders = self.comparable_senders.lock().await;
-                            comparable_senders.insert(out_sender_wrapper.clone());
+                            comparable_senders.insert(out_comparable_sender.clone());
 
                             let mut comparable_sender_active_registrations =
                                 self.comparable_sender_active_registrations.lock().await;
                             let this_comparable_sender_slot =
                                 comparable_sender_active_registrations
-                                    .entry(out_sender_wrapper.clone())
+                                    .entry(out_comparable_sender.clone())
                                     .or_insert(0);
                             *this_comparable_sender_slot += 1usize;
                         }
@@ -811,7 +812,7 @@ impl UTransportRouterInner {
                         &UTRANSPORT_ROUTER_INNER_FN_HANDLE_COMMAND_TAG,
                         &in_authority,
                         &out_authority,
-                        &out_sender_wrapper.id,
+                        &out_comparable_sender.id,
                         e,
                     );
                 }
@@ -820,7 +821,7 @@ impl UTransportRouterInner {
                 let RegisterUnregisterControl {
                     in_authority,
                     out_authority,
-                    out_sender_wrapper,
+                    out_comparable_sender,
                     result_sender,
                 } = unregister_control;
 
@@ -832,11 +833,11 @@ impl UTransportRouterInner {
                         &UTRANSPORT_ROUTER_INNER_FN_HANDLE_COMMAND_TAG,
                         &in_authority,
                         &out_authority,
-                        &out_sender_wrapper.id
+                        &out_comparable_sender.id
                     );
                 }
 
-                if self.message_sender == out_sender_wrapper {
+                if self.message_sender == out_comparable_sender {
                     let result_send_res = result_sender
                         .send(Err(UStatus::fail_with_code(
                             UCode::INVALID_ARGUMENT,
@@ -851,7 +852,7 @@ impl UTransportRouterInner {
                             &UTRANSPORT_ROUTER_INNER_FN_HANDLE_COMMAND_TAG,
                             &in_authority,
                             &out_authority,
-                            &out_sender_wrapper.id,
+                            &out_comparable_sender.id,
                             e,
                         );
                     }
@@ -863,7 +864,7 @@ impl UTransportRouterInner {
                 let lister_map_key = ListenerMapKey {
                     in_authority: in_authority.clone(),
                     out_authority: out_authority.clone(),
-                    out_comparable_sender: out_sender_wrapper.clone(),
+                    out_comparable_sender: out_comparable_sender.clone(),
                 };
 
                 if listener_map.remove(&lister_map_key).is_none() {
@@ -881,7 +882,7 @@ impl UTransportRouterInner {
                             &UTRANSPORT_ROUTER_INNER_FN_HANDLE_COMMAND_TAG,
                             &in_authority,
                             &out_authority,
-                            &out_sender_wrapper.id,
+                            &out_comparable_sender.id,
                             e,
                         );
                     }
@@ -890,7 +891,7 @@ impl UTransportRouterInner {
                     let mut comparable_sender_active_registrations =
                         self.comparable_sender_active_registrations.lock().await;
                     let this_comparable_sender_slot = comparable_sender_active_registrations
-                        .entry(out_sender_wrapper.clone())
+                        .entry(out_comparable_sender.clone())
                         .or_insert(0);
                     if *this_comparable_sender_slot < 1usize {
                         error!(
@@ -911,7 +912,7 @@ impl UTransportRouterInner {
                                 &UTRANSPORT_ROUTER_INNER_FN_HANDLE_COMMAND_TAG,
                             );
                         }
-                        let removed = comparable_senders.remove(&out_sender_wrapper);
+                        let removed = comparable_senders.remove(&out_comparable_sender);
                         if !removed {
                             error!(
                                 "{}:{}:{} Unable to remove comparable sender",
@@ -932,7 +933,7 @@ impl UTransportRouterInner {
                         &UTRANSPORT_ROUTER_INNER_FN_HANDLE_COMMAND_TAG,
                         &in_authority,
                         &out_authority,
-                        &out_sender_wrapper.id,
+                        &out_comparable_sender.id,
                         e,
                     );
                 }
@@ -971,7 +972,7 @@ impl UTransportRouterInner {
 async fn request_response_notification_forwarding_callback(
     name: Arc<String>,
     received: Result<UMessage, UStatus>,
-    out_sender_wrapper: ComparableSender<UMessage>,
+    out_comparable_sender: ComparableSender<UMessage>,
 ) {
     if log_enabled!(Level::Debug) {
         debug!(
@@ -979,7 +980,7 @@ async fn request_response_notification_forwarding_callback(
             &name,
             &UTRANSPORT_ROUTER_INNER_TAG,
             &UTRANSPORT_ROUTER_INNER_FN_REQUEST_RESPONSE_NOTIFICATION_CALLBACK_TAG,
-            &out_sender_wrapper.id
+            &out_comparable_sender.id
         );
     }
     if let Ok(msg) = received {
@@ -1024,14 +1025,14 @@ async fn request_response_notification_forwarding_callback(
             );
             return;
         }
-        let forward_result = out_sender_wrapper.send(msg).await;
+        let forward_result = out_comparable_sender.send(msg).await;
         if let Err(e) = forward_result {
             error!(
                 "{}:{}:{} Forwarding message from this UTransportRouter onto another UTransportRouter's Receiver<UMessage> failed: {}; error: {:?}",
                 &name,
                 &UTRANSPORT_ROUTER_INNER_TAG,
                 &UTRANSPORT_ROUTER_INNER_FN_REQUEST_RESPONSE_NOTIFICATION_CALLBACK_TAG,
-                &out_sender_wrapper.id,
+                &out_comparable_sender.id,
                 e
             );
         }
