@@ -19,7 +19,7 @@ members = [
 [workspace.package]
 rust-version = "1.66.1"
 version = "0.1.5-dev" # uProtocol version
-repository = "https://github.com/eclipse-uprotocol/uprotocol-platform-linux-zenoh"
+repository = "https://github.com/eclipse-uprotocol/up-streamer-rust"
 homepage = "https://github.com/eclipse-uprotocol"
 authors = [
     "Pete LeVasseur <plevasseur@gmail.com>",

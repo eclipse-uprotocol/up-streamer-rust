@@ -7,6 +7,8 @@ to bridge from one transport to another.
 
 Implementation of the uProtocol's uStreamer specification in Rust.
 
+### Generating cargo docs locally
+
 Documentation can be generated locally with:
 ```bash
 cargo doc --package up-streamer --open
@@ -26,7 +28,4 @@ which will open your browser to view the docs.
 
 ### Usage
 
-After following along with the docs to add all your forwarding routes, you'll
-then need to keep the instantiated `UStreamer`, `UTransportRouter`, and
-`UTransportRouterHandle` around and then pause the main thread, so it will not
-exit, while the routing happens in the background threads spun up.
+After following along with the [cargo docs](#generating-cargo-docs-locally) generated to add all your forwarding routes, you'll then need to keep the instantiated `UStreamer`, `UTransportRouter`, and `UTransportRouterHandle` around and then pause the main thread, so it will not exit, while the routing happens in the background threads spun up.
