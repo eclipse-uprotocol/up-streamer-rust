@@ -252,6 +252,12 @@ impl UStreamer {
     /// Adds a forwarding rule to the [`UStreamer`] based on an in [`Route`][crate::Route] and an
     /// out [`Route`][crate::Route]
     ///
+    /// Works for any [`UMessage`][up_rust::UMessage] type which has a destination / sink contained
+    /// in its attributes, i.e.
+    /// * [`UMessageType::UMESSAGE_TYPE_NOTIFICATION`][up_rust::UMessageType::UMESSAGE_TYPE_NOTIFICATION]
+    /// * [`UMessageType::UMESSAGE_TYPE_REQUEST`][up_rust::UMessageType::UMESSAGE_TYPE_REQUEST]
+    /// * [`UMessageType::UMESSAGE_TYPE_RESPONSE`][up_rust::UMessageType::UMESSAGE_TYPE_RESPONSE]
+    ///
     /// # Parameters
     ///
     /// * `in` - [`Route`][crate::Route] we will bridge _from_
@@ -293,6 +299,12 @@ impl UStreamer {
 
     /// Deletes a forwarding rule from the [`UStreamer`] based on an in [`Route`][crate::Route] and an
     /// out [`Route`][crate::Route]
+    ///
+    /// Works for any [`UMessage`][up_rust::UMessage] type which has a destination / sink contained
+    /// in its attributes, i.e.
+    /// * [`UMessageType::UMESSAGE_TYPE_NOTIFICATION`][up_rust::UMessageType::UMESSAGE_TYPE_NOTIFICATION]
+    /// * [`UMessageType::UMESSAGE_TYPE_REQUEST`][up_rust::UMessageType::UMESSAGE_TYPE_REQUEST]
+    /// * [`UMessageType::UMESSAGE_TYPE_RESPONSE`][up_rust::UMessageType::UMESSAGE_TYPE_RESPONSE]
     ///
     /// # Parameters
     ///
