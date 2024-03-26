@@ -896,8 +896,16 @@ impl UTransportRouterInner {
                         );
                     }
                     return;
-                } else {
-                    // TODO: Add logging for the success path
+                } else if log_enabled!(Level::Debug) {
+                    debug!(
+                        "{}:{}:{} Able to unregister: ({:?}, {:?}, {})",
+                        &self.name,
+                        &UTRANSPORT_ROUTER_INNER_TAG,
+                        &UTRANSPORT_ROUTER_INNER_FN_HANDLE_COMMAND_TAG,
+                        &in_authority,
+                        &out_authority,
+                        &out_comparable_sender.id
+                    );
                 }
 
                 let result_send_res = result_sender.send(Ok(())).await;

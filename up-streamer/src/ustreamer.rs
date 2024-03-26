@@ -399,9 +399,11 @@ mod tests {
             Self {}
         }
     }
+
     pub struct UTransportBuilderFoo {
         succeed: bool,
     }
+
     impl UTransportBuilder for UTransportBuilderFoo {
         fn build(&self) -> Result<Box<dyn UTransport>, UStatus> {
             if self.succeed {
@@ -457,7 +459,9 @@ mod tests {
             Self {}
         }
     }
+
     pub struct UTransportBuilderBar;
+
     impl UTransportBuilder for UTransportBuilderBar {
         fn build(&self) -> Result<Box<dyn UTransport>, UStatus> {
             let utransport_foo: Box<dyn UTransport> = Box::new(UPClientBar::new());
@@ -756,12 +760,4 @@ mod tests {
         }
         assert!(local_transport_router.is_err());
     }
-
-    /*
-    /// This is an example where we need to set up multiple routes to different destinations where one of the
-    /// routes is the default route (ex. the cloud gateway)
-    ///
-    /// TODO: Visit with Steven on this point
-    ///  We'd have to have another ability within register_listener to register on wildcard authority
-     */
 }
