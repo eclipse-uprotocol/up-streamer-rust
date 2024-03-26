@@ -100,6 +100,14 @@ pub struct UTransportRouterHandle {
         Arc<Mutex<RefCell<Option<futures::channel::mpsc::Receiver<UMessage>>>>>,
 }
 
+/// Used to obtain a single [`futures::channel::mpsc::Receiver<UMessage>`][futures::channel::mpsc::Receiver],
+/// only once, which can then be held onto and polled for all `UMessage` coming into and out of
+/// this [`UTransportRouter`]
+///
+/// # Returns
+///
+/// An `Option<futures::channel::mpsc::Receiver<UMessage>>`. Note that once called the ownership
+/// of this single `Receiver` is transferred to you to maintain. Future calls will return `None`.
 impl UTransportRouterHandle {
     pub async fn get_recording_message_receiver(
         &self,
