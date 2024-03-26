@@ -7,26 +7,50 @@ to bridge from one transport to another.
 
 Implementation of the uProtocol's uStreamer specification in Rust.
 
-### Pictorially
+### Visual Breakdown
 
 ```mermaid
 flowchart TB
-    subgraph ide0 [zenohd]
-    main-->ide1
-    subgraph ide1 [streamer-plugin]
-    a1[up-streamer-rust]-->ide2
-    a1[up-streamer-rust]-->ide3
-    subgraph ide2 [OS thread]
-    a2[up-client-zenoh-rust]
+
+    subgraph ide0 [Usage Flow]
+    subgraph ide5 [UTransportRouter]
     end
-    subgraph ide3 [OS thread]
-    subgraph ide4 [Rust bridge e.g. up-client-someip-rust using cxx]
-    a3[up-client-someip-cpp]
+
+    subgraph ide6 [UTransportRouterInner]
+    a4[Async Loop Here Awaiting \n Commands & Messages \n in OS thread to send over  \n non-thread-safe UTransport]
     end
+
+    subgraph ide7 [UStreamer]
+    a5[add_forwarding_rule]
+    a6[delete_forwarding_rule]
     end
+
+    subgraph ide8 [Route]
     end
+
+    main-- start(UTransportBuilder) -->ide5
+    ide5-- UTransportRouterHandle -->main
+    ide5-- launch() --> ide6
+
+    main-- new() -->ide7
+    ide7-- UStreamer -->main
+
+    main-- new(UAuthority, UTransportRouterHandle) --> ide8
+    ide8-- Route -->main
+
+    main-- add_forwarding_rule(in: Route, out: Route) -->ide7
+    main-- delete_forwarding_rule(in: Route, out: Route) -->ide7
+
+    a5-->a4
+    a4-- Result -->a5
+
+    a6-->a4
+    a4-- Result -->a6
+
     end
 ```
+
+`UTransport` is not thread-safe, so we opt for an approach where a `UTransportRouter` starts a `UTransportRouterInner` which launches an OS thread onto which the `Box<dyn UTransport>` is built and we await further commands / messages in an async loop.
 
 ### Generating cargo docs locally
 
