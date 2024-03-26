@@ -74,3 +74,9 @@ which will open your browser to view the docs.
 ### Usage
 
 After following along with the [cargo docs](#generating-cargo-docs-locally) generated to add all your forwarding routes, you'll then need to keep the instantiated `UStreamer`, `UTransportRouter`, and `UTransportRouterHandle` around and then pause the main thread, so it will not exit, while the routing happens in the background threads spun up.
+
+## Implementation Status
+
+- [x] Routing of Request, Response, and Notification Messages
+- [ ] Routing of Publish messages (requires further development of uSubscription interface)
+- [x] Mechanism to retrieve messages received on and sent over transports
