@@ -89,15 +89,17 @@ impl<T> PartialEq for ComparableSender<T> {
 
 impl<T> Eq for ComparableSender<T> {}
 
+type SnaggableReceiver =
+    Arc<Mutex<RefCell<Option<futures::channel::mpsc::Receiver<Arc<UMessage>>>>>>;
+
 /// A [`UTransportRouterHandle`] which is returned from starting a [`UTransportRouter`]
 ///
 /// Used to build a [`Route`][crate::Route]
 pub struct UTransportRouterHandle {
     pub(crate) name: String,
     pub(crate) command_sender: Sender<UTransportRouterCommand>,
-    pub(crate) message_sender: ComparableSender<UMessage>,
-    pub(crate) recording_message_receiver:
-        Arc<Mutex<RefCell<Option<futures::channel::mpsc::Receiver<UMessage>>>>>,
+    pub(crate) message_sender: ComparableSender<Arc<UMessage>>,
+    pub(crate) recording_message_receiver: SnaggableReceiver,
 }
 
 /// Used to obtain a single [`futures::channel::mpsc::Receiver<UMessage>`][futures::channel::mpsc::Receiver],
@@ -111,7 +113,7 @@ pub struct UTransportRouterHandle {
 impl UTransportRouterHandle {
     pub async fn get_recording_message_receiver(
         &self,
-    ) -> Option<futures::channel::mpsc::Receiver<UMessage>> {
+    ) -> Option<futures::channel::mpsc::Receiver<Arc<UMessage>>> {
         let recording_message_receiver = self
             .recording_message_receiver
             .lock()
@@ -125,7 +127,7 @@ impl UTransportRouterHandle {
         &self,
         in_authority: UAuthority,
         out_authority: UAuthority,
-        out_comparable_sender: ComparableSender<UMessage>,
+        out_comparable_sender: ComparableSender<Arc<UMessage>>,
     ) -> Result<(), UStatus> {
         if log_enabled!(Level::Debug) {
             debug!(
@@ -192,7 +194,7 @@ impl UTransportRouterHandle {
         &self,
         in_authority: UAuthority,
         out_authority: UAuthority,
-        out_comparable_sender: ComparableSender<UMessage>,
+        out_comparable_sender: ComparableSender<Arc<UMessage>>,
     ) -> Result<(), UStatus> {
         if log_enabled!(Level::Debug) {
             debug!(
@@ -256,7 +258,7 @@ impl UTransportRouterHandle {
 pub(crate) struct RegisterUnregisterControl {
     in_authority: UAuthority,
     out_authority: UAuthority,
-    out_comparable_sender: ComparableSender<UMessage>,
+    out_comparable_sender: ComparableSender<Arc<UMessage>>,
     result_sender: Sender<Result<(), UStatus>>,
 }
 
@@ -269,9 +271,9 @@ pub(crate) enum UTransportRouterCommand {
 pub(crate) struct UTransportChannels {
     command_sender: Sender<UTransportRouterCommand>,
     command_receiver: Receiver<UTransportRouterCommand>,
-    message_sender: ComparableSender<UMessage>,
-    message_receiver: Receiver<UMessage>,
-    recording_message_sender: futures::channel::mpsc::Sender<UMessage>,
+    message_sender: ComparableSender<Arc<UMessage>>,
+    message_receiver: Receiver<Arc<UMessage>>,
+    recording_message_sender: futures::channel::mpsc::Sender<Arc<UMessage>>,
 }
 
 /// A [`UTransportRouter`] manages a `up-client-foo-rust`'s [`UTransport`][up_rust::UTransport]
@@ -468,7 +470,7 @@ impl UTransportRouter {
 pub(crate) struct ListenerMapKey {
     in_authority: UAuthority,
     out_authority: UAuthority,
-    out_comparable_sender: ComparableSender<UMessage>,
+    out_comparable_sender: ComparableSender<Arc<UMessage>>,
 }
 
 struct UTransportRouterInner {
@@ -480,10 +482,10 @@ struct UTransportRouterInner {
     #[allow(dead_code)] // allow us flexibility in the future
     command_receiver: Receiver<UTransportRouterCommand>,
     #[allow(dead_code)] // allow us flexibility in the future
-    message_sender: ComparableSender<UMessage>,
+    message_sender: ComparableSender<Arc<UMessage>>,
     #[allow(dead_code)] // allow us flexibility in the future
-    message_receiver: Receiver<UMessage>,
-    recording_message_sender: futures::channel::mpsc::Sender<UMessage>,
+    message_receiver: Receiver<Arc<UMessage>>,
+    recording_message_sender: futures::channel::mpsc::Sender<Arc<UMessage>>,
 }
 
 impl UTransportRouterInner {
@@ -592,7 +594,7 @@ impl UTransportRouterInner {
     async fn launch(
         &self,
         command_receiver: Receiver<UTransportRouterCommand>,
-        message_receiver: Receiver<UMessage>,
+        message_receiver: Receiver<Arc<UMessage>>,
     ) {
         let mut command_fut = command_receiver.recv().fuse();
         let mut message_fut = message_receiver.recv().fuse();
@@ -925,7 +927,7 @@ impl UTransportRouterInner {
         }
     }
 
-    async fn send_over_utransport(&self, message: UMessage) {
+    async fn send_over_utransport(&self, message: Arc<UMessage>) {
         let message_id = message
             .attributes
             .as_ref()
@@ -988,6 +990,7 @@ impl UTransportRouterInner {
             );
         }
 
+        let message = (*message).clone();
         let send_result = self.utransport.send(message).await;
         // unfortunately because send() takes ownership of message, it would be required to clone()
         // before calling send(). However, that feels wasteful to do for some small percentage of
@@ -1017,8 +1020,8 @@ impl UTransportRouterInner {
 async fn request_response_notification_forwarding_callback(
     name: Arc<String>,
     received: Result<UMessage, UStatus>,
-    out_comparable_sender: ComparableSender<UMessage>,
-    recording_message_sender: futures::channel::mpsc::Sender<UMessage>,
+    out_comparable_sender: ComparableSender<Arc<UMessage>>,
+    recording_message_sender: futures::channel::mpsc::Sender<Arc<UMessage>>,
 ) {
     if log_enabled!(Level::Debug) {
         debug!(
@@ -1032,6 +1035,8 @@ async fn request_response_notification_forwarding_callback(
     }
     match received {
         Ok(msg) => {
+            let msg = Arc::new(msg);
+
             // TODO: Make recording configurable
             let mut sender = recording_message_sender.clone();
             let recording_message_sender_res = sender.send(msg.clone()).await;
@@ -1093,19 +1098,29 @@ async fn request_response_notification_forwarding_callback(
                     msg.clone()
                 );
             }
-            let UMessage { attributes, .. } = &msg;
-            let Some(attr) = attributes.as_ref() else {
-                warn!(
-                    "{}:{}:{} message_id:comparable_sender_id {}:{} No UAttributes attached, cannot proceed",
+
+            let type_ = msg
+                .attributes
+                .as_ref()
+                .ok_or_else(|| {
+                    UStatus::fail_with_code(
+                        UCode::INVALID_ARGUMENT,
+                        "Message cannot be sent without attributes",
+                    )
+                })
+                .map(|attr| attr.type_.enum_value_or(UMESSAGE_TYPE_UNSPECIFIED));
+            let Ok(type_) = type_ else {
+                error!(
+                    "{}:{}:{} comparable_sender_id {} Missing metadata needed to send. error: {:?}",
                     &name,
                     &UTRANSPORT_ROUTER_INNER_TAG,
-                    &UTRANSPORT_ROUTER_INNER_FN_REQUEST_RESPONSE_NOTIFICATION_CALLBACK_TAG,
-                    message_id,
+                    &UTRANSPORT_ROUTER_INNER_FN_SEND_OVER_TRANSPORT_TAG,
                     &out_comparable_sender.id,
+                    type_.err().unwrap()
                 );
                 return;
             };
-            let type_ = attr.type_.enum_value_or(UMESSAGE_TYPE_UNSPECIFIED);
+
             if type_ == UMESSAGE_TYPE_UNSPECIFIED {
                 warn!(
                     "{}:{}:{} message_id:comparable_sender_id {}:{} Message type is not specified, cannot proceed",
