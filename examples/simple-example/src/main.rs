@@ -37,14 +37,14 @@ async fn main() {
     let utransport_builder_foo =
         UTransportBuilderFoo::new("utransport_builder_foo", rx_1.clone(), tx_1.clone());
     let utransport_router_handle_foo = Arc::new(
-        UTransportRouter::start("foo".to_string(), utransport_builder_foo, 100, 100).unwrap(),
+        UTransportRouter::start("foo".to_string(), utransport_builder_foo, 100, 100, 100).unwrap(),
     );
 
     // kicking off a UTransportRouter for protocol "bar" and retrieving its UTransportRouterHandle
     let utransport_builder_bar =
         UTransportBuilderFoo::new("utransport_builder_bar", rx_2.clone(), tx_2.clone());
     let utransport_router_handle_bar = Arc::new(
-        UTransportRouter::start("bar".to_string(), utransport_builder_bar, 100, 100).unwrap(),
+        UTransportRouter::start("bar".to_string(), utransport_builder_bar, 100, 100, 100).unwrap(),
     );
 
     // getting handles to the messages flowing into / out of each transport for recording purposes

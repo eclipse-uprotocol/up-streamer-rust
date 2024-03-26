@@ -160,7 +160,7 @@ impl UTransportRouterHandle {
             }
         }
 
-        let timeout_duration = Duration::from_millis(1000); // Example: 5 seconds
+        let timeout_duration = Duration::from_millis(1000);
         match timeout(timeout_duration, rx_result.recv()).await {
             Ok(result) => match result {
                 Ok(result) => match result {
@@ -223,7 +223,7 @@ impl UTransportRouterHandle {
                 )
             })?;
 
-        let timeout_duration = Duration::from_millis(1000); // Example: 5 seconds
+        let timeout_duration = Duration::from_millis(1000);
         match timeout(timeout_duration, rx_result.recv()).await {
             Ok(result) => match result {
                 Ok(result) => match result {
@@ -341,7 +341,7 @@ pub(crate) struct UTransportChannels {
 /// # }
 ///
 /// let local_transport_router =
-///             UTransportRouter::start("FOO".to_string(), foo_transport_builder::UTransportBuilderFoo::new(), 100, 200);
+///             UTransportRouter::start("FOO".to_string(), foo_transport_builder::UTransportBuilderFoo::new(), 100, 200, 300);
 ///         assert!(local_transport_router.is_ok());
 ///         let local_transport_router_handle = Arc::new(local_transport_router.unwrap());
 /// ```
@@ -379,6 +379,7 @@ impl UTransportRouter {
         utransport_builder: T,
         command_queue_size: usize,
         message_queue_size: usize,
+        recording_message_queue_size: usize,
     ) -> Result<UTransportRouterHandle, UStatus>
     where
         T: UTransportBuilder + 'static,
@@ -407,7 +408,7 @@ impl UTransportRouter {
         let (message_sender, message_receiver) = bounded(message_queue_size);
         let message_sender = ComparableSender::new(message_sender);
         let (recording_message_sender, recording_message_receiver) =
-            futures::channel::mpsc::channel(100);
+            futures::channel::mpsc::channel(recording_message_queue_size);
 
         let utransport_channels = UTransportChannels {
             command_sender: command_sender.clone(),
