@@ -16,11 +16,12 @@ use async_std::channel::{bounded, Receiver, Sender};
 use async_std::future::timeout;
 use async_std::sync::{Arc, Mutex};
 use async_std::task;
-use futures::select;
 use futures::FutureExt;
+use futures::{select, SinkExt};
 use log::*;
 use std::any::Any;
-use std::collections::{HashMap, HashSet};
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::fmt::Debug;
 use std::hash::{Hash, Hasher};
 use std::ops::Deref;
@@ -95,9 +96,23 @@ pub struct UTransportRouterHandle {
     pub(crate) name: String,
     pub(crate) command_sender: Sender<UTransportRouterCommand>,
     pub(crate) message_sender: ComparableSender<UMessage>,
+    pub(crate) recording_message_receiver:
+        Arc<Mutex<RefCell<Option<futures::channel::mpsc::Receiver<UMessage>>>>>,
 }
 
 impl UTransportRouterHandle {
+    pub async fn get_recording_message_receiver(
+        &self,
+    ) -> Option<futures::channel::mpsc::Receiver<UMessage>> {
+        let recording_message_receiver = self
+            .recording_message_receiver
+            .lock()
+            .await
+            .borrow_mut()
+            .take();
+        recording_message_receiver
+    }
+
     pub(crate) async fn register(
         &self,
         in_authority: UAuthority,
@@ -248,6 +263,7 @@ pub(crate) struct UTransportChannels {
     command_receiver: Receiver<UTransportRouterCommand>,
     message_sender: ComparableSender<UMessage>,
     message_receiver: Receiver<UMessage>,
+    recording_message_sender: futures::channel::mpsc::Sender<UMessage>,
 }
 
 /// A [`UTransportRouter`] manages a `up-client-foo-rust`'s [`UTransport`][up_rust::UTransport]
@@ -382,12 +398,15 @@ impl UTransportRouter {
         let (command_sender, command_receiver) = bounded(command_queue_size);
         let (message_sender, message_receiver) = bounded(message_queue_size);
         let message_sender = ComparableSender::new(message_sender);
+        let (recording_message_sender, recording_message_receiver) =
+            futures::channel::mpsc::channel(100);
 
         let utransport_channels = UTransportChannels {
             command_sender: command_sender.clone(),
             command_receiver,
             message_sender: message_sender.clone(),
             message_receiver,
+            recording_message_sender,
         };
 
         debug!(
@@ -429,6 +448,9 @@ impl UTransportRouter {
             name: name.to_string(),
             command_sender,
             message_sender,
+            recording_message_receiver: Arc::new(Mutex::new(RefCell::new(Some(
+                recording_message_receiver,
+            )))),
         })
     }
 }
@@ -444,8 +466,6 @@ struct UTransportRouterInner {
     name: Arc<String>,
     utransport: Box<dyn UTransport>,
     listener_map: Arc<Mutex<HashMap<ListenerMapKey, String>>>,
-    comparable_sender_active_registrations: Arc<Mutex<HashMap<ComparableSender<UMessage>, usize>>>,
-    comparable_senders: Arc<Mutex<HashSet<ComparableSender<UMessage>>>>,
     #[allow(dead_code)] // allow us flexibility in the future
     command_sender: Sender<UTransportRouterCommand>,
     #[allow(dead_code)] // allow us flexibility in the future
@@ -454,6 +474,7 @@ struct UTransportRouterInner {
     message_sender: ComparableSender<UMessage>,
     #[allow(dead_code)] // allow us flexibility in the future
     message_receiver: Receiver<UMessage>,
+    recording_message_sender: futures::channel::mpsc::Sender<UMessage>,
 }
 
 impl UTransportRouterInner {
@@ -507,14 +528,13 @@ impl UTransportRouterInner {
                         name: Arc::new(name.to_string()),
                         utransport,
                         listener_map: Arc::new(Mutex::new(HashMap::new())),
-                        comparable_sender_active_registrations: Arc::new(
-                            Mutex::new(HashMap::new()),
-                        ),
-                        comparable_senders: Arc::new(Mutex::new(HashSet::new())),
                         command_sender: utransport_channels.command_sender.clone(),
                         command_receiver: utransport_channels.command_receiver.clone(),
                         message_sender: utransport_channels.message_sender.clone(),
                         message_receiver: utransport_channels.message_receiver.clone(),
+                        recording_message_sender: utransport_channels
+                            .recording_message_sender
+                            .clone(),
                     });
 
                     if log_enabled!(Level::Debug) {
@@ -585,53 +605,57 @@ impl UTransportRouterInner {
                 );
             }
             select! {
-                command = command_fut => match command {
-                    Ok(command) => {
-                        if log_enabled!(Level::Debug) {
-                            debug!(
-                                "{}:{}:{} Received command: ({:?})",
+                command = command_fut => {
+                    match command {
+                        Ok(command) => {
+                            if log_enabled!(Level::Debug) {
+                                debug!(
+                                    "{}:{}:{} Received command: ({:?})",
+                                    &self.name,
+                                    &UTRANSPORT_ROUTER_INNER_TAG,
+                                    &UTRANSPORT_ROUTER_INNER_FN_LAUNCH_TAG,
+                                    &command
+                                );
+                            }
+                            self.handle_command(command).await;
+                        },
+                        Err(e) => {
+                            error!(
+                                "{}:{}:{} Unable to receive command: error: ({:?})",
                                 &self.name,
                                 &UTRANSPORT_ROUTER_INNER_TAG,
                                 &UTRANSPORT_ROUTER_INNER_FN_LAUNCH_TAG,
-                                &command
+                                e
                             );
                         }
-                        self.handle_command(command).await;
-                        command_fut = command_receiver.recv().fuse(); // Re-arm future for the next iteration
-                    },
-                    Err(e) => {
-                        error!(
-                            "{}:{}:{} Unable to receive command: error: ({:?})",
-                            &self.name,
-                            &UTRANSPORT_ROUTER_INNER_TAG,
-                            &UTRANSPORT_ROUTER_INNER_FN_LAUNCH_TAG,
-                            e
-                        );
-                    },
+                    }
+                    command_fut = command_receiver.recv().fuse(); // Re-arm future for the next iteration
                 },
-                message = message_fut => match message {
-                    Ok(msg) => {
-                        if log_enabled!(Level::Debug) {
-                            debug!(
-                                "{}:{}:{} Received a message intended to be sent out over our UTransport: message: {:?}",
+                message = message_fut => {
+                    match message {
+                        Ok(msg) => {
+                            if log_enabled!(Level::Debug) {
+                                debug!(
+                                    "{}:{}:{} Received a message intended to be sent out over our UTransport: message: {:?}",
+                                    &self.name,
+                                    &UTRANSPORT_ROUTER_INNER_TAG,
+                                    &UTRANSPORT_ROUTER_INNER_FN_LAUNCH_TAG,
+                                    &msg
+                                );
+                            }
+                            self.send_over_utransport(msg).await;
+                        },
+                        Err(e) => {
+                            error!(
+                                "{}:{}:{} Unable to receive message: error: ({:?})",
                                 &self.name,
                                 &UTRANSPORT_ROUTER_INNER_TAG,
                                 &UTRANSPORT_ROUTER_INNER_FN_LAUNCH_TAG,
-                                &msg
+                                e
                             );
-                        }
-                        self.send_over_utransport(msg).await;
-                        message_fut = message_receiver.recv().fuse(); // Re-arm future for the next iteration
-                    },
-                    Err(e) => {
-                        error!(
-                            "{}:{}:{} Unable to receive message: error: ({:?})",
-                            &self.name,
-                            &UTRANSPORT_ROUTER_INNER_TAG,
-                            &UTRANSPORT_ROUTER_INNER_FN_LAUNCH_TAG,
-                            e
-                        );
-                    },
+                        },
+                    }
+                    message_fut = message_receiver.recv().fuse(); // Re-arm future for the next iteration
                 },
             }
             if log_enabled!(Level::Debug) {
@@ -719,12 +743,14 @@ impl UTransportRouterInner {
                     return;
                 }
 
+                let recording_message_sender = self.recording_message_sender.clone();
                 if listener_map.get(&listener_map_key.clone()).is_none() {
                     let out_comparable_sender_rrn_closure = out_comparable_sender.clone();
                     let rrn_closure_name = self.name.clone();
                     let request_response_notification_closure: Box<
                         dyn Fn(Result<UMessage, UStatus>) + Send + Sync + 'static,
                     > = Box::new(move |received: Result<UMessage, UStatus>| {
+                        let recording_message_sender_closure = recording_message_sender.clone();
                         let out_comparable_sender_closure =
                             out_comparable_sender_rrn_closure.clone();
                         let closure_name = rrn_closure_name.clone();
@@ -733,6 +759,7 @@ impl UTransportRouterInner {
                                 closure_name.clone(),
                                 received,
                                 out_comparable_sender_closure.clone(),
+                                recording_message_sender_closure,
                             )
                             .await;
                         });
@@ -751,17 +778,6 @@ impl UTransportRouterInner {
                     match request_response_notification_registration_result {
                         Ok(rrn_reg_string) => {
                             listener_map.insert(listener_map_key, rrn_reg_string);
-
-                            let mut comparable_senders = self.comparable_senders.lock().await;
-                            comparable_senders.insert(out_comparable_sender.clone());
-
-                            let mut comparable_sender_active_registrations =
-                                self.comparable_sender_active_registrations.lock().await;
-                            let this_comparable_sender_slot =
-                                comparable_sender_active_registrations
-                                    .entry(out_comparable_sender.clone())
-                                    .or_insert(0);
-                            *this_comparable_sender_slot += 1usize;
                         }
                         _ => {
                             let result_send_res = result_sender
@@ -872,40 +888,7 @@ impl UTransportRouterInner {
                     }
                     return;
                 } else {
-                    let mut comparable_sender_active_registrations =
-                        self.comparable_sender_active_registrations.lock().await;
-                    let this_comparable_sender_slot = comparable_sender_active_registrations
-                        .entry(out_comparable_sender.clone())
-                        .or_insert(0);
-                    if *this_comparable_sender_slot < 1usize {
-                        error!(
-                            "{}:{}:{} No active comparable senders",
-                            &self.name,
-                            &UTRANSPORT_ROUTER_INNER_TAG,
-                            &UTRANSPORT_ROUTER_INNER_FN_HANDLE_COMMAND_TAG,
-                        );
-                    }
-                    *this_comparable_sender_slot -= 1usize;
-                    if *this_comparable_sender_slot < 1usize {
-                        let mut comparable_senders = self.comparable_senders.lock().await;
-                        if log_enabled!(Level::Debug) {
-                            debug!(
-                                "{}:{}:{} Last active registration for comparable sender",
-                                &self.name,
-                                &UTRANSPORT_ROUTER_INNER_TAG,
-                                &UTRANSPORT_ROUTER_INNER_FN_HANDLE_COMMAND_TAG,
-                            );
-                        }
-                        let removed = comparable_senders.remove(&out_comparable_sender);
-                        if !removed {
-                            error!(
-                                "{}:{}:{} Unable to remove comparable sender",
-                                &self.name,
-                                &UTRANSPORT_ROUTER_INNER_TAG,
-                                &UTRANSPORT_ROUTER_INNER_FN_HANDLE_COMMAND_TAG,
-                            );
-                        }
-                    }
+                    // TODO: Add logging for the success path
                 }
 
                 let result_send_res = result_sender.send(Ok(())).await;
@@ -966,6 +949,28 @@ impl UTransportRouterInner {
             );
         }
 
+        // TODO: Make recording configurable
+        let mut sender = self.recording_message_sender.clone();
+        let recording_message_sender_res = sender.send(message.clone()).await;
+        if let Err(e) = recording_message_sender_res {
+            error!(
+                "{}:{}:{} Failed to send message back for recording: message id: {} error: {:?}",
+                &self.name,
+                &UTRANSPORT_ROUTER_INNER_TAG,
+                &UTRANSPORT_ROUTER_INNER_FN_SEND_OVER_TRANSPORT_TAG,
+                message_id,
+                e,
+            );
+        } else if log_enabled!(Level::Debug) {
+            debug!(
+                "{}:{}:{} message_id {} Sending message for recording succeeded",
+                &self.name,
+                &UTRANSPORT_ROUTER_INNER_TAG,
+                &UTRANSPORT_ROUTER_INNER_FN_SEND_OVER_TRANSPORT_TAG,
+                message_id,
+            );
+        }
+
         let send_result = self.utransport.send(message).await;
         // unfortunately because send() takes ownership of message, it would be required to clone()
         // before calling send(). However, that feels wasteful to do for some small percentage of
@@ -996,10 +1001,12 @@ async fn request_response_notification_forwarding_callback(
     name: Arc<String>,
     received: Result<UMessage, UStatus>,
     out_comparable_sender: ComparableSender<UMessage>,
+    recording_message_sender: futures::channel::mpsc::Sender<UMessage>,
 ) {
     if log_enabled!(Level::Debug) {
         debug!(
-            "{}:{}:{} comparable_sender_id {} Forwarding Request | Response | Notification message from this UTransportRouter onto another UTransportRouter's Receiver<UMessage>",
+            "{}:{}:{} comparable_sender_id {} Forwarding Request | Response | Notification message \
+            from this UTransportRouter onto another UTransportRouter's Receiver<UMessage>",
             &name,
             &UTRANSPORT_ROUTER_INNER_TAG,
             &UTRANSPORT_ROUTER_INNER_FN_REQUEST_RESPONSE_NOTIFICATION_CALLBACK_TAG,
@@ -1008,6 +1015,26 @@ async fn request_response_notification_forwarding_callback(
     }
     match received {
         Ok(msg) => {
+            // TODO: Make recording configurable
+            let mut sender = recording_message_sender.clone();
+            let recording_message_sender_res = sender.send(msg.clone()).await;
+            if let Err(e) = recording_message_sender_res {
+                error!(
+                    "{}:{}:{} Failed to send message back for recording: error: {:?}",
+                    &name,
+                    &UTRANSPORT_ROUTER_INNER_TAG,
+                    &UTRANSPORT_ROUTER_INNER_FN_SEND_OVER_TRANSPORT_TAG,
+                    e,
+                );
+            } else if log_enabled!(Level::Debug) {
+                debug!(
+                    "{}:{}:{} Sending message for recording succeeded",
+                    &name,
+                    &UTRANSPORT_ROUTER_INNER_TAG,
+                    &UTRANSPORT_ROUTER_INNER_FN_SEND_OVER_TRANSPORT_TAG,
+                );
+            }
+
             let message_id = msg
                 .attributes
                 .as_ref()
@@ -1087,7 +1114,8 @@ async fn request_response_notification_forwarding_callback(
             let forward_result = out_comparable_sender.send(msg).await;
             if let Err(e) = forward_result {
                 error!(
-                    "{}:{}:{} message_id:comparable_sender_id {}:{} Forwarding message from this UTransportRouter onto another UTransportRouter's Receiver<UMessage> failed; error: {:?}",
+                    "{}:{}:{} message_id:comparable_sender_id {}:{} Forwarding message from this \
+                    UTransportRouter onto another UTransportRouter's Receiver<UMessage> failed; error: {:?}",
                     &name,
                     &UTRANSPORT_ROUTER_INNER_TAG,
                     &UTRANSPORT_ROUTER_INNER_FN_REQUEST_RESPONSE_NOTIFICATION_CALLBACK_TAG,

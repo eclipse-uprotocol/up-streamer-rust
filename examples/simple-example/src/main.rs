@@ -1,7 +1,8 @@
 use async_broadcast::broadcast;
 use async_broadcast::{Receiver, Sender};
-use async_std::{future, task};
+use async_std::task;
 use example_up_client_foo::{UPClientFoo, UTransportBuilderFoo};
+use futures::{select, FutureExt, StreamExt};
 use std::sync::Arc;
 use std::time::Duration;
 use up_rust::UMessageType::{
@@ -32,6 +33,16 @@ async fn main() {
     let utransport_router_handle_bar = Arc::new(
         UTransportRouter::start("bar".to_string(), utransport_builder_bar, 100, 100).unwrap(),
     );
+
+    // getting handles to the messages flowing into / out of each transport for recording purposes
+    let mut utransport_router_foo_recording_receiver = utransport_router_handle_foo
+        .get_recording_message_receiver()
+        .await
+        .unwrap();
+    let mut utransport_router_bar_recording_receiver = utransport_router_handle_bar
+        .get_recording_message_receiver()
+        .await
+        .unwrap();
 
     // setting up streamer to bridge between "foo" and "bar"
     let ustreamer = UStreamer::new("foo_bar_streamer");
@@ -83,8 +94,22 @@ async fn main() {
     )
     .await;
 
-    // pause current task and wait forever
-    future::pending::<()>().await;
+    loop {
+        let mut foo_recording_messages_fut = utransport_router_foo_recording_receiver.next().fuse();
+        let mut bar_recording_message_fut = utransport_router_bar_recording_receiver.next().fuse();
+
+        // here we use select! in a simple loop, but it's also possible to put each
+        // recording_message_sender into its own thread or async task to run
+        // depending on the use case
+        select! {
+            foo_recording_msg = foo_recording_messages_fut => {
+                println!("message which entered or exited foo: {:?}", foo_recording_msg);
+            }
+            bar_recording_msg = bar_recording_message_fut => {
+                println!("message which entered or exited bar: {:?}", bar_recording_msg);
+            }
+        }
+    }
 }
 
 pub fn local_authority() -> UAuthority {
