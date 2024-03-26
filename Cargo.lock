@@ -1508,7 +1508,7 @@ checksum = "8ecb6da28b8a351d773b68d5825ac39017e680750f980f3a1a85cd8dd28a47c1"
 [[package]]
 name = "up-rust"
 version = "0.1.5"
-source = "git+https://github.com/PLeVasseur/uprotocol-rust_fork?branch=feature/hashable_uuris#912240ac1f895b39a3646f3ff209bc13de9b64e0"
+source = "git+https://github.com/PLeVasseur/uprotocol-rust_fork?branch=feature/hashable_uuris#7867090db653c85b8233a534943325bde44ba09f"
 dependencies = [
  "async-trait",
  "bytes",

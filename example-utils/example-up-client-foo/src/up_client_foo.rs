@@ -55,6 +55,56 @@ impl UPClientFoo {
                                 UMessageType::UMESSAGE_TYPE_UNSPECIFIED => {
                                     println!("{}: Type unspecified! Fail!", &name_clone);
                                 }
+                                UMessageType::UMESSAGE_TYPE_NOTIFICATION => {
+                                    let sink_uuri = attr.sink.as_ref();
+                                    println!("{}: Request sink uuri: {sink_uuri:?}", &name_clone);
+                                    match sink_uuri {
+                                        None => {
+                                            println!("{}: No sink uuri!", &name_clone);
+                                        }
+                                        Some(topic) => {
+                                            let authority_listeners =
+                                                authority_listeners_clone.lock().await;
+                                            if let Some(authority) = topic.authority.as_ref() {
+                                                println!(
+                                                    "{}: Notification: authority: {authority:?}",
+                                                    &name_clone
+                                                );
+
+                                                let authority_listeners =
+                                                    authority_listeners.get(authority);
+                                                match authority_listeners {
+                                                    None => {
+                                                        println!("{}: Notification: No authority listeners for topic! {:?}", &name_clone, &topic);
+                                                    }
+                                                    Some(authority_listeners) => {
+                                                        println!("{}: Notification: Found authority listeners for topic! authority: {:?}", &name_clone, &authority);
+                                                        for al in authority_listeners.iter() {
+                                                            println!("{}: Notification: sending out over registration_string: {}", &name_clone, al.0);
+                                                            al.1(Ok(msg.clone()))
+                                                        }
+                                                    }
+                                                }
+                                            }
+
+                                            let listeners = listeners_clone.lock().await;
+                                            let topic_listeners = listeners.get(topic);
+                                            match topic_listeners {
+                                                None => {
+                                                    println!(
+                                                        "{}: Notification: No listeners for topic! message: {msg:?}",
+                                                        &name_clone
+                                                    );
+                                                }
+                                                Some(topic_listeners) => {
+                                                    for tl in topic_listeners.iter() {
+                                                        tl.1(Ok(msg.clone()))
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                                 UMessageType::UMESSAGE_TYPE_PUBLISH => {
                                     let src_uuri = attr.source.as_ref();
                                     match src_uuri {

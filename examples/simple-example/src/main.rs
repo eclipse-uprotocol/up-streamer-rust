@@ -4,7 +4,10 @@ use async_std::{future, task};
 use example_up_client_foo::{UPClientFoo, UTransportBuilderFoo};
 use std::sync::Arc;
 use std::time::Duration;
-use up_rust::UMessageType::{UMESSAGE_TYPE_PUBLISH, UMESSAGE_TYPE_REQUEST, UMESSAGE_TYPE_RESPONSE};
+use up_rust::UMessageType::{
+    UMESSAGE_TYPE_NOTIFICATION, UMESSAGE_TYPE_PUBLISH, UMESSAGE_TYPE_REQUEST,
+    UMESSAGE_TYPE_RESPONSE,
+};
 use up_rust::{
     Number, UAttributes, UAuthority, UEntity, UMessage, UStatus, UTransport, UUIDBuilder, UUri,
 };
@@ -58,9 +61,10 @@ async fn main() {
         local_client_listener,
         tx_1.clone(),
         rx_1.clone(),
-        publish_from_local_client_for_remote_client(100),
-        request_from_local_client_for_remote_client(100, 200),
-        response_from_local_client_for_remote_client(100, 200),
+        publish_from_local_client_for_remote_client(10),
+        notification_from_local_client_for_remote_client(10, 200),
+        request_from_local_client_for_remote_client(10, 200),
+        response_from_local_client_for_remote_client(10, 200),
         true,
     )
     .await;
@@ -72,6 +76,7 @@ async fn main() {
         tx_2.clone(),
         rx_2.clone(),
         publish_from_remote_client_for_local_client(20),
+        notification_from_remote_client_for_local_client(20, 10),
         request_from_remote_client_for_local_client(20, 10),
         response_from_remote_client_for_local_client(20, 10),
         true,
@@ -138,6 +143,19 @@ pub fn publish_from_local_client_for_remote_client(local_id: u32) -> UMessage {
     }
 }
 
+pub fn notification_from_local_client_for_remote_client(local_id: u32, remote_id: u32) -> UMessage {
+    UMessage {
+        attributes: Some(UAttributes {
+            source: Some(local_client_uuri(local_id)).into(),
+            sink: Some(remote_client_uuri(remote_id)).into(),
+            type_: UMESSAGE_TYPE_NOTIFICATION.into(),
+            ..Default::default()
+        })
+        .into(),
+        ..Default::default()
+    }
+}
+
 pub fn request_from_local_client_for_remote_client(local_id: u32, remote_id: u32) -> UMessage {
     UMessage {
         attributes: Some(UAttributes {
@@ -169,6 +187,19 @@ pub fn publish_from_remote_client_for_local_client(remote_id: u32) -> UMessage {
         attributes: Some(UAttributes {
             source: Some(remote_client_uuri(remote_id)).into(),
             type_: UMESSAGE_TYPE_PUBLISH.into(),
+            ..Default::default()
+        })
+        .into(),
+        ..Default::default()
+    }
+}
+
+pub fn notification_from_remote_client_for_local_client(remote_id: u32, local_id: u32) -> UMessage {
+    UMessage {
+        attributes: Some(UAttributes {
+            source: Some(remote_client_uuri(remote_id)).into(),
+            sink: Some(local_client_uuri(local_id)).into(),
+            type_: UMESSAGE_TYPE_NOTIFICATION.into(),
             ..Default::default()
         })
         .into(),
@@ -219,6 +250,7 @@ pub async fn run_client(
     tx: Sender<Result<UMessage, UStatus>>,
     rx: Receiver<Result<UMessage, UStatus>>,
     _publish_msg: UMessage,
+    notification_msg: UMessage,
     request_msg: UMessage,
     response_msg: UMessage,
     send: bool,
@@ -258,6 +290,22 @@ pub async fn run_client(
                 // if send_res.is_err() {
                 //     panic!("Unable to send from client: {}", &name);
                 // }
+
+                let mut notification_msg = notification_msg.clone();
+                if let Some(attributes) = notification_msg.attributes.as_mut() {
+                    let new_id = uuid_builder.build();
+                    attributes.id.0 = Some(Box::new(new_id));
+                }
+
+                println!(
+                    "prior to sending from client {}, the request message: {:?}",
+                    &name, &request_msg
+                );
+
+                let send_res = client.send(notification_msg).await;
+                if send_res.is_err() {
+                    panic!("Unable to send from client: {}", &name);
+                }
 
                 let mut request_msg = request_msg.clone();
                 if let Some(attributes) = request_msg.attributes.as_mut() {
