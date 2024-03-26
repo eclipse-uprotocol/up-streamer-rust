@@ -7,6 +7,27 @@ to bridge from one transport to another.
 
 Implementation of the uProtocol's uStreamer specification in Rust.
 
+### Pictorially
+
+```mermaid
+flowchart TB
+    subgraph ide0 [zenohd]
+    main-->ide1
+    subgraph ide1 [streamer-plugin]
+    a1[up-streamer-rust]-->ide2
+    a1[up-streamer-rust]-->ide3
+    subgraph ide2 [OS thread]
+    a2[up-client-zenoh-rust]
+    end
+    subgraph ide3 [OS thread]
+    subgraph ide4 [Rust bridge e.g. up-client-someip-rust using cxx]
+    a3[up-client-someip-cpp]
+    end
+    end
+    end
+    end
+```
+
 ### Generating cargo docs locally
 
 Documentation can be generated locally with:
