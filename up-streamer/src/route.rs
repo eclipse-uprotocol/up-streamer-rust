@@ -135,8 +135,6 @@ impl Route {
                 &transport_router_handle.name
             );
         }
-        // TODO: May want to consider having a failure path for new() as well
-        //  Have to consider if there's conditions that can occur
         Self {
             authority: authority.clone(),
             transport_router_handle: transport_router_handle.clone(),

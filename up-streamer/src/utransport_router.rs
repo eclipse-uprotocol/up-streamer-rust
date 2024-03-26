@@ -764,7 +764,25 @@ impl UTransportRouterInner {
                             *this_comparable_sender_slot += 1usize;
                         }
                         _ => {
-                            // TODO: Need to explicitly handle the error case
+                            let result_send_res = result_sender
+                                .send(Err(UStatus::fail_with_code(
+                                    UCode::INTERNAL,
+                                    "Unable to send error result back",
+                                )))
+                                .await;
+                            if let Err(e) = result_send_res {
+                                error!(
+                                    "{}:{}:{} Unable to return result: ({:?}, {:?}, {}), error: {:?}",
+                                    &self.name,
+                                    &UTRANSPORT_ROUTER_INNER_TAG,
+                                    &UTRANSPORT_ROUTER_INNER_FN_HANDLE_COMMAND_TAG,
+                                    &in_authority,
+                                    &out_authority,
+                                    &out_comparable_sender.id,
+                                    e,
+                                );
+                            }
+                            return;
                         }
                     }
                 }
@@ -908,31 +926,68 @@ impl UTransportRouterInner {
     }
 
     async fn send_over_utransport(&self, message: UMessage) {
-        if log_enabled!(Level::Debug) {
-            debug!(
-                "{}:{}:{} Sending message over UTransport: {:?}",
+        let message_id = message
+            .attributes
+            .as_ref()
+            .ok_or_else(|| {
+                UStatus::fail_with_code(
+                    UCode::INVALID_ARGUMENT,
+                    "Message cannot be sent without attributes",
+                )
+            })
+            .and_then(|attr| {
+                attr.id.as_ref().ok_or_else(|| {
+                    UStatus::fail_with_code(
+                        UCode::INVALID_ARGUMENT,
+                        "Message cannot be sent without an id",
+                    )
+                })
+            });
+        let Ok(message_id) = message_id else {
+            error!(
+                "{}:{}:{} Missing metadata needed to send. error: {:?}",
                 &self.name,
                 &UTRANSPORT_ROUTER_INNER_TAG,
                 &UTRANSPORT_ROUTER_INNER_FN_SEND_OVER_TRANSPORT_TAG,
+                message_id.err().unwrap()
+            );
+            return;
+        };
+        let message_id = message_id.clone();
+
+        if log_enabled!(Level::Debug) {
+            debug!(
+                "{}:{}:{} message_id {} Sending message over UTransport: {:?}",
+                &self.name,
+                &UTRANSPORT_ROUTER_INNER_TAG,
+                &UTRANSPORT_ROUTER_INNER_FN_SEND_OVER_TRANSPORT_TAG,
+                message_id,
                 &message.clone(),
             );
         }
+
         let send_result = self.utransport.send(message).await;
         // unfortunately because send() takes ownership of message, it would be required to clone()
         // before calling send(). However, that feels wasteful to do for some small percentage of
         // times that send() doesn't succeed
-        // that's why for now we don't include the message itself in the error!()
-        // TODO: Consider including just the UMessage.id as a compromise? Cheaper to clone
+        // that's why we only include the message id in the error!()
         if let Err(e) = send_result {
             error!(
-                "{}:{}:{} Failed to send message over UTransport: error: {:?}",
+                "{}:{}:{} Failed to send message over UTransport: message id: {} error: {:?}",
                 &self.name,
                 &UTRANSPORT_ROUTER_INNER_TAG,
                 &UTRANSPORT_ROUTER_INNER_FN_SEND_OVER_TRANSPORT_TAG,
-                e
+                message_id,
+                e,
             );
-        } else {
-            // TODO: Explicitly log that it succeeded
+        } else if log_enabled!(Level::Debug) {
+            debug!(
+                "{}:{}:{} message_id {} Sending message over UTransport succeeded",
+                &self.name,
+                &UTRANSPORT_ROUTER_INNER_TAG,
+                &UTRANSPORT_ROUTER_INNER_FN_SEND_OVER_TRANSPORT_TAG,
+                message_id,
+            );
         }
     }
 }
@@ -944,59 +999,116 @@ async fn request_response_notification_forwarding_callback(
 ) {
     if log_enabled!(Level::Debug) {
         debug!(
-            "{}:{}:{} Forwarding Request | Response | Notification message from this UTransportRouter onto another UTransportRouter's Receiver<UMessage>: {}",
+            "{}:{}:{} comparable_sender_id {} Forwarding Request | Response | Notification message from this UTransportRouter onto another UTransportRouter's Receiver<UMessage>",
             &name,
             &UTRANSPORT_ROUTER_INNER_TAG,
             &UTRANSPORT_ROUTER_INNER_FN_REQUEST_RESPONSE_NOTIFICATION_CALLBACK_TAG,
             &out_comparable_sender.id
         );
     }
-    if let Ok(msg) = received {
-        if log_enabled!(Level::Debug) {
-            debug!(
-                "{}:{}:{} Contains message: {:?}",
-                &name,
-                &UTRANSPORT_ROUTER_INNER_TAG,
-                &UTRANSPORT_ROUTER_INNER_FN_REQUEST_RESPONSE_NOTIFICATION_CALLBACK_TAG,
-                msg.clone()
-            );
-        }
-        // TODO: Bail if message id matches one in our cache of transmitted messages
+    match received {
+        Ok(msg) => {
+            let message_id = msg
+                .attributes
+                .as_ref()
+                .ok_or_else(|| {
+                    UStatus::fail_with_code(
+                        UCode::INVALID_ARGUMENT,
+                        "Message cannot be sent without attributes",
+                    )
+                })
+                .and_then(|attr| {
+                    attr.id.as_ref().ok_or_else(|| {
+                        UStatus::fail_with_code(
+                            UCode::INVALID_ARGUMENT,
+                            "Message cannot be sent without an id",
+                        )
+                    })
+                });
+            let Ok(message_id) = message_id else {
+                error!(
+                    "{}:{}:{} comparable_sender_id {} Missing metadata needed to send. error: {:?}",
+                    &name,
+                    &UTRANSPORT_ROUTER_INNER_TAG,
+                    &UTRANSPORT_ROUTER_INNER_FN_SEND_OVER_TRANSPORT_TAG,
+                    &out_comparable_sender.id,
+                    message_id.err().unwrap()
+                );
+                return;
+            };
+            let message_id = message_id.clone();
 
-        // TODO: Bail if we see we got a PUBLISH
-        let UMessage { attributes, .. } = &msg;
-        let Some(attr) = attributes.as_ref() else {
-            warn!(
-                "{}:{}:{} No UAttributes attached, cannot proceed",
-                &name,
-                &UTRANSPORT_ROUTER_INNER_TAG,
-                &UTRANSPORT_ROUTER_INNER_FN_REQUEST_RESPONSE_NOTIFICATION_CALLBACK_TAG,
-            );
-            return;
-        };
-        let type_ = attr.type_.enum_value_or(UMESSAGE_TYPE_UNSPECIFIED);
-        if type_ == UMESSAGE_TYPE_UNSPECIFIED {
-            warn!(
-                "{}:{}:{} Message type is not specified, cannot proceed",
-                &name,
-                &UTRANSPORT_ROUTER_INNER_TAG,
-                &UTRANSPORT_ROUTER_INNER_FN_REQUEST_RESPONSE_NOTIFICATION_CALLBACK_TAG,
-            );
-            return;
+            if log_enabled!(Level::Debug) {
+                debug!(
+                    "{}:{}:{} message_id:comparable_sender_id {}:{} Contains message: {:?}",
+                    &name,
+                    &UTRANSPORT_ROUTER_INNER_TAG,
+                    &UTRANSPORT_ROUTER_INNER_FN_REQUEST_RESPONSE_NOTIFICATION_CALLBACK_TAG,
+                    message_id,
+                    &out_comparable_sender.id,
+                    msg.clone()
+                );
+            }
+            let UMessage { attributes, .. } = &msg;
+            let Some(attr) = attributes.as_ref() else {
+                warn!(
+                    "{}:{}:{} message_id:comparable_sender_id {}:{} No UAttributes attached, cannot proceed",
+                    &name,
+                    &UTRANSPORT_ROUTER_INNER_TAG,
+                    &UTRANSPORT_ROUTER_INNER_FN_REQUEST_RESPONSE_NOTIFICATION_CALLBACK_TAG,
+                    message_id,
+                    &out_comparable_sender.id,
+                );
+                return;
+            };
+            let type_ = attr.type_.enum_value_or(UMESSAGE_TYPE_UNSPECIFIED);
+            if type_ == UMESSAGE_TYPE_UNSPECIFIED {
+                warn!(
+                    "{}:{}:{} message_id:comparable_sender_id {}:{} Message type is not specified, cannot proceed",
+                    &name,
+                    &UTRANSPORT_ROUTER_INNER_TAG,
+                    &UTRANSPORT_ROUTER_INNER_FN_REQUEST_RESPONSE_NOTIFICATION_CALLBACK_TAG,
+                    message_id,
+                    &out_comparable_sender.id,
+                );
+                return;
+            }
+            if type_ == UMESSAGE_TYPE_PUBLISH {
+                debug!(
+                    "{}:{}:{} message_id:comparable_sender_id {}:{} Is a Publish message, no need to handle",
+                    &name,
+                    &UTRANSPORT_ROUTER_INNER_TAG,
+                    &UTRANSPORT_ROUTER_INNER_FN_REQUEST_RESPONSE_NOTIFICATION_CALLBACK_TAG,
+                    message_id,
+                    &out_comparable_sender.id,
+                );
+                return;
+            }
+            let forward_result = out_comparable_sender.send(msg).await;
+            if let Err(e) = forward_result {
+                error!(
+                    "{}:{}:{} message_id:comparable_sender_id {}:{} Forwarding message from this UTransportRouter onto another UTransportRouter's Receiver<UMessage> failed; error: {:?}",
+                    &name,
+                    &UTRANSPORT_ROUTER_INNER_TAG,
+                    &UTRANSPORT_ROUTER_INNER_FN_REQUEST_RESPONSE_NOTIFICATION_CALLBACK_TAG,
+                    message_id,
+                    &out_comparable_sender.id,
+                    e
+                );
+            } else if log_enabled!(Level::Debug) {
+                debug!(
+                    "{}:{}:{} message_id:comparable_sender_id {}:{} Able to send message to other UTransportRouter",
+                    &name,
+                    &UTRANSPORT_ROUTER_INNER_TAG,
+                    &UTRANSPORT_ROUTER_INNER_FN_REQUEST_RESPONSE_NOTIFICATION_CALLBACK_TAG,
+                    message_id,
+                    out_comparable_sender.id.to_hyphenated_string()
+                );
+            }
         }
-        if type_ == UMESSAGE_TYPE_PUBLISH {
-            debug!(
-                "{}:{}:{} Is a Publish message, no need to handle",
-                &name,
-                &UTRANSPORT_ROUTER_INNER_TAG,
-                &UTRANSPORT_ROUTER_INNER_FN_REQUEST_RESPONSE_NOTIFICATION_CALLBACK_TAG,
-            );
-            return;
-        }
-        let forward_result = out_comparable_sender.send(msg).await;
-        if let Err(e) = forward_result {
+        Err(e) => {
             error!(
-                "{}:{}:{} Forwarding message from this UTransportRouter onto another UTransportRouter's Receiver<UMessage> failed: {}; error: {:?}",
+                "{}:{}:{} comparable_sender_id {} Received an error, not a message: error: {:?}",
                 &name,
                 &UTRANSPORT_ROUTER_INNER_TAG,
                 &UTRANSPORT_ROUTER_INNER_FN_REQUEST_RESPONSE_NOTIFICATION_CALLBACK_TAG,
@@ -1005,5 +1117,4 @@ async fn request_response_notification_forwarding_callback(
             );
         }
     }
-    // TODO: Explicitly handle the error case
 }

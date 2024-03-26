@@ -25,7 +25,7 @@ authors = [
     "Pete LeVasseur <plevasseur@gmail.com>",
 ]
 edition = "2021"
-keywords = ["uProtocol", "SDK"]
+keywords = ["uProtocol", "SDV", "routing", "streamer"]
 license = "Apache-2.0"
 
 [workspace.dependencies]

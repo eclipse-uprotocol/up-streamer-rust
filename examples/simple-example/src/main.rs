@@ -5,7 +5,9 @@ use example_up_client_foo::{UPClientFoo, UTransportBuilderFoo};
 use std::sync::Arc;
 use std::time::Duration;
 use up_rust::UMessageType::{UMESSAGE_TYPE_PUBLISH, UMESSAGE_TYPE_REQUEST, UMESSAGE_TYPE_RESPONSE};
-use up_rust::{Number, UAttributes, UAuthority, UEntity, UMessage, UStatus, UTransport, UUri};
+use up_rust::{
+    Number, UAttributes, UAuthority, UEntity, UMessage, UStatus, UTransport, UUIDBuilder, UUri,
+};
 use up_streamer::{Route, UStreamer, UTransportRouter};
 
 #[async_std::main]
@@ -221,6 +223,8 @@ pub async fn run_client(
     response_msg: UMessage,
     send: bool,
 ) {
+    let uuid_builder = UUIDBuilder::new();
+
     std::thread::spawn(move || {
         task::block_on(async move {
             let client = UPClientFoo::new(&name, rx, tx).await;
@@ -255,10 +259,32 @@ pub async fn run_client(
                 //     panic!("Unable to send from client: {}", &name);
                 // }
 
-                let send_res = client.send(request_msg.clone()).await;
+                let mut request_msg = request_msg.clone();
+                if let Some(attributes) = request_msg.attributes.as_mut() {
+                    let new_id = uuid_builder.build();
+                    attributes.id.0 = Some(Box::new(new_id));
+                }
+
+                println!(
+                    "prior to sending from client {}, the request message: {:?}",
+                    &name, &request_msg
+                );
+
+                let send_res = client.send(request_msg).await;
                 if send_res.is_err() {
                     panic!("Unable to send from client: {}", &name);
                 }
+
+                let mut response_msg = response_msg.clone();
+                if let Some(attributes) = response_msg.attributes.as_mut() {
+                    let new_id = uuid_builder.build();
+                    attributes.id.0 = Some(Box::new(new_id));
+                }
+
+                println!(
+                    "prior to sending from client {}, the response message: {:?}",
+                    &name, &response_msg
+                );
 
                 let send_res = client.send(response_msg.clone()).await;
                 if send_res.is_err() {
