@@ -216,7 +216,7 @@ pub async fn run_client(
     listener: fn(Result<UMessage, UStatus>),
     tx: Sender<Result<UMessage, UStatus>>,
     rx: Receiver<Result<UMessage, UStatus>>,
-    publish_msg: UMessage,
+    _publish_msg: UMessage,
     request_msg: UMessage,
     response_msg: UMessage,
     send: bool,
@@ -248,10 +248,12 @@ pub async fn run_client(
                     continue;
                 }
 
-                let send_res = client.send(publish_msg.clone()).await;
-                if send_res.is_err() {
-                    panic!("Unable to send from client: {}", &name);
-                }
+                // TODO: Doesn't work currently
+                //  Requires use of uSubscription
+                // let send_res = client.send(publish_msg.clone()).await;
+                // if send_res.is_err() {
+                //     panic!("Unable to send from client: {}", &name);
+                // }
 
                 let send_res = client.send(request_msg.clone()).await;
                 if send_res.is_err() {
