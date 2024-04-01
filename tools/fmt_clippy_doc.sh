@@ -2,4 +2,4 @@
 
 cargo fmt -- --check
 cargo clippy --all-targets -- -W warnings -D warnings
-cargo doc -p up-rust --no-deps
+cargo doc -p up-streamer --no-deps
