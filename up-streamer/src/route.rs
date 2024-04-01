@@ -125,16 +125,14 @@ impl Route {
         // Required in case of dynamic lib, otherwise no logs.
         // But cannot be done twice in case of static link.
         let _ = env_logger::try_init();
-        if log_enabled!(Level::Debug) {
-            debug!(
-                "{}:{}:{} Creating Route from: ({:?}, {})",
-                &transport_router_handle.name,
-                &ROUTE_TAG,
-                &ROUTEFN_NEW_TAG,
-                &authority,
-                &transport_router_handle.name
-            );
-        }
+        debug!(
+            "{}:{}:{} Creating Route from: ({:?}, {})",
+            &transport_router_handle.name,
+            &ROUTE_TAG,
+            &ROUTEFN_NEW_TAG,
+            &authority,
+            &transport_router_handle.name
+        );
         Self {
             authority: authority.clone(),
             transport_router_handle: transport_router_handle.clone(),

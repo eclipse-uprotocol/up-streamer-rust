@@ -129,17 +129,15 @@ impl UTransportRouterHandle {
         out_authority: UAuthority,
         out_comparable_sender: ComparableSender<Arc<UMessage>>,
     ) -> Result<(), UStatus> {
-        if log_enabled!(Level::Debug) {
-            debug!(
-                "{}:{}:{} Sending registration request for: ({:?}, {:?}, {})",
-                &self.name,
-                &UTRANSPORT_ROUTER_HANDLE_TAG,
-                &UTRANSPORT_ROUTER_HANDLE_FN_REGISTER_TAG,
-                &in_authority,
-                &out_authority,
-                &out_comparable_sender.id
-            );
-        }
+        debug!(
+            "{}:{}:{} Sending registration request for: ({:?}, {:?}, {})",
+            &self.name,
+            &UTRANSPORT_ROUTER_HANDLE_TAG,
+            &UTRANSPORT_ROUTER_HANDLE_FN_REGISTER_TAG,
+            &in_authority,
+            &out_authority,
+            &out_comparable_sender.id
+        );
         let (tx_result, rx_result) = bounded(1);
         match self
             .command_sender
@@ -196,17 +194,15 @@ impl UTransportRouterHandle {
         out_authority: UAuthority,
         out_comparable_sender: ComparableSender<Arc<UMessage>>,
     ) -> Result<(), UStatus> {
-        if log_enabled!(Level::Debug) {
-            debug!(
-                "{}:{}:{} Sending unregistration request for: ({:?}, {:?}, {})",
-                &self.name,
-                &UTRANSPORT_ROUTER_HANDLE_TAG,
-                &UTRANSPORT_ROUTER_HANDLE_FN_UNREGISTER_TAG,
-                &in_authority,
-                &out_authority,
-                &out_comparable_sender.id
-            );
-        }
+        debug!(
+            "{}:{}:{} Sending unregistration request for: ({:?}, {:?}, {})",
+            &self.name,
+            &UTRANSPORT_ROUTER_HANDLE_TAG,
+            &UTRANSPORT_ROUTER_HANDLE_FN_UNREGISTER_TAG,
+            &in_authority,
+            &out_authority,
+            &out_comparable_sender.id
+        );
         let (tx_result, rx_result) = bounded(1);
         self.command_sender
             .send(UTransportRouterCommand::Unregister(
@@ -394,17 +390,15 @@ impl UTransportRouter {
         let name = format!("{name}:{UTRANSPORT_ROUTER_TAG}");
         let (tx, rx) = mpsc::channel();
 
-        if log_enabled!(Level::Debug) {
-            debug!(
-                "{}:{}:{} Starting UTransportRouter with this configuration: ({:?}, {}, {})",
-                &name,
-                &UTRANSPORT_ROUTER_TAG,
-                &UTRANSPORT_ROUTER_FN_START_TAG,
-                utransport_builder.type_id(),
-                &command_queue_size,
-                &message_queue_size
-            );
-        }
+        debug!(
+            "{}:{}:{} Starting UTransportRouter with this configuration: ({:?}, {}, {})",
+            &name,
+            &UTRANSPORT_ROUTER_TAG,
+            &UTRANSPORT_ROUTER_FN_START_TAG,
+            utransport_builder.type_id(),
+            &command_queue_size,
+            &message_queue_size
+        );
 
         let (command_sender, command_receiver) = bounded(command_queue_size);
         let (message_sender, message_receiver) = bounded(message_queue_size);
@@ -505,36 +499,28 @@ impl UTransportRouterInner {
         T: UTransportBuilder + 'static,
     {
         let name = name.clone();
-        if log_enabled!(Level::Debug) {
-            debug!(
-                "{}:{}:{} Starting UTransportRouterInner with this configuration: ({:?})",
-                &name,
-                &UTRANSPORT_ROUTER_INNER_TAG,
-                &UTRANSPORT_ROUTER_INNER_FN_START_TAG,
-                utransport_builder.type_id(),
-            );
-        }
+        debug!(
+            "{}:{}:{} Starting UTransportRouterInner with this configuration: ({:?})",
+            &name,
+            &UTRANSPORT_ROUTER_INNER_TAG,
+            &UTRANSPORT_ROUTER_INNER_FN_START_TAG,
+            utransport_builder.type_id(),
+        );
 
         let (tx, rx) = mpsc::channel::<Result<(), UStatus>>();
 
         thread::spawn(move || {
-            if log_enabled!(Level::Debug) {
-                debug!(
-                    "{}:{}:{} Inside of thread::spawn()",
-                    &name, &UTRANSPORT_ROUTER_INNER_TAG, &UTRANSPORT_ROUTER_INNER_FN_START_TAG,
-                );
-            }
+            debug!(
+                "{}:{}:{} Inside of thread::spawn()",
+                &name, &UTRANSPORT_ROUTER_INNER_TAG, &UTRANSPORT_ROUTER_INNER_FN_START_TAG,
+            );
             let mut result = Ok(());
             match utransport_builder.build() {
                 Ok(utransport) => {
-                    if log_enabled!(Level::Debug) {
-                        debug!(
-                            "{}:{}:{} Before creating UTransportRouterInner",
-                            &name,
-                            &UTRANSPORT_ROUTER_INNER_TAG,
-                            &UTRANSPORT_ROUTER_INNER_FN_START_TAG,
-                        );
-                    }
+                    debug!(
+                        "{}:{}:{} Before creating UTransportRouterInner",
+                        &name, &UTRANSPORT_ROUTER_INNER_TAG, &UTRANSPORT_ROUTER_INNER_FN_START_TAG,
+                    );
                     let utransport_router_inner = Rc::new(UTransportRouterInner {
                         name: Arc::new(name.to_string()),
                         utransport,
@@ -548,26 +534,20 @@ impl UTransportRouterInner {
                             .clone(),
                     });
 
-                    if log_enabled!(Level::Debug) {
-                        debug!(
-                            "{}:{}:{} After creating UTransportRouterInner",
-                            &name,
-                            &UTRANSPORT_ROUTER_INNER_TAG,
-                            &UTRANSPORT_ROUTER_INNER_FN_START_TAG,
-                        );
-                    }
+                    debug!(
+                        "{}:{}:{} After creating UTransportRouterInner",
+                        &name, &UTRANSPORT_ROUTER_INNER_TAG, &UTRANSPORT_ROUTER_INNER_FN_START_TAG,
+                    );
 
                     let utransport_router_inner_clone = utransport_router_inner.clone();
                     tx.send(result).unwrap();
                     task::block_on(async move {
-                        if log_enabled!(Level::Debug) {
-                            debug!(
-                                "{}:{}:{} Calling into launch() which will block the newly spawned OS thread",
-                                &name,
-                                &UTRANSPORT_ROUTER_INNER_TAG,
-                                &UTRANSPORT_ROUTER_INNER_FN_START_TAG,
-                            );
-                        }
+                        debug!(
+                            "{}:{}:{} Calling into launch() which will block the newly spawned OS thread",
+                            &name,
+                            &UTRANSPORT_ROUTER_INNER_TAG,
+                            &UTRANSPORT_ROUTER_INNER_FN_START_TAG,
+                        );
                         utransport_router_inner_clone
                             .launch(
                                 utransport_channels.command_receiver,
@@ -599,35 +579,27 @@ impl UTransportRouterInner {
         let mut command_fut = command_receiver.recv().fuse();
         let mut message_fut = message_receiver.recv().fuse();
 
-        if log_enabled!(Level::Debug) {
-            debug!(
-                "{}:{}:{} Reached launch()",
-                &self.name, &UTRANSPORT_ROUTER_INNER_TAG, &UTRANSPORT_ROUTER_INNER_FN_LAUNCH_TAG,
-            );
-        }
+        debug!(
+            "{}:{}:{} Reached launch()",
+            &self.name, &UTRANSPORT_ROUTER_INNER_TAG, &UTRANSPORT_ROUTER_INNER_FN_LAUNCH_TAG,
+        );
 
         loop {
-            if log_enabled!(Level::Debug) {
-                debug!(
-                    "{}:{}:{} Top of loop before select!",
-                    &self.name,
-                    &UTRANSPORT_ROUTER_INNER_TAG,
-                    &UTRANSPORT_ROUTER_INNER_FN_LAUNCH_TAG,
-                );
-            }
+            debug!(
+                "{}:{}:{} Top of loop before select!",
+                &self.name, &UTRANSPORT_ROUTER_INNER_TAG, &UTRANSPORT_ROUTER_INNER_FN_LAUNCH_TAG,
+            );
             select! {
                 command = command_fut => {
                     match command {
                         Ok(command) => {
-                            if log_enabled!(Level::Debug) {
-                                debug!(
-                                    "{}:{}:{} Received command: ({:?})",
-                                    &self.name,
-                                    &UTRANSPORT_ROUTER_INNER_TAG,
-                                    &UTRANSPORT_ROUTER_INNER_FN_LAUNCH_TAG,
-                                    &command
-                                );
-                            }
+                            debug!(
+                                "{}:{}:{} Received command: ({:?})",
+                                &self.name,
+                                &UTRANSPORT_ROUTER_INNER_TAG,
+                                &UTRANSPORT_ROUTER_INNER_FN_LAUNCH_TAG,
+                                &command
+                            );
                             self.handle_command(command).await;
                         },
                         Err(e) => {
@@ -645,15 +617,13 @@ impl UTransportRouterInner {
                 message = message_fut => {
                     match message {
                         Ok(msg) => {
-                            if log_enabled!(Level::Debug) {
-                                debug!(
-                                    "{}:{}:{} Received a message intended to be sent out over our UTransport: message: {:?}",
-                                    &self.name,
-                                    &UTRANSPORT_ROUTER_INNER_TAG,
-                                    &UTRANSPORT_ROUTER_INNER_FN_LAUNCH_TAG,
-                                    &msg
-                                );
-                            }
+                            debug!(
+                                "{}:{}:{} Received a message intended to be sent out over our UTransport: message: {:?}",
+                                &self.name,
+                                &UTRANSPORT_ROUTER_INNER_TAG,
+                                &UTRANSPORT_ROUTER_INNER_FN_LAUNCH_TAG,
+                                &msg
+                            );
                             self.send_over_utransport(msg).await;
                         },
                         Err(e) => {
@@ -669,14 +639,10 @@ impl UTransportRouterInner {
                     message_fut = message_receiver.recv().fuse(); // Re-arm future for the next iteration
                 },
             }
-            if log_enabled!(Level::Debug) {
-                debug!(
-                    "{}:{}:{} Bottom of loop",
-                    &self.name,
-                    &UTRANSPORT_ROUTER_INNER_TAG,
-                    &UTRANSPORT_ROUTER_INNER_FN_LAUNCH_TAG,
-                );
-            }
+            debug!(
+                "{}:{}:{} Bottom of loop",
+                &self.name, &UTRANSPORT_ROUTER_INNER_TAG, &UTRANSPORT_ROUTER_INNER_FN_LAUNCH_TAG,
+            );
         }
     }
 
@@ -690,17 +656,15 @@ impl UTransportRouterInner {
                     result_sender,
                 } = register_control;
 
-                if log_enabled!(Level::Debug) {
-                    debug!(
-                        "{}:{}:{} Received registration request for: ({:?}, {:?}, {})",
-                        &self.name,
-                        &UTRANSPORT_ROUTER_INNER_TAG,
-                        &UTRANSPORT_ROUTER_INNER_FN_HANDLE_COMMAND_TAG,
-                        &in_authority,
-                        &out_authority,
-                        &out_comparable_sender.id
-                    );
-                }
+                debug!(
+                    "{}:{}:{} Received registration request for: ({:?}, {:?}, {})",
+                    &self.name,
+                    &UTRANSPORT_ROUTER_INNER_TAG,
+                    &UTRANSPORT_ROUTER_INNER_FN_HANDLE_COMMAND_TAG,
+                    &in_authority,
+                    &out_authority,
+                    &out_comparable_sender.id
+                );
 
                 if self.message_sender == out_comparable_sender {
                     let result_send_res = result_sender
@@ -836,17 +800,15 @@ impl UTransportRouterInner {
                     result_sender,
                 } = unregister_control;
 
-                if log_enabled!(Level::Debug) {
-                    debug!(
-                        "{}:{}:{} Received unregistration request for: ({:?}, {:?}, {})",
-                        &self.name,
-                        &UTRANSPORT_ROUTER_INNER_TAG,
-                        &UTRANSPORT_ROUTER_INNER_FN_HANDLE_COMMAND_TAG,
-                        &in_authority,
-                        &out_authority,
-                        &out_comparable_sender.id
-                    );
-                }
+                debug!(
+                    "{}:{}:{} Received unregistration request for: ({:?}, {:?}, {})",
+                    &self.name,
+                    &UTRANSPORT_ROUTER_INNER_TAG,
+                    &UTRANSPORT_ROUTER_INNER_FN_HANDLE_COMMAND_TAG,
+                    &in_authority,
+                    &out_authority,
+                    &out_comparable_sender.id
+                );
 
                 if self.message_sender == out_comparable_sender {
                     let result_send_res = result_sender
@@ -898,7 +860,7 @@ impl UTransportRouterInner {
                         );
                     }
                     return;
-                } else if log_enabled!(Level::Debug) {
+                } else {
                     debug!(
                         "{}:{}:{} Able to unregister: ({:?}, {:?}, {})",
                         &self.name,
@@ -957,16 +919,14 @@ impl UTransportRouterInner {
         };
         let message_id = message_id.clone();
 
-        if log_enabled!(Level::Debug) {
-            debug!(
-                "{}:{}:{} message_id {} Sending message over UTransport: {:?}",
-                &self.name,
-                &UTRANSPORT_ROUTER_INNER_TAG,
-                &UTRANSPORT_ROUTER_INNER_FN_SEND_OVER_TRANSPORT_TAG,
-                message_id,
-                &message.clone(),
-            );
-        }
+        debug!(
+            "{}:{}:{} message_id {} Sending message over UTransport: {:?}",
+            &self.name,
+            &UTRANSPORT_ROUTER_INNER_TAG,
+            &UTRANSPORT_ROUTER_INNER_FN_SEND_OVER_TRANSPORT_TAG,
+            message_id,
+            &message.clone(),
+        );
 
         // TODO: Make recording configurable
         let mut sender = self.recording_message_sender.clone();
@@ -980,7 +940,7 @@ impl UTransportRouterInner {
                 message_id,
                 e,
             );
-        } else if log_enabled!(Level::Debug) {
+        } else {
             debug!(
                 "{}:{}:{} message_id {} Sending message for recording succeeded",
                 &self.name,
@@ -1005,7 +965,7 @@ impl UTransportRouterInner {
                 message_id,
                 e,
             );
-        } else if log_enabled!(Level::Debug) {
+        } else {
             debug!(
                 "{}:{}:{} message_id {} Sending message over UTransport succeeded",
                 &self.name,
@@ -1023,16 +983,14 @@ async fn request_response_notification_forwarding_callback(
     out_comparable_sender: ComparableSender<Arc<UMessage>>,
     recording_message_sender: futures::channel::mpsc::Sender<Arc<UMessage>>,
 ) {
-    if log_enabled!(Level::Debug) {
-        debug!(
-            "{}:{}:{} comparable_sender_id {} Forwarding Request | Response | Notification message \
-            from this UTransportRouter onto another UTransportRouter's Receiver<UMessage>",
-            &name,
-            &UTRANSPORT_ROUTER_INNER_TAG,
-            &UTRANSPORT_ROUTER_INNER_FN_REQUEST_RESPONSE_NOTIFICATION_CALLBACK_TAG,
-            &out_comparable_sender.id
-        );
-    }
+    debug!(
+        "{}:{}:{} comparable_sender_id {} Forwarding Request | Response | Notification message \
+        from this UTransportRouter onto another UTransportRouter's Receiver<UMessage>",
+        &name,
+        &UTRANSPORT_ROUTER_INNER_TAG,
+        &UTRANSPORT_ROUTER_INNER_FN_REQUEST_RESPONSE_NOTIFICATION_CALLBACK_TAG,
+        &out_comparable_sender.id
+    );
     match received {
         Ok(msg) => {
             let msg = Arc::new(msg);
@@ -1048,7 +1006,7 @@ async fn request_response_notification_forwarding_callback(
                     &UTRANSPORT_ROUTER_INNER_FN_SEND_OVER_TRANSPORT_TAG,
                     e,
                 );
-            } else if log_enabled!(Level::Debug) {
+            } else {
                 debug!(
                     "{}:{}:{} Sending message for recording succeeded",
                     &name,
@@ -1087,17 +1045,15 @@ async fn request_response_notification_forwarding_callback(
             };
             let message_id = message_id.clone();
 
-            if log_enabled!(Level::Debug) {
-                debug!(
-                    "{}:{}:{} message_id:comparable_sender_id {}:{} Contains message: {:?}",
-                    &name,
-                    &UTRANSPORT_ROUTER_INNER_TAG,
-                    &UTRANSPORT_ROUTER_INNER_FN_REQUEST_RESPONSE_NOTIFICATION_CALLBACK_TAG,
-                    message_id,
-                    &out_comparable_sender.id,
-                    msg.clone()
-                );
-            }
+            debug!(
+                "{}:{}:{} message_id:comparable_sender_id {}:{} Contains message: {:?}",
+                &name,
+                &UTRANSPORT_ROUTER_INNER_TAG,
+                &UTRANSPORT_ROUTER_INNER_FN_REQUEST_RESPONSE_NOTIFICATION_CALLBACK_TAG,
+                message_id,
+                &out_comparable_sender.id,
+                msg.clone()
+            );
 
             let type_ = msg
                 .attributes
@@ -1155,7 +1111,7 @@ async fn request_response_notification_forwarding_callback(
                     &out_comparable_sender.id,
                     e
                 );
-            } else if log_enabled!(Level::Debug) {
+            } else {
                 debug!(
                     "{}:{}:{} message_id:comparable_sender_id {}:{} Able to send message to other UTransportRouter",
                     &name,

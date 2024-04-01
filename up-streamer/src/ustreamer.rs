@@ -274,6 +274,7 @@ impl UStreamer {
     pub async fn add_forwarding_rule(&self, r#in: Route, out: Route) -> Result<(), UStatus> {
         let out_message_sender = &out.get_transport_router_handle().clone().message_sender;
 
+        // using log_enabled! here to avoid computing hash if not needed
         if log_enabled!(Level::Debug) {
             let mut hasher = DefaultHasher::new();
             out_message_sender.hash(&mut hasher);
@@ -322,6 +323,7 @@ impl UStreamer {
     pub async fn delete_forwarding_rule(&self, r#in: Route, out: Route) -> Result<(), UStatus> {
         let out_message_sender = &out.get_transport_router_handle().clone().message_sender;
 
+        // using log_enabled! here to avoid computing hash if not needed
         if log_enabled!(Level::Debug) {
             let mut hasher = DefaultHasher::new();
             out_message_sender.hash(&mut hasher);
