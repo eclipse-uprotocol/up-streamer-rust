@@ -10,44 +10,83 @@ Implementation of the uProtocol's uStreamer specification in Rust.
 ### Visual Breakdown
 
 ```mermaid
-flowchart TB
+sequenceDiagram
+    participant main
+    participant utransport_router_handle_local
+    participant utransport_router_handle_remote
+    participant launch (foo)
+    participant launch (bar)
+    participant UTransportBuilderFoo
+    participant UTransportBuilderBar
+    participant dyn UTransport (foo)
+    participant dyn UTransport (bar)
 
-    subgraph ide0 [Usage Flow]
-    subgraph ide5 [UTransportRouter]
+    main->>UTransportBuilderFoo: ::new()
+    UTransportBuilderFoo->>main: UTransportBuilderFoo
+    main->>UTransportRouter: ::start(UTransportBuilderFoo)
+    activate UTransportRouter
+    UTransportRouter->>UTransportRouterInner: ::start(UTransportBuilderFoo)
+    UTransportRouterInner->>UTransportRouterInner: UTransportBuilderFoo.build()
+    UTransportRouterInner->>launch (foo): .launch() on new OS Thread
+    activate launch (foo)
+    UTransportRouter->>main: UTransportRouterHandle (foo)
+    deactivate UTransportRouter
+
+    main->>UTransportBuilderBar: ::new()
+    UTransportBuilderBar->>main: UTransportBuilderBar
+    main->>UTransportRouter: ::start(UTransportBuilderBar)
+    activate UTransportRouter
+    UTransportRouter->>UTransportRouterInner: ::start(UTransportBuilderBar)
+    UTransportRouterInner->>launch (bar): .launch() on new OS Thread
+    activate launch (bar)
+    UTransportRouter->>main: UTransportRouterHandle (bar)
+
+    main->>Route: ::new(uauthority_foo, utransport_router_handle_foo)
+    Route->>main: local_route
+    main->>Route: ::new(uauthority_bar, utransport_router_handle_bar)
+    Route->>main: remote_route
+
+    main->>UStreamer: ::new()
+    UStreamer->>main: ustreamer
+    activate ustreamer
+
+    main->>ustreamer: add_forwarding_rule(local_route, remote_route)
+    ustreamer->>utransport_router_handle_local: register(local_route_authority, remote_route_authority, remote_route_channel)
+    utransport_router_handle_local-->>launch (foo): UTransportRouterCommand::RegisterUnregisterControl: <br> {local_route_authority, remote_route_authority, remote_route_channel} <br> sent on command_sender
+    launch (foo)->>launch (foo): handle_command()
+    launch (foo)->>dyn UTransport (foo): register_listener(local_route_authority, request_response_notification_forwarding_callback)
+    activate request_response_notification_forwarding_callback (foo)
+    launch (foo)-->>utransport_router_handle_local: Result of registration
+    utransport_router_handle_local->>ustreamer: Result of registration
+    ustreamer->>main: Result of registration
+
+    main->>ustreamer: add_forwarding_rule(remote_route, local_route)
+    ustreamer->>utransport_router_handle_remote: register(remote_route_authority, local_route_authority, local_route_channel)
+    utransport_router_handle_remote-->>launch (bar): UTransportRouterCommand::RegisterUnregisterControl: <br> {remote_route_authority, local_route_authority, local_route_channel} <br> sent on command_sender
+    launch (bar)->>launch (bar): handle_command()
+    launch (bar)->>dyn UTransport (bar): register_listener(remote_route_authority, request_response_notification_forwarding_callback)
+    activate request_response_notification_forwarding_callback (bar)
+    launch (bar)-->>utransport_router_handle_remote: Result of registration
+    utransport_router_handle_remote->>ustreamer: Result of registration
+    ustreamer->>main: Result of registration
+
+    opt request_response_notification_forwarding_callback (foo) triggered for local_authority
+        request_response_notification_forwarding_callback (foo)-->>launch (bar): UMessage from Foo transport headed to launch (bar) async loop
+        launch (bar)->>launch (bar): send_over_utransport(UMessage)
+        launch (bar)->>dyn UTransport (bar): dyn UTransport (bar).send(UMessage)
     end
 
-    subgraph ide6 [UTransportRouterInner]
-    a4[Async Loop Here Awaiting \n Commands & Messages \n in OS thread to send over  \n non-thread-safe UTransport]
+    opt request_response_notification_forwarding_callback (bar) triggered for remote_authority
+        request_response_notification_forwarding_callback (bar)-->>launch (foo): UMessage from Bar transport headed to launch (foo) async loop
+        launch (foo)->>launch (foo): send_over_utransport(UMessage)
+        launch (foo)->>dyn UTransport (foo): dyn UTransport (foo).send(UMessage)
     end
 
-    subgraph ide7 [UStreamer]
-    a5[add_forwarding_rule]
-    a6[delete_forwarding_rule]
-    end
-
-    subgraph ide8 [Route]
-    end
-
-    main-- start(UTransportBuilder) -->ide5
-    ide5-- UTransportRouterHandle -->main
-    ide5-- launch() --> ide6
-
-    main-- new() -->ide7
-    ide7-- UStreamer -->main
-
-    main-- new(UAuthority, UTransportRouterHandle) --> ide8
-    ide8-- Route -->main
-
-    main-- add_forwarding_rule(in: Route, out: Route) -->ide7
-    main-- delete_forwarding_rule(in: Route, out: Route) -->ide7
-
-    a5-->a4
-    a4-- Result -->a5
-
-    a6-->a4
-    a4-- Result -->a6
-
-    end
+    deactivate launch (foo)
+    deactivate launch (bar)
+    deactivate ustreamer
+    deactivate request_response_notification_forwarding_callback (foo)
+    deactivate request_response_notification_forwarding_callback (bar)
 ```
 
 `UTransport` is not thread-safe, so we opt for an approach where a `UTransportRouter` starts a `UTransportRouterInner` which launches an OS thread onto which the `Box<dyn UTransport>` is built and we await further commands / messages in an async loop.
