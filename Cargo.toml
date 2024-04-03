@@ -13,7 +13,7 @@
 resolver = "2"
 members = [
     "up-streamer",
-    "examples/simple-example",
+#    "examples/simple-example",
 ]
 
 [workspace.package]
@@ -39,7 +39,7 @@ prost-types = { version = "0.12" }
 serde_json = { version = "1.0.111" }
 uuid = { version = "1.7.0" }
 # pete version with hashable uuris
-up-rust = { git = "https://github.com/PLeVasseur/uprotocol-rust_fork", branch = "feature/hashable_uuris" }
+up-rust = { git = "https://github.com/PLeVasseur/uprotocol-rust_fork", branch = "feature/ulistener-instance-specific_ulistener-thread-safe" }
 # upstream
 # up-rust = { git = "https://github.com/eclipse-uprotocol/up-rust", rev = "68c8a1d94f0006daf4ba135c9cbbfddcd793108d" }
 
