@@ -65,7 +65,33 @@ sequenceDiagram
     deactivate UTransportRouterInner (bar)
 ```
 
-`UTransport` is not thread-safe, so we opt for an approach where a `UTransportRouter` starts a `UTransportRouterInner` which launches an OS thread onto which the `Box<dyn UTransport>` is built and we await further commands / messages in an async loop.
+### Design Concepts
+
+There are several design concepts at play here that we will break down.
+
+#### `UTransportBuilder`
+
+`UTransport` is not thread-safe, so rather than passing in the `Box<dyn UTransport>` itself when creating a `Route`, we pass in a `UTransportBuilder` which allows us to create the `Box<dyn UTransport>` in the new OS thread we will spawn to hold it.
+
+#### `UTransportRouter`
+
+Sets up the Rust channels which will be used to communicate between `UTransportRouterInner`s and `UTransportRouterHandle`s, then starts a `UTransportRouterInner`, passing in the `UTransportBuilder`.
+
+Returns the `UTransportRouterHandle` used by the `UStreamer` to communicate through to `UTransportRouterInner`.
+
+#### `UTransportRouterHandle`
+
+Has methods exposed within this crate, but not publicly, that allow the `UStreamer` to interact with it.
+
+Used by `UStreamer` to register and unregister new `Route`s. Communicates via a Rust channel to the `UTransportRouterInner` so that the `UTransportRouterInner` will then call the held `utransport.register_listener()`.
+
+#### `UTransportRouterInner`
+
+Spawns the new OS thread and uses `UTransportBuilder::build()` on that new thread's context to create the `Box<dyn UTransport>` we will hold onto.
+
+Calls an async function `launch()` which will run forever, processing:
+1. Commands sent to it via the corresponding `UTransportRouterHandle` over a Rust channel for registration, unregistration of forwarding
+2. `UMessage`s sent to this `UTransportRouterInner` which correspond to messages picked up on another `UtransportRouterInner`'s `utransport.register_listener()` callback
 
 ### Generating cargo docs locally
 
