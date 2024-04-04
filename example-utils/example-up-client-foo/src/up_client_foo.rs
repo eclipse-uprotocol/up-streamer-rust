@@ -285,9 +285,8 @@ impl UTransport for UPClientFoo {
     async fn register_listener(
         &self,
         topic: UUri,
-        listener: &Arc<dyn UListener>,
+        listener: Arc<dyn UListener>,
     ) -> Result<(), UStatus> {
-        let listener = listener.clone();
         println!("{}: registering listener for: {topic:?}", &self.name);
 
         return if topic.resource.is_none() && topic.entity.is_none() {

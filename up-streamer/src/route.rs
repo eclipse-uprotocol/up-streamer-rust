@@ -49,7 +49,7 @@ const ROUTEFN_NEW_TAG: &str = "new():";
 /// #         async fn register_listener(
 /// #             &self,
 /// #             topic: UUri,
-/// #             _listener: &Arc<dyn UListener>,
+/// #             _listener: Arc<dyn UListener>,
 /// #         ) -> Result<(), UStatus> {
 /// #             println!("UPClientFoo: registering topic: {:?}", topic);
 /// #             let uuid = UUIDBuilder::build();

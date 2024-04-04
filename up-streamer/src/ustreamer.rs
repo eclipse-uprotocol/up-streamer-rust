@@ -78,10 +78,7 @@ impl UStreamer {
             r#in.transport
                 .lock()
                 .await
-                .register_listener(
-                    Self::uauthority_to_uuri(out.authority),
-                    &forwarding_listener,
-                )
+                .register_listener(Self::uauthority_to_uuri(out.authority), forwarding_listener)
                 .await
         }
     }
@@ -158,7 +155,7 @@ mod tests {
         async fn register_listener(
             &self,
             topic: UUri,
-            _listener: &Arc<dyn UListener>,
+            _listener: Arc<dyn UListener>,
         ) -> Result<(), UStatus> {
             println!("UPClientFoo: registering topic: {:?}", topic);
             Ok(())
@@ -189,7 +186,7 @@ mod tests {
         async fn register_listener(
             &self,
             topic: UUri,
-            _listener: &Arc<dyn UListener>,
+            _listener: Arc<dyn UListener>,
         ) -> Result<(), UStatus> {
             println!("UPClientBar: registering topic: {:?}", topic);
             Ok(())

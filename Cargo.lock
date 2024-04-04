@@ -1889,7 +1889,7 @@ dependencies = [
 [[package]]
 name = "up-rust"
 version = "0.1.5"
-source = "git+https://github.com/PLeVasseur/uprotocol-rust_fork?branch=feature/ulistener-instance-specific_ulistener-thread-safe#59343cebcfa8a504308dbf5d01b4a1c4997b1f47"
+source = "git+https://github.com/PLeVasseur/uprotocol-rust_fork?branch=feature/ulistener-instance-specific_ulistener-thread-safe#8f9d707d502a99298b9bb154f755638ab325c4ff"
 dependencies = [
  "async-trait",
  "bytes",
