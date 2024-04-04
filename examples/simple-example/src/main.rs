@@ -292,7 +292,7 @@ pub async fn run_client(
             let client = UPClientFoo::new(&name, rx, tx).await;
 
             let register_res = client
-                .register_listener(my_client_uuri.clone(), listener)
+                .register_listener(my_client_uuri.clone(), &listener)
                 .await;
             let Ok(_registration_string) = register_res else {
                 panic!("Unable to register!");
