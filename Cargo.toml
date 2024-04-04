@@ -13,7 +13,7 @@
 resolver = "2"
 members = [
     "up-streamer",
-#    "examples/simple-example",
+    "examples/simple-example",
 ]
 
 [workspace.package]

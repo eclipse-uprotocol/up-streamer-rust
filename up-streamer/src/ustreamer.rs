@@ -53,6 +53,8 @@ impl UStreamer {
     }
 
     pub async fn add_forwarding_rule(&self, r#in: Route, out: Route) -> Result<(), UStatus> {
+        debug!("adding forwarding rule");
+
         if r#in.authority == out.authority {
             return Err(UStatus::fail_with_code(
                 UCode::INVALID_ARGUMENT,
@@ -65,7 +67,7 @@ impl UStreamer {
 
         let mut forwarding_listeners = self.forwarding_listeners.lock().await;
         if let Some(_exists) = forwarding_listeners.insert(
-            (r#in.authority.clone(), out.authority),
+            (r#in.authority.clone(), out.authority.clone()),
             forwarding_listener.clone(),
         ) {
             Err(UStatus::fail_with_code(
@@ -76,10 +78,7 @@ impl UStreamer {
             r#in.transport
                 .lock()
                 .await
-                .register_listener(
-                    Self::uauthority_to_uuri(r#in.authority),
-                    forwarding_listener,
-                )
+                .register_listener(Self::uauthority_to_uuri(out.authority), forwarding_listener)
                 .await
         }
     }
@@ -93,12 +92,13 @@ impl UStreamer {
         }
 
         let mut forwarding_listeners = self.forwarding_listeners.lock().await;
-        if let Some(exists) = forwarding_listeners.remove(&(r#in.authority.clone(), out.authority))
+        if let Some(exists) =
+            forwarding_listeners.remove(&(r#in.authority.clone(), out.authority.clone()))
         {
             r#in.transport
                 .lock()
                 .await
-                .unregister_listener(Self::uauthority_to_uuri(r#in.authority), exists)
+                .unregister_listener(Self::uauthority_to_uuri(out.authority), exists)
                 .await
         } else {
             Err(UStatus::fail_with_code(UCode::NOT_FOUND, "Doesn't exist"))

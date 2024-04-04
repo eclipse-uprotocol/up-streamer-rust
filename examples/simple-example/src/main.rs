@@ -13,9 +13,11 @@
 
 use async_broadcast::broadcast;
 use async_broadcast::{Receiver, Sender};
+use async_std::sync::Mutex;
 use async_std::task;
-use example_up_client_foo::{UPClientFoo, UTransportBuilderFoo};
-use futures::{select, FutureExt, StreamExt};
+use async_trait::async_trait;
+use example_up_client_foo::UPClientFoo;
+use std::future;
 use std::sync::Arc;
 use std::time::Duration;
 use up_rust::UMessageType::{
@@ -23,9 +25,10 @@ use up_rust::UMessageType::{
     UMESSAGE_TYPE_RESPONSE,
 };
 use up_rust::{
-    Number, UAttributes, UAuthority, UEntity, UMessage, UStatus, UTransport, UUIDBuilder, UUri,
+    Number, UAttributes, UAuthority, UEntity, UListener, UMessage, UStatus, UTransport,
+    UUIDBuilder, UUri,
 };
-use up_streamer::{Route, UStreamer, UTransportRouter};
+use up_streamer::{Route, UStreamer};
 
 #[async_std::main]
 async fn main() {
@@ -33,36 +36,19 @@ async fn main() {
     let (tx_1, rx_1) = broadcast(100);
     let (tx_2, rx_2) = broadcast(100);
 
-    // kicking off a UTransportRouter for protocol "foo" and retrieving its UTransportRouterHandle
-    let utransport_builder_foo =
-        UTransportBuilderFoo::new("utransport_builder_foo", rx_1.clone(), tx_1.clone());
-    let utransport_router_handle_foo = Arc::new(
-        UTransportRouter::start("foo".to_string(), utransport_builder_foo, 100, 100, 100).unwrap(),
-    );
-
-    // kicking off a UTransportRouter for protocol "bar" and retrieving its UTransportRouterHandle
-    let utransport_builder_bar =
-        UTransportBuilderFoo::new("utransport_builder_bar", rx_2.clone(), tx_2.clone());
-    let utransport_router_handle_bar = Arc::new(
-        UTransportRouter::start("bar".to_string(), utransport_builder_bar, 100, 100, 100).unwrap(),
-    );
-
-    // getting handles to the messages flowing into / out of each transport for recording purposes
-    let mut utransport_router_foo_recording_receiver = utransport_router_handle_foo
-        .get_recording_message_receiver()
-        .await
-        .unwrap();
-    let mut utransport_router_bar_recording_receiver = utransport_router_handle_bar
-        .get_recording_message_receiver()
-        .await
-        .unwrap();
+    let utransport_foo: Arc<Mutex<Box<dyn UTransport>>> = Arc::new(Mutex::new(Box::new(
+        UPClientFoo::new("upclient_foo", rx_1.clone(), tx_1.clone()).await,
+    )));
+    let utransport_bar: Arc<Mutex<Box<dyn UTransport>>> = Arc::new(Mutex::new(Box::new(
+        UPClientFoo::new("upclient_bar", rx_2.clone(), tx_2.clone()).await,
+    )));
 
     // setting up streamer to bridge between "foo" and "bar"
     let ustreamer = UStreamer::new("foo_bar_streamer");
 
     // setting up routes between authorities and protocols
-    let local_route = Route::new(&local_authority(), &utransport_router_handle_foo);
-    let remote_route = Route::new(&remote_authority(), &utransport_router_handle_bar);
+    let local_route = Route::new(local_authority(), utransport_foo.clone());
+    let remote_route = Route::new(remote_authority(), utransport_bar.clone());
 
     // adding local to remote routing
     let add_forwarding_rule_res = ustreamer
@@ -75,6 +61,9 @@ async fn main() {
         .add_forwarding_rule(remote_route.clone(), local_route.clone())
         .await;
     assert!(add_forwarding_rule_res.is_ok());
+
+    let local_client_listener: Arc<dyn UListener> = Arc::new(LocalClientListener);
+    let remote_client_listener: Arc<dyn UListener> = Arc::new(RemoteClientListener);
 
     // kicking off a "local_foo_client" and "remote_bar_client" in order to keep exercising
     // the streamer periodically
@@ -107,22 +96,7 @@ async fn main() {
     )
     .await;
 
-    loop {
-        let mut foo_recording_messages_fut = utransport_router_foo_recording_receiver.next().fuse();
-        let mut bar_recording_message_fut = utransport_router_bar_recording_receiver.next().fuse();
-
-        // here we use select! in a simple loop, but it's also possible to put each
-        // recording_message_sender into its own thread or async task to run
-        // depending on the use case
-        select! {
-            foo_recording_msg = foo_recording_messages_fut => {
-                println!("message which entered or exited foo: {:?}", foo_recording_msg);
-            }
-            bar_recording_msg = bar_recording_message_fut => {
-                println!("message which entered or exited bar: {:?}", bar_recording_msg);
-            }
-        }
-    }
+    future::pending::<()>().await;
 }
 
 pub fn local_authority() -> UAuthority {
@@ -271,20 +245,40 @@ pub fn response_from_remote_client_for_local_client(remote_id: u32, local_id: u3
     }
 }
 
-pub fn local_client_listener(received: Result<UMessage, UStatus>) {
-    println!("within local_client_listener! received: {:?}", received);
+#[derive(Clone)]
+struct LocalClientListener;
+
+#[async_trait]
+impl UListener for LocalClientListener {
+    async fn on_receive(&self, msg: UMessage) {
+        println!("within local_client_listener! msg: {:?}", msg);
+    }
+
+    async fn on_error(&self, err: UStatus) {
+        println!("within local_client_listener! err: {:?}", err);
+    }
 }
 
-pub fn remote_client_listener(received: Result<UMessage, UStatus>) {
-    println!("within remote_client_listener! received: {:?}", received);
+#[derive(Clone)]
+struct RemoteClientListener;
+
+#[async_trait]
+impl UListener for RemoteClientListener {
+    async fn on_receive(&self, msg: UMessage) {
+        println!("within remote_client_listener! msg: {:?}", msg);
+    }
+
+    async fn on_error(&self, err: UStatus) {
+        println!("within remote_client_listener! err: {:?}", err);
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
 pub async fn run_client(
     name: String,
     my_client_uuri: UUri,
-    other_client_uuri: UUri,
-    listener: fn(Result<UMessage, UStatus>),
+    _other_client_uuri: UUri,
+    listener: Arc<dyn UListener>,
     tx: Sender<Result<UMessage, UStatus>>,
     rx: Receiver<Result<UMessage, UStatus>>,
     _publish_msg: UMessage,
@@ -293,25 +287,23 @@ pub async fn run_client(
     response_msg: UMessage,
     send: bool,
 ) {
-    let uuid_builder = UUIDBuilder::new();
-
     std::thread::spawn(move || {
         task::block_on(async move {
             let client = UPClientFoo::new(&name, rx, tx).await;
 
             let register_res = client
-                .register_listener(my_client_uuri.clone(), Box::new(listener))
+                .register_listener(my_client_uuri.clone(), listener)
                 .await;
             let Ok(_registration_string) = register_res else {
                 panic!("Unable to register!");
             };
 
-            let register_res = client
-                .register_listener(other_client_uuri.clone(), Box::new(listener))
-                .await;
-            let Ok(_registration_string) = register_res else {
-                panic!("Unable to register!");
-            };
+            // let register_res = client
+            //     .register_listener(other_client_uuri.clone(), listener)
+            //     .await;
+            // let Ok(_registration_string) = register_res else {
+            //     panic!("Unable to register!");
+            // };
 
             loop {
                 task::sleep(Duration::from_millis(5000)).await;
@@ -331,7 +323,7 @@ pub async fn run_client(
 
                 let mut notification_msg = notification_msg.clone();
                 if let Some(attributes) = notification_msg.attributes.as_mut() {
-                    let new_id = uuid_builder.build();
+                    let new_id = UUIDBuilder::build();
                     attributes.id.0 = Some(Box::new(new_id));
                 }
 
@@ -347,7 +339,7 @@ pub async fn run_client(
 
                 let mut request_msg = request_msg.clone();
                 if let Some(attributes) = request_msg.attributes.as_mut() {
-                    let new_id = uuid_builder.build();
+                    let new_id = UUIDBuilder::build();
                     attributes.id.0 = Some(Box::new(new_id));
                 }
 
@@ -363,7 +355,7 @@ pub async fn run_client(
 
                 let mut response_msg = response_msg.clone();
                 if let Some(attributes) = response_msg.attributes.as_mut() {
-                    let new_id = uuid_builder.build();
+                    let new_id = UUIDBuilder::build();
                     attributes.id.0 = Some(Box::new(new_id));
                 }
 
