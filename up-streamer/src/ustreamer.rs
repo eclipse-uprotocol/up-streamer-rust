@@ -78,7 +78,10 @@ impl UStreamer {
             r#in.transport
                 .lock()
                 .await
-                .register_listener(Self::uauthority_to_uuri(out.authority), &forwarding_listener)
+                .register_listener(
+                    Self::uauthority_to_uuri(out.authority),
+                    &forwarding_listener,
+                )
                 .await
         }
     }
@@ -120,6 +123,9 @@ impl ForwardingListener {
 #[async_trait]
 impl UListener for ForwardingListener {
     async fn on_receive(&self, msg: UMessage) {
+        // TODO: This will currently just immediately upon receipt of the message send it back out
+        //  We may want to implement some kind of queueing mechanism here explicitly to handle
+        //  if we're busy still receiving but another message is available
         let out_transport = self.out_transport.lock().await;
         let _res = out_transport.send(msg).await;
     }
@@ -265,5 +271,125 @@ mod tests {
             .delete_forwarding_rule(local_route.clone(), remote_route.clone())
             .await
             .is_err());
+    }
+
+    #[async_std::test]
+    async fn test_advanced_where_there_is_a_local_route_and_two_remote_routes() {
+        // Local route
+        let local_authority = UAuthority {
+            name: Some("local".to_string()),
+            number: Some(Number::Ip(vec![192, 168, 1, 100])),
+            ..Default::default()
+        };
+        let local_transport: Arc<Mutex<Box<dyn UTransport>>> =
+            Arc::new(Mutex::new(Box::new(UPClientFoo)));
+        let local_route = Route::new(local_authority.clone(), local_transport.clone());
+
+        // Remote route - A
+        let remote_authority_a = UAuthority {
+            name: Some("remote_a".to_string()),
+            number: Some(Number::Ip(vec![192, 168, 1, 200])),
+            ..Default::default()
+        };
+        let remote_transport_a: Arc<Mutex<Box<dyn UTransport>>> =
+            Arc::new(Mutex::new(Box::new(UPClientBar)));
+        let remote_route_a = Route::new(remote_authority_a.clone(), remote_transport_a.clone());
+
+        // Remote route - B
+        let remote_authority_b = UAuthority {
+            name: Some("remote_b".to_string()),
+            number: Some(Number::Ip(vec![192, 168, 1, 201])),
+            ..Default::default()
+        };
+        let remote_transport_b: Arc<Mutex<Box<dyn UTransport>>> =
+            Arc::new(Mutex::new(Box::new(UPClientBar)));
+        let remote_route_b = Route::new(remote_authority_b.clone(), remote_transport_b.clone());
+
+        let ustreamer = UStreamer::new("foo_bar_streamer");
+
+        // Add forwarding rules to route local<->remote_a
+        assert!(ustreamer
+            .add_forwarding_rule(local_route.clone(), remote_route_a.clone())
+            .await
+            .is_ok());
+        assert!(ustreamer
+            .add_forwarding_rule(remote_route_a.clone(), local_route.clone())
+            .await
+            .is_ok());
+
+        // Add forwarding rules to route local<->remote_b
+        assert!(ustreamer
+            .add_forwarding_rule(local_route.clone(), remote_route_b.clone())
+            .await
+            .is_ok());
+        assert!(ustreamer
+            .add_forwarding_rule(remote_route_b.clone(), local_route.clone())
+            .await
+            .is_ok());
+
+        // Add forwarding rules to route remote_a<->remote_b
+        assert!(ustreamer
+            .add_forwarding_rule(remote_route_a.clone(), remote_route_b.clone())
+            .await
+            .is_ok());
+        assert!(ustreamer
+            .add_forwarding_rule(remote_route_b.clone(), remote_route_a.clone())
+            .await
+            .is_ok());
+    }
+
+    #[async_std::test]
+    async fn test_advanced_where_there_is_a_local_route_and_two_remote_routes_but_the_remote_routes_have_the_same_instance_of_utransport(
+    ) {
+        // Local route
+        let local_authority = UAuthority {
+            name: Some("local".to_string()),
+            number: Some(Number::Ip(vec![192, 168, 1, 100])),
+            ..Default::default()
+        };
+        let local_transport: Arc<Mutex<Box<dyn UTransport>>> =
+            Arc::new(Mutex::new(Box::new(UPClientFoo)));
+        let local_route = Route::new(local_authority.clone(), local_transport.clone());
+
+        let remote_transport: Arc<Mutex<Box<dyn UTransport>>> =
+            Arc::new(Mutex::new(Box::new(UPClientBar)));
+
+        // Remote route - A
+        let remote_authority_a = UAuthority {
+            name: Some("remote_a".to_string()),
+            number: Some(Number::Ip(vec![192, 168, 1, 200])),
+            ..Default::default()
+        };
+        let remote_route_a = Route::new(remote_authority_a.clone(), remote_transport.clone());
+
+        // Remote route - B
+        let remote_authority_b = UAuthority {
+            name: Some("remote_b".to_string()),
+            number: Some(Number::Ip(vec![192, 168, 1, 201])),
+            ..Default::default()
+        };
+        let remote_route_b = Route::new(remote_authority_b.clone(), remote_transport.clone());
+
+        let ustreamer = UStreamer::new("foo_bar_streamer");
+
+        // Add forwarding rules to route local<->remote_a
+        assert!(ustreamer
+            .add_forwarding_rule(local_route.clone(), remote_route_a.clone())
+            .await
+            .is_ok());
+        assert!(ustreamer
+            .add_forwarding_rule(remote_route_a.clone(), local_route.clone())
+            .await
+            .is_ok());
+
+        // Add forwarding rules to route local<->remote_b
+        assert!(ustreamer
+            .add_forwarding_rule(local_route.clone(), remote_route_b.clone())
+            .await
+            .is_ok());
+        assert!(ustreamer
+            .add_forwarding_rule(remote_route_b.clone(), local_route.clone())
+            .await
+            .is_ok());
     }
 }
