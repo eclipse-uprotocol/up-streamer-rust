@@ -232,6 +232,30 @@ impl UStreamer {
         }
     }
 
+    #[inline(always)]
+    fn forwarding_id(r#in: &Route, out: &Route) -> String {
+        format!(
+            "[in.name: {}, in.authority: {:?} ; out.name: {}, out.authority: {:?}]",
+            r#in.name, r#in.authority, out.name, out.authority
+        )
+    }
+
+    #[inline(always)]
+    fn fail_due_to_same_authority(&self, r#in: &Route, out: &Route) -> Result<(), UStatus> {
+        let err = Err(UStatus::fail_with_code(
+            UCode::INVALID_ARGUMENT,
+            format!(
+                "{} are the same. Unable to delete.",
+                Self::forwarding_id(r#in, out)
+            ),
+        ));
+        error!(
+            "{}:{}:{} Deleting forwarding rule failed: {:?}",
+            self.name, USTREAMER_TAG, USTREAMER_FN_ADD_FORWARDING_RULE_TAG, err
+        );
+        err
+    }
+
     /// Adds a forwarding rule to the [`UStreamer`] based on an in [`Route`][crate::Route] and an
     /// out [`Route`][crate::Route]
     ///
@@ -256,28 +280,20 @@ impl UStreamer {
     /// * attempting to forward onto the same [`Route`][crate::Route]
     pub async fn add_forwarding_rule(&self, r#in: Route, out: Route) -> Result<(), UStatus> {
         debug!(
-            "{}:{}:{} Adding forwarding rule for [in.authority: {:?}, out.authority: {:?}]",
+            "{}:{}:{} Adding forwarding rule for {}",
             self.name,
             USTREAMER_TAG,
             USTREAMER_FN_ADD_FORWARDING_RULE_TAG,
-            r#in.authority.clone(),
-            out.authority.clone()
+            Self::forwarding_id(&r#in, &out)
         );
 
         if r#in.authority == out.authority {
-            let err = Err(UStatus::fail_with_code(
-                UCode::INVALID_ARGUMENT,
-                format!("[in.name: {}, in.authority: {:?} ; out.name: {}, out.authority: {:?}] are the same. Unable to delete.", r#in.name, r#in.authority.clone(), out.name, out.authority.clone()),
-            ));
-            error!(
-                "{}:{}:{} Deleting forwarding rule failed: {:?}",
-                self.name, USTREAMER_TAG, USTREAMER_FN_ADD_FORWARDING_RULE_TAG, err
-            );
-            return err;
+            return self.fail_due_to_same_authority(&r#in, &out);
         }
 
-        let forwarding_listener: Arc<dyn UListener> =
-            Arc::new(ForwardingListener::new(out.transport.clone()).await);
+        let forwarding_listener: Arc<dyn UListener> = Arc::new(
+            ForwardingListener::new(&Self::forwarding_id(&r#in, &out), out.transport.clone()).await,
+        );
 
         let mut forwarding_listeners = self.forwarding_listeners.lock().await;
         if let Some(_exists) = forwarding_listeners.insert(
@@ -286,7 +302,10 @@ impl UStreamer {
         ) {
             let err = Err(UStatus::fail_with_code(
                 UCode::ALREADY_EXISTS,
-                format!("[in.name: {}, in.authority: {:?} ; out.name: {}, out.authority: {:?}] are already routed. Unable to add same rule twice.", r#in.name, r#in.authority.clone(), out.name, out.authority.clone()),
+                format!(
+                    "{} are already routed. Unable to add same rule twice.",
+                    Self::forwarding_id(&r#in, &out)
+                ),
             ));
             error!(
                 "{}:{}:{} Adding forwarding rule failed: {:?}",
@@ -326,24 +345,15 @@ impl UStreamer {
     /// * attempting to delete a forwarding rule where we would forward onto the same [`Route`][crate::Route]
     pub async fn delete_forwarding_rule(&self, r#in: Route, out: Route) -> Result<(), UStatus> {
         debug!(
-            "{}:{}:{} Deleting forwarding rule for [in.authority: {:?}, out.authority: {:?}]",
+            "{}:{}:{} Deleting forwarding rule for {}",
             self.name,
             USTREAMER_TAG,
             USTREAMER_FN_DELETE_FORWARDING_RULE_TAG,
-            r#in.authority.clone(),
-            out.authority.clone()
+            Self::forwarding_id(&r#in, &out)
         );
 
         if r#in.authority == out.authority {
-            let err = Err(UStatus::fail_with_code(
-                UCode::INVALID_ARGUMENT,
-                format!("[in.name: {}, in.authority: {:?} ; out.name: {}, out.authority: {:?}] are the same. Unable to delete.", r#in.name, r#in.authority.clone(), out.name, out.authority.clone()),
-            ));
-            error!(
-                "{}:{}:{} Deleting forwarding rule failed: {:?}",
-                self.name, USTREAMER_TAG, USTREAMER_FN_ADD_FORWARDING_RULE_TAG, err
-            );
-            return err;
+            return self.fail_due_to_same_authority(&r#in, &out);
         }
 
         let mut forwarding_listeners = self.forwarding_listeners.lock().await;
@@ -358,7 +368,10 @@ impl UStreamer {
         } else {
             let err = Err(UStatus::fail_with_code(
                 UCode::NOT_FOUND,
-                format!("[in.name: {}, in.authority: {:?} ; out.name: {}, out.authority: {:?}] are not routed. No rule to delete.", r#in.name, r#in.authority.clone(), out.name, out.authority.clone()),
+                format!(
+                    "{} are not routed. No rule to delete.",
+                    Self::forwarding_id(&r#in, &out)
+                ),
             ));
             error!(
                 "{}:{}:{} Adding forwarding rule failed: {:?}",
@@ -369,29 +382,93 @@ impl UStreamer {
     }
 }
 
+const FORWARDING_LISTENER_TAG: &str = "ForwardingListener:";
+const FORWARDING_LISTENER_FN_ON_RECEIVE_TAG: &str = "on_receive():";
+const FORWARDING_LISTENER_FN_ON_ERROR_TAG: &str = "on_error():";
+
 #[derive(Clone)]
 pub(crate) struct ForwardingListener {
+    forwarding_id: String,
     out_transport: Arc<Mutex<Box<dyn UTransport>>>,
 }
 
 impl ForwardingListener {
-    pub(crate) async fn new(out_transport: Arc<Mutex<Box<dyn UTransport>>>) -> Self {
-        Self { out_transport }
+    pub(crate) async fn new(
+        forwarding_id: &str,
+        out_transport: Arc<Mutex<Box<dyn UTransport>>>,
+    ) -> Self {
+        Self {
+            forwarding_id: forwarding_id.to_string(),
+            out_transport,
+        }
     }
 }
 
 #[async_trait]
 impl UListener for ForwardingListener {
     async fn on_receive(&self, msg: UMessage) {
+        let Some(attr) = msg.attributes.as_ref() else {
+            error!(
+                "{}:{}:{} Unable to forward message, missing attributes: {:?}",
+                self.forwarding_id,
+                FORWARDING_LISTENER_TAG,
+                FORWARDING_LISTENER_FN_ON_RECEIVE_TAG,
+                msg
+            );
+            return;
+        };
+
+        let Some(id) = attr.id.as_ref() else {
+            error!(
+                "{}:{}:{} Unable to forward message, missing id: {:?}",
+                self.forwarding_id,
+                FORWARDING_LISTENER_TAG,
+                FORWARDING_LISTENER_FN_ON_RECEIVE_TAG,
+                msg
+            );
+            return;
+        };
+        let msg_id = id.clone();
+
+        debug!(
+            "{}:{}:{} Received message: {:?}",
+            self.forwarding_id,
+            FORWARDING_LISTENER_TAG,
+            FORWARDING_LISTENER_FN_ON_RECEIVE_TAG,
+            &msg
+        );
         // TODO: This will currently just immediately upon receipt of the message send it back out
         //  We may want to implement some kind of queueing mechanism here explicitly to handle
         //  if we're busy still receiving but another message is available
         let out_transport = self.out_transport.lock().await;
-        let _res = out_transport.send(msg).await;
+        let send_res = out_transport.send(msg).await;
+        match send_res {
+            Ok(_) => {
+                debug!(
+                    "{}:{}:{} Succeeded sending message id: {}",
+                    self.forwarding_id,
+                    FORWARDING_LISTENER_TAG,
+                    FORWARDING_LISTENER_FN_ON_RECEIVE_TAG,
+                    msg_id
+                );
+            }
+            Err(err) => {
+                error!(
+                    "{}:{}:{} Failed sending message id: {} with error: {err:?}",
+                    self.forwarding_id,
+                    FORWARDING_LISTENER_TAG,
+                    FORWARDING_LISTENER_FN_ON_RECEIVE_TAG,
+                    msg_id
+                );
+            }
+        }
     }
 
     async fn on_error(&self, err: UStatus) {
-        error!("Unable to send over transport! {err:?}");
+        error!(
+            "{}:{}:{} Received error instead of message from UTransport, with error: {err:?}",
+            self.forwarding_id, FORWARDING_LISTENER_TAG, FORWARDING_LISTENER_FN_ON_ERROR_TAG
+        );
     }
 }
 
