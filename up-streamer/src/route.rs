@@ -78,16 +78,21 @@ const ROUTEFN_NEW_TAG: &str = "new():";
 ///     ..Default::default()
 /// };
 ///
-/// let local_route = Route::new(authority_foo, local_transport);
+/// let local_route = Route::new("local_route", authority_foo, local_transport);
 /// ```
 #[derive(Clone)]
 pub struct Route {
+    pub(crate) name: String,
     pub(crate) authority: UAuthority,
     pub(crate) transport: Arc<Mutex<Box<dyn UTransport>>>,
 }
 
 impl Route {
-    pub fn new(authority: UAuthority, transport: Arc<Mutex<Box<dyn UTransport>>>) -> Self {
+    pub fn new(
+        name: &str,
+        authority: UAuthority,
+        transport: Arc<Mutex<Box<dyn UTransport>>>,
+    ) -> Self {
         // Try to initiate logging.
         // Required in case of dynamic lib, otherwise no logs.
         // But cannot be done twice in case of static link.
@@ -97,6 +102,7 @@ impl Route {
             &ROUTE_TAG, &ROUTEFN_NEW_TAG, &authority,
         );
         Self {
+            name: name.to_string(),
             authority,
             transport,
         }

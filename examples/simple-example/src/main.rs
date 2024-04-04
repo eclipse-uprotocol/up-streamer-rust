@@ -47,8 +47,8 @@ async fn main() {
     let ustreamer = UStreamer::new("foo_bar_streamer");
 
     // setting up routes between authorities and protocols
-    let local_route = Route::new(local_authority(), utransport_foo.clone());
-    let remote_route = Route::new(remote_authority(), utransport_bar.clone());
+    let local_route = Route::new("local_route", local_authority(), utransport_foo.clone());
+    let remote_route = Route::new("remote_route", remote_authority(), utransport_bar.clone());
 
     // adding local to remote routing
     let add_forwarding_rule_res = ustreamer

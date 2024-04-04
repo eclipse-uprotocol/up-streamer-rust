@@ -19,8 +19,9 @@ use std::collections::HashMap;
 use up_rust::{UAuthority, UCode, UListener, UMessage, UStatus, UTransport, UUri};
 
 const USTREAMER_TAG: &str = "UStreamer:";
-const _USTREAMER_FN_ADD_FORWARDING_RULE_TAG: &str = "add_forwarding_rule():";
-const _USTREAMER_FN_DELETE_FORWARDING_RULE_TAG: &str = "delete_forwarding_rule():";
+const USTREAMER_FN_NEW_TAG: &str = "new():";
+const USTREAMER_FN_ADD_FORWARDING_RULE_TAG: &str = "add_forwarding_rule():";
+const USTREAMER_FN_DELETE_FORWARDING_RULE_TAG: &str = "delete_forwarding_rule():";
 
 type ForwardingListenersMap = Arc<Mutex<HashMap<(UAuthority, UAuthority), Arc<dyn UListener>>>>;
 
@@ -134,7 +135,7 @@ type ForwardingListenersMap = Arc<Mutex<HashMap<(UAuthority, UAuthority), Arc<dy
 ///     number: Some(Number::Ip(vec![192, 168, 1, 100])),
 ///     ..Default::default()
 /// };
-/// let local_route = Route::new(local_authority, local_transport.clone());
+/// let local_route = Route::new("local_route", local_authority, local_transport.clone());
 ///
 /// // A remote route
 /// let remote_authority = UAuthority {
@@ -142,7 +143,7 @@ type ForwardingListenersMap = Arc<Mutex<HashMap<(UAuthority, UAuthority), Arc<dy
 ///     number: Some(Number::Ip(vec![192, 168, 1, 200])),
 ///     ..Default::default()
 /// };
-/// let remote_route = Route::new(remote_authority, remote_transport.clone());
+/// let remote_route = Route::new("remote_route", remote_authority, remote_transport.clone());
 ///
 /// let streamer = UStreamer::new("hoge");
 ///
@@ -213,7 +214,10 @@ impl UStreamer {
         // Required in case of dynamic lib, otherwise no logs.
         // But cannot be done twice in case of static link.
         let _ = env_logger::try_init();
-        debug!("{}: UStreamer started", &name);
+        debug!(
+            "{}:{}:{} UStreamer created",
+            &name, USTREAMER_TAG, USTREAMER_FN_NEW_TAG
+        );
 
         Self {
             name: name.to_string(),
@@ -251,13 +255,25 @@ impl UStreamer {
     /// * already have this forwarding rule registered
     /// * attempting to forward onto the same [`Route`][crate::Route]
     pub async fn add_forwarding_rule(&self, r#in: Route, out: Route) -> Result<(), UStatus> {
-        debug!("adding forwarding rule");
+        debug!(
+            "{}:{}:{} Adding forwarding rule for [in.authority: {:?}, out.authority: {:?}]",
+            self.name,
+            USTREAMER_TAG,
+            USTREAMER_FN_ADD_FORWARDING_RULE_TAG,
+            r#in.authority.clone(),
+            out.authority.clone()
+        );
 
         if r#in.authority == out.authority {
-            return Err(UStatus::fail_with_code(
+            let err = Err(UStatus::fail_with_code(
                 UCode::INVALID_ARGUMENT,
-                "Unable to send onto same authority!",
+                format!("[in.name: {}, in.authority: {:?} ; out.name: {}, out.authority: {:?}] are the same. Unable to delete.", r#in.name, r#in.authority.clone(), out.name, out.authority.clone()),
             ));
+            error!(
+                "{}:{}:{} Deleting forwarding rule failed: {:?}",
+                self.name, USTREAMER_TAG, USTREAMER_FN_ADD_FORWARDING_RULE_TAG, err
+            );
+            return err;
         }
 
         let forwarding_listener: Arc<dyn UListener> =
@@ -268,10 +284,15 @@ impl UStreamer {
             (r#in.authority.clone(), out.authority.clone()),
             forwarding_listener.clone(),
         ) {
-            Err(UStatus::fail_with_code(
+            let err = Err(UStatus::fail_with_code(
                 UCode::ALREADY_EXISTS,
-                "Already exists",
-            ))
+                format!("[in.name: {}, in.authority: {:?} ; out.name: {}, out.authority: {:?}] are already routed. Unable to add same rule twice.", r#in.name, r#in.authority.clone(), out.name, out.authority.clone()),
+            ));
+            error!(
+                "{}:{}:{} Adding forwarding rule failed: {:?}",
+                self.name, USTREAMER_TAG, USTREAMER_FN_ADD_FORWARDING_RULE_TAG, err
+            );
+            err
         } else {
             r#in.transport
                 .lock()
@@ -304,11 +325,25 @@ impl UStreamer {
     /// * No such route has been added
     /// * attempting to delete a forwarding rule where we would forward onto the same [`Route`][crate::Route]
     pub async fn delete_forwarding_rule(&self, r#in: Route, out: Route) -> Result<(), UStatus> {
+        debug!(
+            "{}:{}:{} Deleting forwarding rule for [in.authority: {:?}, out.authority: {:?}]",
+            self.name,
+            USTREAMER_TAG,
+            USTREAMER_FN_DELETE_FORWARDING_RULE_TAG,
+            r#in.authority.clone(),
+            out.authority.clone()
+        );
+
         if r#in.authority == out.authority {
-            return Err(UStatus::fail_with_code(
+            let err = Err(UStatus::fail_with_code(
                 UCode::INVALID_ARGUMENT,
-                "Unable to send onto same authority!",
+                format!("[in.name: {}, in.authority: {:?} ; out.name: {}, out.authority: {:?}] are the same. Unable to delete.", r#in.name, r#in.authority.clone(), out.name, out.authority.clone()),
             ));
+            error!(
+                "{}:{}:{} Deleting forwarding rule failed: {:?}",
+                self.name, USTREAMER_TAG, USTREAMER_FN_ADD_FORWARDING_RULE_TAG, err
+            );
+            return err;
         }
 
         let mut forwarding_listeners = self.forwarding_listeners.lock().await;
@@ -321,7 +356,15 @@ impl UStreamer {
                 .unregister_listener(Self::uauthority_to_uuri(out.authority), exists)
                 .await
         } else {
-            Err(UStatus::fail_with_code(UCode::NOT_FOUND, "Doesn't exist"))
+            let err = Err(UStatus::fail_with_code(
+                UCode::NOT_FOUND,
+                format!("[in.name: {}, in.authority: {:?} ; out.name: {}, out.authority: {:?}] are not routed. No rule to delete.", r#in.name, r#in.authority.clone(), out.name, out.authority.clone()),
+            ));
+            error!(
+                "{}:{}:{} Adding forwarding rule failed: {:?}",
+                self.name, USTREAMER_TAG, USTREAMER_FN_ADD_FORWARDING_RULE_TAG, err
+            );
+            err
         }
     }
 }
@@ -432,7 +475,11 @@ mod tests {
         };
         let local_transport: Arc<Mutex<Box<dyn UTransport>>> =
             Arc::new(Mutex::new(Box::new(UPClientFoo)));
-        let local_route = Route::new(local_authority.clone(), local_transport.clone());
+        let local_route = Route::new(
+            "local_route",
+            local_authority.clone(),
+            local_transport.clone(),
+        );
 
         // A remote route
         let remote_authority = UAuthority {
@@ -442,7 +489,11 @@ mod tests {
         };
         let remote_transport: Arc<Mutex<Box<dyn UTransport>>> =
             Arc::new(Mutex::new(Box::new(UPClientBar)));
-        let remote_route = Route::new(remote_authority.clone(), remote_transport.clone());
+        let remote_route = Route::new(
+            "remote_route",
+            remote_authority.clone(),
+            remote_transport.clone(),
+        );
 
         let ustreamer = UStreamer::new("foo_bar_streamer");
         // Add forwarding rules to route local<->remote
@@ -500,7 +551,11 @@ mod tests {
         };
         let local_transport: Arc<Mutex<Box<dyn UTransport>>> =
             Arc::new(Mutex::new(Box::new(UPClientFoo)));
-        let local_route = Route::new(local_authority.clone(), local_transport.clone());
+        let local_route = Route::new(
+            "local_route",
+            local_authority.clone(),
+            local_transport.clone(),
+        );
 
         // Remote route - A
         let remote_authority_a = UAuthority {
@@ -510,7 +565,11 @@ mod tests {
         };
         let remote_transport_a: Arc<Mutex<Box<dyn UTransport>>> =
             Arc::new(Mutex::new(Box::new(UPClientBar)));
-        let remote_route_a = Route::new(remote_authority_a.clone(), remote_transport_a.clone());
+        let remote_route_a = Route::new(
+            "remote_route_a",
+            remote_authority_a.clone(),
+            remote_transport_a.clone(),
+        );
 
         // Remote route - B
         let remote_authority_b = UAuthority {
@@ -520,7 +579,11 @@ mod tests {
         };
         let remote_transport_b: Arc<Mutex<Box<dyn UTransport>>> =
             Arc::new(Mutex::new(Box::new(UPClientBar)));
-        let remote_route_b = Route::new(remote_authority_b.clone(), remote_transport_b.clone());
+        let remote_route_b = Route::new(
+            "remote_route_b",
+            remote_authority_b.clone(),
+            remote_transport_b.clone(),
+        );
 
         let ustreamer = UStreamer::new("foo_bar_streamer");
 
@@ -566,7 +629,11 @@ mod tests {
         };
         let local_transport: Arc<Mutex<Box<dyn UTransport>>> =
             Arc::new(Mutex::new(Box::new(UPClientFoo)));
-        let local_route = Route::new(local_authority.clone(), local_transport.clone());
+        let local_route = Route::new(
+            "local_route",
+            local_authority.clone(),
+            local_transport.clone(),
+        );
 
         let remote_transport: Arc<Mutex<Box<dyn UTransport>>> =
             Arc::new(Mutex::new(Box::new(UPClientBar)));
@@ -577,7 +644,11 @@ mod tests {
             number: Some(Number::Ip(vec![192, 168, 1, 200])),
             ..Default::default()
         };
-        let remote_route_a = Route::new(remote_authority_a.clone(), remote_transport.clone());
+        let remote_route_a = Route::new(
+            "remote_route_a",
+            remote_authority_a.clone(),
+            remote_transport.clone(),
+        );
 
         // Remote route - B
         let remote_authority_b = UAuthority {
@@ -585,7 +656,11 @@ mod tests {
             number: Some(Number::Ip(vec![192, 168, 1, 201])),
             ..Default::default()
         };
-        let remote_route_b = Route::new(remote_authority_b.clone(), remote_transport.clone());
+        let remote_route_b = Route::new(
+            "remote_route_b",
+            remote_authority_b.clone(),
+            remote_transport.clone(),
+        );
 
         let ustreamer = UStreamer::new("foo_bar_streamer");
 
