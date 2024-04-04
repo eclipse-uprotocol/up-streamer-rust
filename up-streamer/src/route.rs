@@ -52,11 +52,10 @@ const ROUTEFN_NEW_TAG: &str = "new():";
 /// #             _listener: Arc<dyn UListener>,
 /// #         ) -> Result<(), UStatus> {
 /// #             println!("UPClientFoo: registering topic: {:?}", topic);
-/// #             let uuid = UUIDBuilder::build();
 /// #             Ok(())
 /// #         }
 /// #
-/// #         async fn unregister_listener(&self, topic: UUri, listener: Arc<dyn UListener>) -> Result<(), UStatus> {
+/// #         async fn unregister_listener(&self, topic: UUri, _listener: Arc<dyn UListener>) -> Result<(), UStatus> {
 /// #             println!(
 /// #                 "UPClientFoo: unregistering topic: {topic:?}"
 /// #             );
