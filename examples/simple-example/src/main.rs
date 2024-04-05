@@ -48,7 +48,7 @@ async fn main() {
     )));
 
     // setting up streamer to bridge between "foo" and "bar"
-    let ustreamer = UStreamer::new("foo_bar_streamer", 100, 2);
+    let ustreamer = UStreamer::new("foo_bar_streamer");
 
     // setting up routes between authorities and protocols
     let local_route = Route::new("local_route", local_authority(), utransport_foo.clone());
@@ -335,7 +335,7 @@ pub async fn run_client(
 
                 // task::yield_now().await;
 
-                task::sleep(Duration::from_millis(50)).await;
+                task::sleep(Duration::from_millis(100)).await;
 
                 if FINISH_CLIENTS.load(Ordering::SeqCst) {
                     debug!("Received a return request, performing the action...");
