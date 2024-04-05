@@ -15,8 +15,11 @@ use async_broadcast::broadcast;
 use async_broadcast::{Receiver, Sender};
 use async_std::task;
 use example_up_client_foo::{UPClientFoo, UTransportBuilderFoo};
-use futures::{select, FutureExt, StreamExt};
+// use futures::{select, FutureExt, StreamExt};
+use log::debug;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::thread::JoinHandle;
 use std::time::Duration;
 use up_rust::UMessageType::{
     UMESSAGE_TYPE_NOTIFICATION, UMESSAGE_TYPE_PUBLISH, UMESSAGE_TYPE_REQUEST,
@@ -26,6 +29,8 @@ use up_rust::{
     Number, UAttributes, UAuthority, UEntity, UMessage, UStatus, UTransport, UUIDBuilder, UUri,
 };
 use up_streamer::{Route, UStreamer, UTransportRouter};
+
+static FINISH_CLIENTS: AtomicBool = AtomicBool::new(false);
 
 #[async_std::main]
 async fn main() {
@@ -48,11 +53,11 @@ async fn main() {
     );
 
     // getting handles to the messages flowing into / out of each transport for recording purposes
-    let mut utransport_router_foo_recording_receiver = utransport_router_handle_foo
+    let mut _utransport_router_foo_recording_receiver = utransport_router_handle_foo
         .get_recording_message_receiver()
         .await
         .unwrap();
-    let mut utransport_router_bar_recording_receiver = utransport_router_handle_bar
+    let mut _utransport_router_bar_recording_receiver = utransport_router_handle_bar
         .get_recording_message_receiver()
         .await
         .unwrap();
@@ -78,7 +83,7 @@ async fn main() {
 
     // kicking off a "local_foo_client" and "remote_bar_client" in order to keep exercising
     // the streamer periodically
-    run_client(
+    let handle_1 = run_client(
         "local_foo_client".to_string(),
         local_client_uuri(10),
         remote_client_uuri(20),
@@ -92,7 +97,7 @@ async fn main() {
         true,
     )
     .await;
-    run_client(
+    let handle_2 = run_client(
         "remote_bar_client".to_string(),
         remote_client_uuri(200),
         local_client_uuri(100),
@@ -107,22 +112,45 @@ async fn main() {
     )
     .await;
 
-    loop {
-        let mut foo_recording_messages_fut = utransport_router_foo_recording_receiver.next().fuse();
-        let mut bar_recording_message_fut = utransport_router_bar_recording_receiver.next().fuse();
+    debug!("waiting for a bit to let clients run");
 
-        // here we use select! in a simple loop, but it's also possible to put each
-        // recording_message_sender into its own thread or async task to run
-        // depending on the use case
-        select! {
-            foo_recording_msg = foo_recording_messages_fut => {
-                println!("message which entered or exited foo: {:?}", foo_recording_msg);
-            }
-            bar_recording_msg = bar_recording_message_fut => {
-                println!("message which entered or exited bar: {:?}", bar_recording_msg);
-            }
-        }
-    }
+    task::sleep(Duration::from_millis(1000)).await;
+
+    debug!("Finished!");
+
+    FINISH_CLIENTS.store(true, Ordering::SeqCst);
+
+    debug!("set FINISH_CLIENTS to true");
+
+    debug!(
+        "FINISH_CLIENTS.load(): {}",
+        FINISH_CLIENTS.load(Ordering::SeqCst)
+    );
+
+    let recv_1 = handle_1.join().expect("Unable to join on handle_1");
+    let recv_2 = handle_2.join().expect("Unable to join on handle_2");
+
+    println!("recv_1: {recv_1}");
+    println!("recv_2: {recv_2}");
+
+    debug!("All clients finished.");
+
+    // loop {
+    //     let mut foo_recording_messages_fut = utransport_router_foo_recording_receiver.next().fuse();
+    //     let mut bar_recording_message_fut = utransport_router_bar_recording_receiver.next().fuse();
+    //
+    //     // here we use select! in a simple loop, but it's also possible to put each
+    //     // recording_message_sender into its own thread or async task to run
+    //     // depending on the use case
+    //     select! {
+    //         foo_recording_msg = foo_recording_messages_fut => {
+    //             debug!("message which entered or exited foo: {:?}", foo_recording_msg);
+    //         }
+    //         bar_recording_msg = bar_recording_message_fut => {
+    //             debug!("message which entered or exited bar: {:?}", bar_recording_msg);
+    //         }
+    //     }
+    // }
 }
 
 pub fn local_authority() -> UAuthority {
@@ -272,11 +300,11 @@ pub fn response_from_remote_client_for_local_client(remote_id: u32, local_id: u3
 }
 
 pub fn local_client_listener(received: Result<UMessage, UStatus>) {
-    println!("within local_client_listener! received: {:?}", received);
+    debug!("within local_client_listener! received: {:?}", received);
 }
 
 pub fn remote_client_listener(received: Result<UMessage, UStatus>) {
-    println!("within remote_client_listener! received: {:?}", received);
+    debug!("within remote_client_listener! received: {:?}", received);
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -292,11 +320,11 @@ pub async fn run_client(
     request_msg: UMessage,
     response_msg: UMessage,
     send: bool,
-) {
+) -> JoinHandle<u64> {
     let uuid_builder = UUIDBuilder::new();
 
-    std::thread::spawn(move || {
-        task::block_on(async move {
+    let join_handle = std::thread::spawn(move || {
+        let res = task::block_on(async move {
             let client = UPClientFoo::new(&name, rx, tx).await;
 
             let register_res = client
@@ -314,9 +342,19 @@ pub async fn run_client(
             };
 
             loop {
-                task::sleep(Duration::from_millis(5000)).await;
+                task::sleep(Duration::from_millis(100)).await;
 
-                println!("-----------------------------------------------------------------------");
+                if FINISH_CLIENTS.load(Ordering::SeqCst) {
+                    debug!("Received a return request, performing the action...");
+                    // Handle the return request
+                    let times: u64 = client.times_received.load(Ordering::Relaxed);
+                    println!("{name} had rx of: {times}");
+                    return times;
+                } else {
+                    debug!("No request to quit yet");
+                }
+
+                debug!("-----------------------------------------------------------------------");
 
                 if !send {
                     continue;
@@ -335,7 +373,7 @@ pub async fn run_client(
                     attributes.id.0 = Some(Box::new(new_id));
                 }
 
-                println!(
+                debug!(
                     "prior to sending from client {}, the request message: {:?}",
                     &name, &request_msg
                 );
@@ -351,7 +389,7 @@ pub async fn run_client(
                     attributes.id.0 = Some(Box::new(new_id));
                 }
 
-                println!(
+                debug!(
                     "prior to sending from client {}, the request message: {:?}",
                     &name, &request_msg
                 );
@@ -367,7 +405,7 @@ pub async fn run_client(
                     attributes.id.0 = Some(Box::new(new_id));
                 }
 
-                println!(
+                debug!(
                     "prior to sending from client {}, the response message: {:?}",
                     &name, &response_msg
                 );
@@ -378,5 +416,7 @@ pub async fn run_client(
                 }
             }
         });
+        res
     });
+    join_handle
 }
