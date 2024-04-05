@@ -429,7 +429,7 @@ impl ForwardingListener {
                             FORWARDING_LISTENER_FN_ON_RECEIVE_TAG,
                             msg
                         );
-                        return;
+                        continue;
                     };
 
                     let Some(id) = attr.id.as_ref() else {
@@ -440,7 +440,7 @@ impl ForwardingListener {
                             FORWARDING_LISTENER_FN_ON_RECEIVE_TAG,
                             msg
                         );
-                        return;
+                        continue;
                     };
                     let msg_id = id.clone();
 

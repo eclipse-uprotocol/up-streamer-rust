@@ -17,8 +17,10 @@ use async_std::sync::Mutex;
 use async_std::task;
 use async_trait::async_trait;
 use example_up_client_foo::UPClientFoo;
-use std::future;
+use log::{debug, error};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::thread::JoinHandle;
 use std::time::Duration;
 use up_rust::UMessageType::{
     UMESSAGE_TYPE_NOTIFICATION, UMESSAGE_TYPE_PUBLISH, UMESSAGE_TYPE_REQUEST,
@@ -29,6 +31,8 @@ use up_rust::{
     UUIDBuilder, UUri,
 };
 use up_streamer::{Route, UStreamer};
+
+static FINISH_CLIENTS: AtomicBool = AtomicBool::new(false);
 
 #[async_std::main]
 async fn main() {
@@ -67,7 +71,7 @@ async fn main() {
 
     // kicking off a "local_foo_client" and "remote_bar_client" in order to keep exercising
     // the streamer periodically
-    run_client(
+    let handle_1 = run_client(
         "local_foo_client".to_string(),
         local_client_uuri(10),
         remote_client_uuri(20),
@@ -81,7 +85,7 @@ async fn main() {
         true,
     )
     .await;
-    run_client(
+    let handle_2 = run_client(
         "remote_bar_client".to_string(),
         remote_client_uuri(200),
         local_client_uuri(100),
@@ -96,7 +100,28 @@ async fn main() {
     )
     .await;
 
-    future::pending::<()>().await;
+    debug!("waiting for a bit to let clients run");
+
+    task::sleep(Duration::from_millis(1000)).await;
+
+    debug!("Finished!");
+
+    FINISH_CLIENTS.store(true, Ordering::SeqCst);
+
+    debug!("set FINISH_CLIENTS to true");
+
+    debug!(
+        "FINISH_CLIENTS.load(): {}",
+        FINISH_CLIENTS.load(Ordering::SeqCst)
+    );
+
+    let recv_1 = handle_1.join().expect("Unable to join on handle_1");
+    let recv_2 = handle_2.join().expect("Unable to join on handle_2");
+
+    println!("recv_1: {recv_1}");
+    println!("recv_2: {recv_2}");
+
+    debug!("All clients finished.");
 }
 
 pub fn local_authority() -> UAuthority {
@@ -251,11 +276,11 @@ struct LocalClientListener;
 #[async_trait]
 impl UListener for LocalClientListener {
     async fn on_receive(&self, msg: UMessage) {
-        println!("within local_client_listener! msg: {:?}", msg);
+        debug!("within local_client_listener! msg: {:?}", msg);
     }
 
     async fn on_error(&self, err: UStatus) {
-        println!("within local_client_listener! err: {:?}", err);
+        debug!("within local_client_listener! err: {:?}", err);
     }
 }
 
@@ -265,11 +290,11 @@ struct RemoteClientListener;
 #[async_trait]
 impl UListener for RemoteClientListener {
     async fn on_receive(&self, msg: UMessage) {
-        println!("within remote_client_listener! msg: {:?}", msg);
+        debug!("within remote_client_listener! msg: {:?}", msg);
     }
 
     async fn on_error(&self, err: UStatus) {
-        println!("within remote_client_listener! err: {:?}", err);
+        debug!("within remote_client_listener! err: {:?}", err);
     }
 }
 
@@ -286,9 +311,9 @@ pub async fn run_client(
     request_msg: UMessage,
     response_msg: UMessage,
     send: bool,
-) {
-    std::thread::spawn(move || {
-        task::block_on(async move {
+) -> JoinHandle<u64> {
+    let join_handle = std::thread::spawn(move || {
+        let res = task::block_on(async move {
             let client = UPClientFoo::new(&name, rx, tx).await;
 
             let register_res = client
@@ -306,9 +331,23 @@ pub async fn run_client(
             // };
 
             loop {
-                task::sleep(Duration::from_millis(5000)).await;
+                debug!("top of loop");
 
-                println!("-----------------------------------------------------------------------");
+                // task::yield_now().await;
+
+                task::sleep(Duration::from_millis(50)).await;
+
+                if FINISH_CLIENTS.load(Ordering::SeqCst) {
+                    debug!("Received a return request, performing the action...");
+                    // Handle the return request
+                    let times: u64 = client.times_received.load(Ordering::Relaxed);
+                    println!("{name} had rx of: {times}");
+                    return times;
+                } else {
+                    debug!("No request to quit yet");
+                }
+
+                debug!("-----------------------------------------------------------------------");
 
                 if !send {
                     continue;
@@ -327,14 +366,14 @@ pub async fn run_client(
                     attributes.id.0 = Some(Box::new(new_id));
                 }
 
-                println!(
+                debug!(
                     "prior to sending from client {}, the request message: {:?}",
                     &name, &request_msg
                 );
 
                 let send_res = client.send(notification_msg).await;
                 if send_res.is_err() {
-                    panic!("Unable to send from client: {}", &name);
+                    error!("Unable to send from client: {}", &name);
                 }
 
                 let mut request_msg = request_msg.clone();
@@ -343,14 +382,14 @@ pub async fn run_client(
                     attributes.id.0 = Some(Box::new(new_id));
                 }
 
-                println!(
+                debug!(
                     "prior to sending from client {}, the request message: {:?}",
                     &name, &request_msg
                 );
 
                 let send_res = client.send(request_msg).await;
                 if send_res.is_err() {
-                    panic!("Unable to send from client: {}", &name);
+                    error!("Unable to send from client: {}", &name);
                 }
 
                 let mut response_msg = response_msg.clone();
@@ -359,16 +398,13 @@ pub async fn run_client(
                     attributes.id.0 = Some(Box::new(new_id));
                 }
 
-                println!(
+                debug!(
                     "prior to sending from client {}, the response message: {:?}",
                     &name, &response_msg
                 );
-
-                let send_res = client.send(response_msg.clone()).await;
-                if send_res.is_err() {
-                    panic!("Unable to send from client: {}", &name);
-                }
             }
         });
+        res
     });
+    join_handle
 }

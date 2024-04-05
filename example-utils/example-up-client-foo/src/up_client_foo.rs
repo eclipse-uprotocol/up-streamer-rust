@@ -15,7 +15,9 @@ use async_broadcast::{Receiver, Sender};
 use async_std::sync::Mutex;
 use async_std::task;
 use async_trait::async_trait;
+use log::debug;
 use std::collections::{HashMap, HashSet};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use up_rust::{
     ComparableListener, UAuthority, UCode, UListener, UMessage, UMessageType, UStatus, UTransport,
@@ -30,6 +32,7 @@ pub struct UPClientFoo {
     protocol_sender: Sender<Result<UMessage, UStatus>>,
     listeners: Arc<Mutex<HashMap<UUri, HashSet<ComparableListener>>>>,
     authority_listeners: Arc<Mutex<HashMap<UAuthority, HashSet<ComparableListener>>>>,
+    pub times_received: Arc<AtomicU64>,
 }
 
 impl UPClientFoo {
@@ -48,6 +51,9 @@ impl UPClientFoo {
         let authority_listeners_clone = authority_listeners.clone();
         let listeners_clone = listeners.clone();
         let protocol_receiver_clone = protocol_receiver.clone();
+
+        let times_received = Arc::new(AtomicU64::new(0));
+        let times_received_task = times_received.clone();
         task::spawn(async move {
             let name_clone = name_clone.clone();
             let mut protocol_receiver_clone = protocol_receiver_clone.clone();
@@ -58,27 +64,27 @@ impl UPClientFoo {
                     Ok(msg) => {
                         let UMessage { attributes, .. } = &msg;
                         let Some(attr) = attributes.as_ref() else {
-                            println!("{}: No UAttributes!", &name_clone);
+                            debug!("{}: No UAttributes!", &name_clone);
                             continue;
                         };
 
                         match attr.type_.enum_value() {
                             Ok(enum_value) => match enum_value {
                                 UMessageType::UMESSAGE_TYPE_UNSPECIFIED => {
-                                    println!("{}: Type unspecified! Fail!", &name_clone);
+                                    debug!("{}: Type unspecified! Fail!", &name_clone);
                                 }
                                 UMessageType::UMESSAGE_TYPE_NOTIFICATION => {
                                     let sink_uuri = attr.sink.as_ref();
-                                    println!("{}: Request sink uuri: {sink_uuri:?}", &name_clone);
+                                    debug!("{}: Request sink uuri: {sink_uuri:?}", &name_clone);
                                     match sink_uuri {
                                         None => {
-                                            println!("{}: No sink uuri!", &name_clone);
+                                            debug!("{}: No sink uuri!", &name_clone);
                                         }
                                         Some(topic) => {
                                             let authority_listeners =
                                                 authority_listeners_clone.lock().await;
                                             if let Some(authority) = topic.authority.as_ref() {
-                                                println!(
+                                                debug!(
                                                     "{}: Notification: authority: {authority:?}",
                                                     &name_clone
                                                 );
@@ -89,7 +95,7 @@ impl UPClientFoo {
                                                 if let Some(authority_listeners) =
                                                     authority_listeners
                                                 {
-                                                    println!(
+                                                    debug!(
                                                         "{}: Notification: authority: {authority:?} -- listeners found",
                                                         &name_clone
                                                     );
@@ -98,7 +104,7 @@ impl UPClientFoo {
                                                         al.on_receive(msg.clone()).await;
                                                     }
                                                 } else {
-                                                    println!(
+                                                    debug!(
                                                         "{}: Notification: authority: {authority:?} -- no listeners",
                                                         &name_clone
                                                     );
@@ -109,15 +115,16 @@ impl UPClientFoo {
                                             let topic_listeners = listeners.get(topic);
 
                                             if let Some(topic_listeners) = topic_listeners {
-                                                println!(
+                                                debug!(
                                                     "{}: Notification: topic: {topic:?} -- listeners found",
                                                     &name_clone
                                                 );
+                                                times_received_task.fetch_add(1, Ordering::Relaxed);
                                                 for tl in topic_listeners.iter() {
                                                     tl.on_receive(msg.clone()).await;
                                                 }
                                             } else {
-                                                println!(
+                                                debug!(
                                                     "{}: Notification: topic: {topic:?} -- listeners not found",
                                                     &name_clone
                                                 );
@@ -130,16 +137,16 @@ impl UPClientFoo {
                                 }
                                 UMessageType::UMESSAGE_TYPE_REQUEST => {
                                     let sink_uuri = attr.sink.as_ref();
-                                    println!("{}: Request sink uuri: {sink_uuri:?}", &name_clone);
+                                    debug!("{}: Request sink uuri: {sink_uuri:?}", &name_clone);
                                     match sink_uuri {
                                         None => {
-                                            println!("{}: No sink uuri!", &name_clone);
+                                            debug!("{}: No sink uuri!", &name_clone);
                                         }
                                         Some(topic) => {
                                             let authority_listeners =
                                                 authority_listeners_clone.lock().await;
                                             if let Some(authority) = topic.authority.as_ref() {
-                                                println!(
+                                                debug!(
                                                     "{}: Request: authority: {authority:?}",
                                                     &name_clone
                                                 );
@@ -150,7 +157,7 @@ impl UPClientFoo {
                                                 if let Some(authority_listeners) =
                                                     authority_listeners
                                                 {
-                                                    println!(
+                                                    debug!(
                                                         "{}: Request: authority: {authority:?} -- listeners found",
                                                         &name_clone
                                                     );
@@ -158,7 +165,7 @@ impl UPClientFoo {
                                                         al.on_receive(msg.clone()).await;
                                                     }
                                                 } else {
-                                                    println!(
+                                                    debug!(
                                                         "{}: Request: authority: {authority:?} -- no listeners",
                                                         &name_clone
                                                     );
@@ -169,15 +176,16 @@ impl UPClientFoo {
                                             let topic_listeners = listeners.get(topic);
 
                                             if let Some(topic_listeners) = topic_listeners {
-                                                println!(
+                                                debug!(
                                                     "{}: Request: topic: {topic:?} -- listeners found",
                                                     &name_clone
                                                 );
+                                                times_received_task.fetch_add(1, Ordering::Relaxed);
                                                 for tl in topic_listeners.iter() {
                                                     tl.on_receive(msg.clone()).await;
                                                 }
                                             } else {
-                                                println!(
+                                                debug!(
                                                     "{}: Request: topic: {topic:?} -- listeners not found",
                                                     &name_clone
                                                 );
@@ -187,16 +195,16 @@ impl UPClientFoo {
                                 }
                                 UMessageType::UMESSAGE_TYPE_RESPONSE => {
                                     let sink_uuri = attr.sink.as_ref();
-                                    println!("{}: Response sink uuri: {sink_uuri:?}", &name_clone);
+                                    debug!("{}: Response sink uuri: {sink_uuri:?}", &name_clone);
                                     match sink_uuri {
                                         None => {
-                                            println!("{}: No sink uuri!", &name_clone);
+                                            debug!("{}: No sink uuri!", &name_clone);
                                         }
                                         Some(topic) => {
                                             let authority_listeners =
                                                 authority_listeners_clone.lock().await;
                                             if let Some(authority) = topic.authority.as_ref() {
-                                                println!(
+                                                debug!(
                                                     "{}: Response: authority: {authority:?}",
                                                     &name_clone
                                                 );
@@ -207,7 +215,7 @@ impl UPClientFoo {
                                                 if let Some(authority_listeners) =
                                                     authority_listeners
                                                 {
-                                                    println!(
+                                                    debug!(
                                                         "{}: Response: authority: {authority:?} -- listeners found",
                                                         &name_clone
                                                     );
@@ -215,7 +223,7 @@ impl UPClientFoo {
                                                         al.on_receive(msg.clone()).await;
                                                     }
                                                 } else {
-                                                    println!(
+                                                    debug!(
                                                         "{}: Response: authority: {authority:?} -- no listeners",
                                                         &name_clone
                                                     );
@@ -226,15 +234,16 @@ impl UPClientFoo {
                                             let topic_listeners = listeners.get(topic);
 
                                             if let Some(topic_listeners) = topic_listeners {
-                                                println!(
+                                                debug!(
                                                     "{}: Response: topic: {topic:?} -- listeners found",
                                                     &name_clone
                                                 );
+                                                times_received_task.fetch_add(1, Ordering::Relaxed);
                                                 for tl in topic_listeners.iter() {
                                                     tl.on_receive(msg.clone()).await;
                                                 }
                                             } else {
-                                                println!(
+                                                debug!(
                                                     "{}: Response: topic: {topic:?} -- listeners not found",
                                                     &name_clone
                                                 );
@@ -244,12 +253,12 @@ impl UPClientFoo {
                                 }
                             },
                             Err(_) => {
-                                println!("No matching type or an error occurred!");
+                                debug!("No matching type or an error occurred!");
                             }
                         }
                     }
                     Err(status) => {
-                        println!("Got an error! err: {status:?}");
+                        debug!("Got an error! err: {status:?}");
                     }
                 }
             }
@@ -261,6 +270,7 @@ impl UPClientFoo {
             protocol_receiver,
             listeners,
             authority_listeners,
+            times_received,
         }
     }
 }
@@ -268,7 +278,7 @@ impl UPClientFoo {
 #[async_trait]
 impl UTransport for UPClientFoo {
     async fn send(&self, message: UMessage) -> Result<(), UStatus> {
-        println!("sending: {message:?}");
+        debug!("sending: {message:?}");
         match self.protocol_sender.broadcast(Ok(message)).await {
             Ok(_) => Ok(()),
             Err(_) => Err(UStatus::fail_with_code(
@@ -287,10 +297,10 @@ impl UTransport for UPClientFoo {
         topic: UUri,
         listener: Arc<dyn UListener>,
     ) -> Result<(), UStatus> {
-        println!("{}: registering listener for: {topic:?}", &self.name);
+        debug!("{}: registering listener for: {topic:?}", &self.name);
 
         return if topic.resource.is_none() && topic.entity.is_none() {
-            println!("{}: registering authority listener", &self.name);
+            debug!("{}: registering authority listener", &self.name);
 
             let mut authority_listeners = self.authority_listeners.lock().await;
             let Some(authority) = topic.authority.as_ref() else {
@@ -311,7 +321,7 @@ impl UTransport for UPClientFoo {
                 )),
             }
         } else {
-            println!("{}: registering regular listener", &self.name);
+            debug!("{}: registering regular listener", &self.name);
 
             let mut listeners = self.listeners.lock().await;
             let topic_listeners = listeners.entry(topic).or_default();
