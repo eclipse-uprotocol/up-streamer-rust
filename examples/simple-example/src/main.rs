@@ -18,10 +18,10 @@ use async_std::task;
 use async_trait::async_trait;
 use example_up_client_foo::UPClientFoo;
 use log::{debug, error};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::thread::JoinHandle;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use up_rust::UMessageType::{
     UMESSAGE_TYPE_NOTIFICATION, UMESSAGE_TYPE_PUBLISH, UMESSAGE_TYPE_REQUEST,
     UMESSAGE_TYPE_RESPONSE,
@@ -32,13 +32,11 @@ use up_rust::{
 };
 use up_streamer::{Route, UStreamer};
 
-static FINISH_CLIENTS: AtomicBool = AtomicBool::new(false);
-
 #[async_std::main]
 async fn main() {
     // using async_broadcast to simulate communication protocol
-    let (tx_1, rx_1) = broadcast(100);
-    let (tx_2, rx_2) = broadcast(100);
+    let (tx_1, rx_1) = broadcast(10000);
+    let (tx_2, rx_2) = broadcast(10000);
 
     let utransport_foo: Arc<Mutex<Box<dyn UTransport>>> = Arc::new(Mutex::new(Box::new(
         UPClientFoo::new("upclient_foo", rx_1.clone(), tx_1.clone()).await,
@@ -100,26 +98,15 @@ async fn main() {
     )
     .await;
 
-    debug!("waiting for a bit to let clients run");
-
-    task::sleep(Duration::from_millis(1000)).await;
-
-    debug!("Finished!");
-
-    FINISH_CLIENTS.store(true, Ordering::SeqCst);
-
-    debug!("set FINISH_CLIENTS to true");
-
-    debug!(
-        "FINISH_CLIENTS.load(): {}",
-        FINISH_CLIENTS.load(Ordering::SeqCst)
-    );
+    debug!("waiting for a clients to finish run");
 
     let recv_1 = handle_1.join().expect("Unable to join on handle_1");
     let recv_2 = handle_2.join().expect("Unable to join on handle_2");
 
     println!("recv_1: {recv_1}");
     println!("recv_2: {recv_2}");
+
+    println!("total messages: {}", recv_1 + recv_2);
 
     debug!("All clients finished.");
 }
@@ -330,21 +317,20 @@ pub async fn run_client(
             //     panic!("Unable to register!");
             // };
 
+            let start = Instant::now();
+
             loop {
                 debug!("top of loop");
 
-                // task::yield_now().await;
+                let current = Instant::now();
+                let ellapsed = current - start;
 
-                task::sleep(Duration::from_millis(100)).await;
+                debug!("ellapsed: {}", ellapsed.as_millis());
 
-                if FINISH_CLIENTS.load(Ordering::SeqCst) {
-                    debug!("Received a return request, performing the action...");
-                    // Handle the return request
+                if ellapsed.as_millis() > 1000 {
                     let times: u64 = client.times_received.load(Ordering::Relaxed);
                     println!("{name} had rx of: {times}");
                     return times;
-                } else {
-                    debug!("No request to quit yet");
                 }
 
                 debug!("-----------------------------------------------------------------------");
@@ -402,6 +388,8 @@ pub async fn run_client(
                     "prior to sending from client {}, the response message: {:?}",
                     &name, &response_msg
                 );
+
+                task::sleep(Duration::from_millis(1)).await;
             }
         });
         res
