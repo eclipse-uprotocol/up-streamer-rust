@@ -16,11 +16,11 @@ use async_broadcast::{Receiver, Sender};
 use async_std::task;
 use example_up_client_foo::{UPClientFoo, UTransportBuilderFoo};
 // use futures::{select, FutureExt, StreamExt};
-use log::debug;
-use std::sync::atomic::{AtomicBool, Ordering};
+use log::{debug, error};
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::thread::JoinHandle;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use up_rust::UMessageType::{
     UMESSAGE_TYPE_NOTIFICATION, UMESSAGE_TYPE_PUBLISH, UMESSAGE_TYPE_REQUEST,
     UMESSAGE_TYPE_RESPONSE,
@@ -30,26 +30,26 @@ use up_rust::{
 };
 use up_streamer::{Route, UStreamer, UTransportRouter};
 
-static FINISH_CLIENTS: AtomicBool = AtomicBool::new(false);
-
 #[async_std::main]
 async fn main() {
     // using async_broadcast to simulate communication protocol
-    let (tx_1, rx_1) = broadcast(100);
-    let (tx_2, rx_2) = broadcast(100);
+    let (tx_1, rx_1) = broadcast(10000);
+    let (tx_2, rx_2) = broadcast(10000);
 
     // kicking off a UTransportRouter for protocol "foo" and retrieving its UTransportRouterHandle
     let utransport_builder_foo =
         UTransportBuilderFoo::new("utransport_builder_foo", rx_1.clone(), tx_1.clone());
     let utransport_router_handle_foo = Arc::new(
-        UTransportRouter::start("foo".to_string(), utransport_builder_foo, 100, 100, 100).unwrap(),
+        UTransportRouter::start("foo".to_string(), utransport_builder_foo, 100, 10000, 10000)
+            .unwrap(),
     );
 
     // kicking off a UTransportRouter for protocol "bar" and retrieving its UTransportRouterHandle
     let utransport_builder_bar =
         UTransportBuilderFoo::new("utransport_builder_bar", rx_2.clone(), tx_2.clone());
     let utransport_router_handle_bar = Arc::new(
-        UTransportRouter::start("bar".to_string(), utransport_builder_bar, 100, 100, 100).unwrap(),
+        UTransportRouter::start("bar".to_string(), utransport_builder_bar, 100, 10000, 10000)
+            .unwrap(),
     );
 
     // getting handles to the messages flowing into / out of each transport for recording purposes
@@ -118,20 +118,13 @@ async fn main() {
 
     debug!("Finished!");
 
-    FINISH_CLIENTS.store(true, Ordering::SeqCst);
-
-    debug!("set FINISH_CLIENTS to true");
-
-    debug!(
-        "FINISH_CLIENTS.load(): {}",
-        FINISH_CLIENTS.load(Ordering::SeqCst)
-    );
-
     let recv_1 = handle_1.join().expect("Unable to join on handle_1");
     let recv_2 = handle_2.join().expect("Unable to join on handle_2");
 
     println!("recv_1: {recv_1}");
     println!("recv_2: {recv_2}");
+
+    println!("total messages: {}", recv_1 + recv_2);
 
     debug!("All clients finished.");
 
@@ -341,17 +334,20 @@ pub async fn run_client(
                 panic!("Unable to register!");
             };
 
-            loop {
-                task::sleep(Duration::from_millis(100)).await;
+            let start = Instant::now();
 
-                if FINISH_CLIENTS.load(Ordering::SeqCst) {
-                    debug!("Received a return request, performing the action...");
-                    // Handle the return request
+            loop {
+                debug!("top of loop");
+
+                let current = Instant::now();
+                let ellapsed = current - start;
+
+                debug!("ellapsed: {}", ellapsed.as_millis());
+
+                if ellapsed.as_millis() > 1000 {
                     let times: u64 = client.times_received.load(Ordering::Relaxed);
                     println!("{name} had rx of: {times}");
                     return times;
-                } else {
-                    debug!("No request to quit yet");
                 }
 
                 debug!("-----------------------------------------------------------------------");
@@ -380,7 +376,7 @@ pub async fn run_client(
 
                 let send_res = client.send(notification_msg).await;
                 if send_res.is_err() {
-                    panic!("Unable to send from client: {}", &name);
+                    error!("Unable to send from client: {}", &name);
                 }
 
                 let mut request_msg = request_msg.clone();
@@ -396,7 +392,7 @@ pub async fn run_client(
 
                 let send_res = client.send(request_msg).await;
                 if send_res.is_err() {
-                    panic!("Unable to send from client: {}", &name);
+                    error!("Unable to send from client: {}", &name);
                 }
 
                 let mut response_msg = response_msg.clone();
@@ -412,8 +408,10 @@ pub async fn run_client(
 
                 let send_res = client.send(response_msg.clone()).await;
                 if send_res.is_err() {
-                    panic!("Unable to send from client: {}", &name);
+                    error!("Unable to send from client: {}", &name);
                 }
+
+                task::sleep(Duration::from_millis(1)).await;
             }
         });
         res
