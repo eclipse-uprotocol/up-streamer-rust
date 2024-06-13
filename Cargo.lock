@@ -2237,9 +2237,9 @@ checksum = "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a"
 
 [[package]]
 name = "miniz_oxide"
-version = "0.7.4"
+version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b8a240ddb74feaf34a79a7add65a741f3167852fba007066dcac1ca548d89c08"
+checksum = "87dfd01fe195c66b572b37921ad8803d010623c0aca821bea2302239d155cdae"
 dependencies = [
  "adler",
 ]
@@ -3818,23 +3818,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "subscription-cache"
-version = "0.1.5-dev"
-dependencies = [
- "async-std",
- "async-trait",
- "env_logger 0.10.2",
- "futures",
- "log",
- "prost",
- "protobuf",
- "serde",
- "serde_json",
- "up-rust",
- "uuid",
-]
-
-[[package]]
 name = "subtle"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4407,7 +4390,6 @@ name = "up-linux-streamer"
 version = "0.1.5-dev"
 dependencies = [
  "async-trait",
- "chrono",
  "env_logger 0.10.2",
  "hello-world-protos",
  "log",
@@ -4417,7 +4399,6 @@ dependencies = [
  "up-streamer",
  "up-transport-vsomeip",
  "up-transport-zenoh",
- "usubscription-static-file",
  "zenoh",
 ]
 
@@ -4465,7 +4446,7 @@ dependencies = [
 [[package]]
 name = "up-transport-vsomeip"
 version = "0.1.0"
-source = "git+https://github.com/PLeVasseur/up-client-vsomeip-rust.git?branch=feature/initial-implementation#b51c00fd750c130e44df45ffe061d918adee1b3d"
+source = "git+https://github.com/PLeVasseur/up-client-vsomeip-rust.git?branch=feature/initial-implementation#db97c69eb9f1967ccef0345c3f8ce6a9e5870c03"
 dependencies = [
  "async-trait",
  "bytes",
@@ -4528,18 +4509,6 @@ dependencies = [
  "form_urlencoded",
  "idna",
  "percent-encoding",
-]
-
-[[package]]
-name = "usubscription-static-file"
-version = "0.1.5-dev"
-dependencies = [
- "async-std",
- "async-trait",
- "serde_json",
- "subscription-cache",
- "up-rust",
- "uriparse",
 ]
 
 [[package]]
@@ -4648,7 +4617,7 @@ checksum = "5c3082ca00d5a5ef149bb8b555a72ae84c9c59f7250f013ac822ac2e49b19c64"
 [[package]]
 name = "vsomeip-proc-macro"
 version = "0.1.0"
-source = "git+https://github.com/PLeVasseur/up-client-vsomeip-rust.git?branch=feature/initial-implementation#b51c00fd750c130e44df45ffe061d918adee1b3d"
+source = "git+https://github.com/PLeVasseur/up-client-vsomeip-rust.git?branch=feature/initial-implementation#db97c69eb9f1967ccef0345c3f8ce6a9e5870c03"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4659,7 +4628,7 @@ dependencies = [
 [[package]]
 name = "vsomeip-sys"
 version = "0.1.0"
-source = "git+https://github.com/PLeVasseur/up-client-vsomeip-rust.git?branch=feature/initial-implementation#b51c00fd750c130e44df45ffe061d918adee1b3d"
+source = "git+https://github.com/PLeVasseur/up-client-vsomeip-rust.git?branch=feature/initial-implementation#db97c69eb9f1967ccef0345c3f8ce6a9e5870c03"
 dependencies = [
  "autocxx",
  "autocxx-build",
