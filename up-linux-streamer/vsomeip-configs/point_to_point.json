@@ -1,0 +1,9 @@
+{
+  "applications" :
+  [
+    {
+      "name" : "foo",
+      "id" : "0x1236"
+    }
+  ]
+}
