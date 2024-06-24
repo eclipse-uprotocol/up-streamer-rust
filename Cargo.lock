@@ -760,6 +760,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "245097e9a4535ee1e3e3931fcfcd55a796a44c643e8596ff6566d68f09b87bbc"
 
 [[package]]
+name = "convert_case"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6245d59a3e82a7fc217c5828a6692dbc6dfb63a0c8c90495621f7b9d79704a0e"
+
+[[package]]
 name = "core-foundation"
 version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1004,6 +1010,19 @@ checksum = "ebcda35c7a396850a55ffeac740804b40ffec779b98fffbb1738f4033f0ee79e"
 dependencies = [
  "derive_builder_core",
  "syn 1.0.109",
+]
+
+[[package]]
+name = "derive_more"
+version = "0.99.18"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5f33878137e4dafd7fa914ad4e259e18a4e8e532b9617a2d0150262bf53abfce"
+dependencies = [
+ "convert_case",
+ "proc-macro2",
+ "quote",
+ "rustc_version",
+ "syn 2.0.67",
 ]
 
 [[package]]
@@ -4262,6 +4281,7 @@ dependencies = [
  "env_logger 0.10.2",
  "futures",
  "git-version",
+ "serde",
  "serde_json",
  "tokio",
  "tracing",
@@ -4274,6 +4294,7 @@ dependencies = [
  "zenoh-plugin-trait",
  "zenoh-result",
  "zenoh-util",
+ "zenoh_backend_traits",
 ]
 
 [[package]]
@@ -4342,7 +4363,7 @@ dependencies = [
 [[package]]
 name = "up-transport-zenoh"
 version = "0.1.0"
-source = "git+https://github.com/eclipse-uprotocol/up-transport-zenoh-rust.git?rev=4607454b7dbb97d24668bfb64a615c1fe13a7c58#4607454b7dbb97d24668bfb64a615c1fe13a7c58"
+source = "git+https://github.com/eclipse-uprotocol/up-transport-zenoh-rust.git?rev=b977153265d22c4bb4bbbc20dea403342b9ab438#b977153265d22c4bb4bbbc20dea403342b9ab438"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5322,6 +5343,24 @@ dependencies = [
  "winapi",
  "zenoh-core",
  "zenoh-result",
+]
+
+[[package]]
+name = "zenoh_backend_traits"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "458b5c151d7e31de67d45f1ba9cc409ddeb762adc7ce35c3c81d9dcad314da97"
+dependencies = [
+ "async-std",
+ "async-trait",
+ "const_format",
+ "derive_more",
+ "schemars",
+ "serde_json",
+ "zenoh",
+ "zenoh-plugin-trait",
+ "zenoh-result",
+ "zenoh-util",
 ]
 
 [[package]]

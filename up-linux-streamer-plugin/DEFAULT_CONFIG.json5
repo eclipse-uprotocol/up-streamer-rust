@@ -1,12 +1,24 @@
 ////
-//// This file presents the default configuration used by both the `zenoh-plugin-mqtt` plugin and the `zenoh-bridge-mqtt` standalone executable.
-//// The "mqtt" JSON5 object below can be used as such in the "plugins" part of a config file for the zenoh router (zenohd).
+//// This file presents the default configuration used by both the `up-linux-streamer-plugin` plugin.
+//// The "up_linux_streamer" JSON5 object below can be used as such in the "plugins" part of a config file for the zenoh router (zenohd).
 ////
 {
   plugins: {
     up_linux_streamer: {
       __required__: true,
-      host_authority: "linux"
+      up_streamer_config: {
+        message_queue_size: 10000
+      },
+      host_config: {
+        transport: "Zenoh",
+        authority: "linux"
+      },
+      someip_config: {
+        authority: "me_authority",
+        config_file: "vsomeip-configs/point_to_point.json",
+        default_someip_application_id_for_someip_subscriptions: 10,
+        enabled: true
+      },
     }
   }
 }

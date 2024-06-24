@@ -25,7 +25,7 @@ crate-type = ["cdylib"]
 [dependencies]
 tokio = { version = "1.35.1", default-features = false }
 up-rust = { git = "https://github.com/eclipse-uprotocol/up-rust", rev = "3a50104421a801d52e1d9c68979db54c013ce43d" }
-up-transport-zenoh = { git = "https://github.com/eclipse-uprotocol/up-transport-zenoh-rust.git", rev = "4607454b7dbb97d24668bfb64a615c1fe13a7c58" }
+up-transport-zenoh = { git = "https://github.com/eclipse-uprotocol/up-transport-zenoh-rust.git", rev = "b977153265d22c4bb4bbbc20dea403342b9ab438" }
 up-transport-vsomeip = { git = "https://github.com/PLeVasseur/up-client-vsomeip-rust.git", branch = "feature/initial-implementation" }
 #up-transport-vsomeip = { git = "https://github.com/eclipse-uprotocol/up-transport-vsomeip-rust.git", rev = "" }
 up-streamer = { path = "../up-streamer" }
@@ -34,15 +34,12 @@ const_format = "0.2.30"
 futures = { version = "0.3.25" }
 git-version = { version = "0.3.5" }
 tracing = { version = "0.1" }
+serde = { version = "1.0.154" }
 serde_json = { version = "1.0.94" }
 zenoh = { version = "0.11.0-rc.3", features = ["unstable"] }
 zenoh-core = { version = "0.11.0-rc.3" }
 zenoh-plugin-trait = { version = "0.11.0-rc.3" }
 zenoh-result = { version = "0.11.0-rc.3" }
 zenoh-util = { version = "0.11.0-rc.3" }
-#zenoh = { version = "0.11.0-dev", features = ["unstable"] }
-#zenoh-core = { version = "0.11.0-dev" }
-#zenoh-plugin-trait = { version = "0.11.0-dev" }
-#zenoh-result = { version = "0.11.0-dev" }
-#zenoh-util = { version = "0.11.0-dev" }
+zenoh_backend_traits = { version = "0.11.0-rc.3" }
 env_logger = "0.10.2"
