@@ -15,27 +15,28 @@
 
 use async_trait::async_trait;
 use serde_json::Value;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::fs::{self, canonicalize};
 use std::path::PathBuf;
 use std::str::FromStr;
 use up_rust::core::usubscription::{
     FetchSubscribersRequest, FetchSubscribersResponse, FetchSubscriptionsRequest,
     FetchSubscriptionsResponse, NotificationsRequest, SubscriptionRequest, SubscriptionResponse,
-    USubscription, UnsubscribeRequest,
+    USubscription, UnsubscribeRequest, SubscriberInfo, Subscription
 };
 use up_rust::{UStatus, UUri};
 
 pub struct USubscriptionStaticFile {}
 
-impl Default for USubscriptionStaticFile {
-    fn default() -> Self {
-        Self::new()
+impl USubscriptionStaticFile {
+    pub fn new() -> Self {
+        USubscriptionStaticFile {}
     }
 }
 
 #[async_trait]
 impl USubscription for USubscriptionStaticFile {
+
     async fn subscribe(
         &self,
         subscription_request: SubscriptionRequest,
@@ -47,48 +48,19 @@ impl USubscription for USubscriptionStaticFile {
         &self,
         fetch_subscriptions_request: FetchSubscriptionsRequest,
     ) -> Result<FetchSubscriptionsResponse, UStatus> {
-        todo!()
-    }
-
-    async fn unsubscribe(&self, unsubscribe_request: UnsubscribeRequest) -> Result<(), UStatus> {
-        todo!()
-    }
-
-    async fn register_for_notifications(
-        &self,
-        notifications_register_request: NotificationsRequest,
-    ) -> Result<(), UStatus> {
-        todo!()
-    }
-
-    async fn unregister_for_notifications(
-        &self,
-        notifications_unregister_request: NotificationsRequest,
-    ) -> Result<(), UStatus> {
-        todo!()
-    }
-
-    async fn fetch_subscribers(
-        &self,
-        fetch_subscribers_request: FetchSubscribersRequest,
-    ) -> Result<FetchSubscribersResponse, UStatus> {
-        todo!();
-    }
-}
-
-impl USubscriptionStaticFile {
-    pub fn new() -> Self {
-        Self {}
-    }
-
-    pub fn fetch_subscribers(&self, topic: UUri) -> HashMap<UUri, HashSet<UUri>> {
         // Reads in a file and builds it into a subscription_cache data type
         // This is a static file, so we will just return the same set of subscribers
         // for all URIs
-        println!("fetch_subscribers for topic: {}", topic);
+        println!("fetch_subscriptions for topic: {}", fetch_subscriptions_request.subscriber());
 
         let crate_dir = env!("CARGO_MANIFEST_DIR");
         let subscription_json_file = PathBuf::from(crate_dir).join("static-configs/testdata.json");
+
+        let mut subscriptions_vec = Vec::new();
+
+        let empty_fetch_response = FetchSubscriptionsResponse {
+            ..Default::default()
+        };
 
         match canonicalize(subscription_json_file) {
             Ok(subscription_json_file) => {
@@ -97,7 +69,6 @@ impl USubscriptionStaticFile {
                 match fs::read_to_string(&subscription_json_file) {
                     Ok(data) => match serde_json::from_str::<Value>(&data) {
                         Ok(res) => {
-                            let mut subscribers_map = HashMap::new();
 
                             if let Some(obj) = res.as_object() {
                                 for (key, value) in obj {
@@ -125,38 +96,83 @@ impl USubscriptionStaticFile {
                                     }
 
                                     println!("key: {}", key);
-                                    match UUri::from_str(&key.to_string()) {
+                                    let topic = match UUri::from_str(&key.to_string()) {
                                         Ok(mut uri) => {
                                             println!("All good for key");
                                             uri.resource_id = 0x8001;
-                                            subscribers_map.insert(uri, subscriber_set);
+                                            uri
                                         }
                                         Err(error) => {
                                             println!("Error with Deserializing Key: {}", error);
+                                            continue
                                         }
+                                    };
+
+                                    let details_vec = Vec::new();
+                                    for subscriber in subscriber_set {
+                                        let subscriber_info_tmp = SubscriberInfo {
+                                            uri: Some(subscriber).into(),
+                                            details: details_vec.clone(),
+                                            ..Default::default()
+                                        };
+                                        let subscription_tmp = Subscription {
+                                            topic: Some(topic.clone()).into(),
+                                            subscriber: Some(subscriber_info_tmp).into(),
+                                            ..Default::default()
+                                        };
+                                        subscriptions_vec.push(subscription_tmp);
                                     }
                                 }
                             }
 
                             println!("{}", res);
-                            dbg!(&subscribers_map);
-                            subscribers_map
+                            dbg!(&subscriptions_vec);
+                            let fetch_response = FetchSubscriptionsResponse {
+                                subscriptions: subscriptions_vec,
+                                ..Default::default()
+                            };
+                            Ok(fetch_response)
                         }
                         Err(e) => {
                             eprintln!("Unable to parse JSON: {}", e);
-                            HashMap::new()
+                            Ok(empty_fetch_response)
                         }
                     },
                     Err(e) => {
                         eprintln!("Unable to read file: {}", e);
-                        HashMap::new()
+                        Ok(empty_fetch_response)
                     }
                 }
             }
             Err(e) => {
                 eprintln!("Unable to canonicalize path: {}", e);
-                HashMap::new()
+                Ok(empty_fetch_response)
             }
         }
+    }
+
+    async fn unsubscribe(&self, unsubscribe_request: UnsubscribeRequest) -> Result<(), UStatus> {
+        todo!()
+    }
+
+    async fn register_for_notifications(
+        &self,
+        notifications_register_request: NotificationsRequest,
+    ) -> Result<(), UStatus> {
+        todo!()
+    }
+
+    async fn unregister_for_notifications(
+        &self,
+        notifications_unregister_request: NotificationsRequest,
+    ) -> Result<(), UStatus> {
+        todo!()
+    }
+
+    async fn fetch_subscribers(
+        &self,
+        fetch_subscribers_request: FetchSubscribersRequest,
+    ) -> Result<FetchSubscribersResponse, UStatus> {
+        todo!();
     }
 }

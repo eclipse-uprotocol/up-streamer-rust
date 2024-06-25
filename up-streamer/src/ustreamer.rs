@@ -26,7 +26,7 @@ use std::str;
 use std::thread;
 use subscription_cache::SubscriptionCache;
 use up_rust::{UCode, UListener, UMessage, UStatus, UTransport, UUIDBuilder, UUri};
-use usubscription_static_file::USubscriptionStaticFile;
+use up_rust::core::usubscription::{FetchSubscriptionsRequest, FetchSubscriptionsResponse, SubscriberInfo, USubscription};
 
 const USTREAMER_TAG: &str = "UStreamer:";
 const USTREAMER_FN_NEW_TAG: &str = "new():";
@@ -186,7 +186,7 @@ impl ForwardingListeners {
                 for (topic, subscribers) in initial_subscriber_cache {
                     let mut authority_name_hash_set: HashSet<String> = HashSet::new();
                     for subscriber in subscribers {
-                        authority_name_hash_set.insert(subscriber.authority_name);
+                        authority_name_hash_set.insert(subscriber.subscriber.get_or_default().uri.get_or_default().authority_name.clone());
                     }
                     // TODO: Should we also check if topic's authority matches in_transport's authority, i.e., topic belongs to in_transport
                     // topic.authority_name == in_authority
@@ -450,7 +450,7 @@ pub struct UStreamer {
     subscription_cache: Arc<Mutex<SubscriptionCache>>,
     // TODO: Use this when USubsription is implemented
     #[allow(dead_code)]
-    usubscription: Arc<USubscriptionStaticFile>,
+    usubscription: Arc<dyn USubscription>,
 }
 
 impl UStreamer {
@@ -465,7 +465,7 @@ impl UStreamer {
     pub fn new(
         name: &str,
         message_queue_size: u16,
-        usubscription: Arc<USubscriptionStaticFile>,
+        usubscription: Arc<dyn USubscription>,
     ) -> Self {
         let name = format!("{USTREAMER_TAG}:{name}:");
         // Try to initiate logging.
@@ -479,14 +479,39 @@ impl UStreamer {
         );
 
         let uuri: UUri = UUri {
-            authority_name: "me_authority".to_string(),
+            authority_name: "*".to_string(),
             ue_id: 0x0000_FFFF,     // any instance, any service
             ue_version_major: 0xFF, // any
             resource_id: 0xFFFF,    // any
             ..Default::default()
         };
-        let subscriptions = Mutex::new(usubscription.fetch_subscribers(uuri));
-        let subscription_cache_foo = Arc::new(Mutex::new(SubscriptionCache::new(subscriptions)));
+
+        let details_vector = Vec::new();
+        let subscriber_info = SubscriberInfo {
+            uri: Some(uuri).into(),
+            details: details_vector,
+            ..Default::default()
+        };
+
+        let mut fetch_request = FetchSubscriptionsRequest {
+            request: None,
+            offset: None,
+            ..Default::default()
+        };
+        fetch_request.set_subscriber(subscriber_info);
+        let subscriptions = task::block_on(usubscription.fetch_subscriptions(fetch_request));
+        //let subscription_cache_foo = Arc::new(Mutex::new(SubscriptionCache::new(subscriptions.expect("Subscriptions is an Error"))));
+
+        let subscription_cache_foo = match subscriptions {
+            Ok(subs) => Arc::new(Mutex::new(SubscriptionCache::new(subs))),
+            Err(_subs) => {
+                // Handle the error case here, such as returning a default value or creating a default SubscriptionCache
+                let empty_fetch_response = FetchSubscriptionsResponse {
+                    ..Default::default()
+                };
+                Arc::new(Mutex::new(SubscriptionCache::new(empty_fetch_response)))
+            }
+        };
 
         Self {
             name: name.to_string(),

@@ -30,7 +30,7 @@ log = { workspace = true }
 prost = { workspace = true }
 uuid = { workspace = true }
 serde_json = { workspace = true }
-up-rust = { workspace = true }
+up-rust = { workspace = true, features = ["usubscription"] }
 protobuf = { version = "3.3", features = ["with-bytes"] }
 subscription-cache = {path="../subscription-cache"}
 usubscription-static-file = {path="../example-utils/usubscription-static-file"}
