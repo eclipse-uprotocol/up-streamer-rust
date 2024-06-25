@@ -2,12 +2,13 @@ use async_trait::async_trait;
 use hello_world_protos::hello_world_service::{HelloRequest, HelloResponse};
 use log::error;
 use protobuf::Message;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 use up_rust::{UListener, UMessage, UMessageBuilder, UPayloadFormat, UStatus, UTransport, UUri};
 use up_transport_zenoh::UPClientZenoh;
-use zenoh::config::Config;
+use zenoh::config::{Config, EndPoint};
 
 const SERVICE_AUTHORITY: &str = "linux";
 const SERVICE_UE_ID: u16 = 0x1236;
@@ -71,7 +72,15 @@ async fn main() -> Result<(), UStatus> {
     println!("uE_service");
 
     // TODO: Probably make somewhat configurable?
-    let zenoh_config = Config::default();
+    let mut zenoh_config = Config::default();
+    // Specify the address to listen on using IPv4
+    let ipv4_endpoint = EndPoint::from_str("tcp/0.0.0.0:7445");
+
+    // Add the IPv4 endpoint to the Zenoh configuration
+    zenoh_config
+        .listen
+        .endpoints
+        .push(ipv4_endpoint.expect("FAIL"));
     // TODO: Add error handling if we fail to create a UPClientZenoh
     let service: Arc<dyn UTransport> = Arc::new(
         UPClientZenoh::new(zenoh_config, "linux".to_string())
