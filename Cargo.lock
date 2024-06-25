@@ -4535,6 +4535,7 @@ name = "usubscription-static-file"
 version = "0.1.5-dev"
 dependencies = [
  "async-std",
+ "async-trait",
  "serde_json",
  "subscription-cache",
  "up-rust",

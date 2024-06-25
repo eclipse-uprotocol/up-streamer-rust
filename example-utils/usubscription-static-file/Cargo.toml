@@ -12,7 +12,8 @@ license.workspace = true
 
 [dependencies]
 async-std = { workspace = true, features = ["unstable"] }
+async-trait = "0.1.80"
 serde_json = { version = "1.0.111" }
 subscription-cache = {path="../../subscription-cache"}
-up-rust = { workspace = true }
+up-rust = { workspace = true, features = ["usubscription"] }
 uriparse = { version = "0.6" }
