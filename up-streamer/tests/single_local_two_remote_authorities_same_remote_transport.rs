@@ -32,6 +32,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use up_rust::{UListener, UTransport};
 use up_streamer::{Endpoint, UStreamer};
+use usubscription_static_file::USubscriptionStaticFile;
 
 const DURATION_TO_RUN_CLIENTS: u128 = 1_000;
 const SENT_MESSAGE_VEC_CAPACITY: usize = 10_000;
@@ -48,7 +49,8 @@ async fn single_local_two_remote_authorities_same_remote_transport() {
         Arc::new(UPClientFoo::new("upclient_bar", rx_2.clone(), tx_2.clone()).await);
 
     // setting up streamer to bridge between "foo" and "bar"
-    let mut ustreamer = UStreamer::new("foo_bar_streamer", 3000);
+    let usubscription = Arc::new(USubscriptionStaticFile::new());
+    let mut ustreamer = UStreamer::new("foo_bar_streamer", 3000, usubscription);
 
     // setting up endpoints between authorities and protocols
     let local_endpoint = Endpoint::new("local_endpoint", &local_authority(), utransport_foo);

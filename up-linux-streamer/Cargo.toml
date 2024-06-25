@@ -1,0 +1,26 @@
+[package]
+name = "up-linux-streamer"
+rust-version.workspace = true
+version.workspace = true
+repository.workspace = true
+homepage.workspace = true
+edition.workspace = true
+keywords.workspace = true
+license.workspace = true
+
+[dependencies]
+tokio = { version = "1.35.1", default-features = false }
+up-rust = { git = "https://github.com/eclipse-uprotocol/up-rust", rev = "3a50104421a801d52e1d9c68979db54c013ce43d" }
+up-transport-zenoh = { git = "https://github.com/eclipse-uprotocol/up-transport-zenoh-rust.git", rev = "7c839e7a94f526a82027564a609f48a79a3f4eae" }
+up-transport-vsomeip = { git = "https://github.com/PLeVasseur/up-client-vsomeip-rust.git", branch = "feature/initial-implementation" }
+#up-transport-vsomeip = { git = "https://github.com/eclipse-uprotocol/up-transport-vsomeip-rust.git", rev = "" }
+up-streamer = { path = "../up-streamer" }
+zenoh = { version = "0.11.0-rc.3", features = ["unstable"]}
+env_logger = "0.10.2"
+log = "0.4.21"
+async-trait = "0.1.80"
+protobuf = { version = "3.3", features = ["with-bytes"] }
+usubscription-static-file = {path = "../example-utils/usubscription-static-file"}
+
+[dev-dependencies]
+hello-world-protos = { path = "../example-utils/hello-world-protos" }
