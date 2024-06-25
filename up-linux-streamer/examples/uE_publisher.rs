@@ -11,7 +11,10 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
-use hello_world_protos::hello_world_service::HelloRequest;
+use chrono::Timelike;
+use chrono::Local;
+use hello_world_protos::timeofday::TimeOfDay;
+use hello_world_protos::hello_world_topics::Timer;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -57,18 +60,26 @@ async fn main() -> Result<(), UStatus> {
         ..Default::default()
     };
 
-    let mut i = 0;
     loop {
         tokio::time::sleep(Duration::from_millis(1000)).await;
 
-        let hello_request = HelloRequest {
-            name: format!("ue_client@i={}", i).to_string(),
+        let now = Local::now();
+
+        let time_of_day = TimeOfDay {
+            hours: now.hour() as i32,
+            minutes: now.minute() as i32,
+            seconds: now.second() as i32,
+            nanos: now.nanosecond() as i32,
             ..Default::default()
         };
-        i += 1;
+
+        let timer_message = Timer {
+            time: Some(time_of_day).into(),
+            ..Default::default()
+        };
 
         let publish_msg = UMessageBuilder::publish(source.clone())
-            .build_with_protobuf_payload(&hello_request)
+            .build_with_protobuf_payload(&timer_message)
             .unwrap();
         println!("Sending Publish message:\n{publish_msg:?}");
 

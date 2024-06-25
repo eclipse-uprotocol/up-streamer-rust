@@ -1,41 +1,32 @@
-use async_trait::async_trait;
-use hello_world_protos::hello_world_service::{HelloRequest, HelloResponse};
+/********************************************************************************
+ * Copyright (c) 2024 Contributors to the Eclipse Foundation
+ *
+ * See the NOTICE file(s) distributed with this work for additional
+ * information regarding copyright ownership.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ********************************************************************************/
+
+use chrono::Timelike;
+use chrono::Local;
+use hello_world_protos::timeofday::TimeOfDay;
+use hello_world_protos::hello_world_topics::Timer;
 use log::trace;
-use protobuf::Message;
 use std::fs::canonicalize;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
-use up_rust::{UListener, UMessage, UMessageBuilder, UPayloadFormat, UStatus, UTransport, UUri};
+use up_rust::{UMessageBuilder, UStatus, UTransport, UUri};
 use up_transport_vsomeip::UPTransportVsomeip;
 
 const PUB_TOPIC_AUTHORITY: &str = "linux";
 const PUB_TOPIC_UE_ID: u16 = 0x1237;
 const PUB_TOPIC_UE_VERSION_MAJOR: u8 = 1;
 const PUB_TOPIC_RESOURCE_ID: u16 = 0x8001;
-
-struct ServiceResponseListener;
-
-#[async_trait]
-impl UListener for ServiceResponseListener {
-    async fn on_receive(&self, msg: UMessage) {
-        println!("ServiceResponseListener: Received a message: {msg:?}");
-
-        let Some(payload_bytes) = msg.payload else {
-            panic!("No payload bytes");
-        };
-
-        let Ok(hello_response) = HelloResponse::parse_from_bytes(&payload_bytes) else {
-            panic!("Unable to parse into HelloResponse");
-        };
-
-        println!("Here we received response: {hello_response:?}");
-    }
-
-    async fn on_error(&self, err: UStatus) {
-        println!("ServiceResponseListener: Encountered an error: {err:?}");
-    }
-}
 
 #[tokio::main]
 async fn main() -> Result<(), UStatus> {
@@ -68,18 +59,26 @@ async fn main() -> Result<(), UStatus> {
         ..Default::default()
     };
 
-    let mut i = 0;
     loop {
         tokio::time::sleep(Duration::from_millis(1000)).await;
 
-        let hello_request = HelloRequest {
-            name: format!("ue_client@i={}", i).to_string(),
+        let now = Local::now();
+
+        let time_of_day = TimeOfDay {
+            hours: now.hour() as i32,
+            minutes: now.minute() as i32,
+            seconds: now.second() as i32,
+            nanos: now.nanosecond() as i32,
             ..Default::default()
         };
-        i += 1;
+
+        let timer_message = Timer {
+            time: Some(time_of_day).into(),
+            ..Default::default()
+        };
 
         let publish_msg = UMessageBuilder::publish(source.clone())
-            .build_with_protobuf_payload(&hello_request)
+            .build_with_protobuf_payload(&timer_message)
             .unwrap();
         println!("Sending Publish message:\n{publish_msg:?}");
 

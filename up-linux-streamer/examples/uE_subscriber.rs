@@ -1,5 +1,18 @@
+/********************************************************************************
+ * Copyright (c) 2024 Contributors to the Eclipse Foundation
+ *
+ * See the NOTICE file(s) distributed with this work for additional
+ * information regarding copyright ownership.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ********************************************************************************/
+
 use async_trait::async_trait;
-use hello_world_protos::hello_world_service::HelloRequest;
+use hello_world_protos::hello_world_topics::Timer;
 use log::error;
 use protobuf::Message;
 use std::str::FromStr;
@@ -15,29 +28,29 @@ const PUB_TOPIC_UE_VERSION_MAJOR: u8 = 1;
 const PUB_TOPIC_RESOURCE_ID: u16 = 0x8001;
 
 #[allow(dead_code)]
-struct ServiceRequestResponder {
+struct PublishReceiver {
     client: Arc<dyn UTransport>,
 }
-impl ServiceRequestResponder {
+impl PublishReceiver {
     pub fn new(client: Arc<dyn UTransport>) -> Self {
         Self { client }
     }
 }
 #[async_trait]
-impl UListener for ServiceRequestResponder {
+impl UListener for PublishReceiver {
     async fn on_receive(&self, msg: UMessage) {
-        println!("ServiceRequestResponder: Received a message: {msg:?}");
+        println!("PublishReceiver: Received a message: {msg:?}");
 
         let Some(payload_bytes) = msg.payload else {
             panic!("No bytes available");
         };
-        let _ = match HelloRequest::parse_from_bytes(&payload_bytes) {
-            Ok(hello_request) => {
-                println!("hello_request: {hello_request:?}");
-                hello_request
+        let _ = match Timer::parse_from_bytes(&payload_bytes) {
+            Ok(timer_message) => {
+                println!("timer: {timer_message:?}");
+                timer_message
             }
             Err(err) => {
-                error!("Unable to parse HelloRequest: {err:?}");
+                error!("Unable to parse Timer Message: {err:?}");
                 return;
             }
         };
@@ -82,11 +95,11 @@ async fn main() -> Result<(), UStatus> {
         ..Default::default()
     };
 
-    let service_request_responder: Arc<dyn UListener> =
-        Arc::new(ServiceRequestResponder::new(service.clone()));
+    let publish_receiver: Arc<dyn UListener> =
+        Arc::new(PublishReceiver::new(service.clone()));
     // TODO: Need to revisit how the vsomeip config file is used in non point-to-point cases
     service
-        .register_listener(&source_filter, None, service_request_responder.clone())
+        .register_listener(&source_filter, None, publish_receiver.clone())
         .await?;
 
     thread::park();
