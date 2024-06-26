@@ -126,6 +126,38 @@ You can also run without the `RUST_LOG=trace` environment variable prepended and
 
 ### You're done!
 
+## Supported Use Cases
+
+### RPC
+
+* `uE_client` <-> `mE_service`
+* `mE_client` <-> `uE_service`
+
+### PubSub
+
+* `uE_publisher` -> `mE_subscriber`
+* `mE_publisher` -> `uE_subscriber`
+
+## Running the examples
+
+You are able to run example applications of the names listed above like so from within this repo in one terminal:
+
+```bash
+RUST_LOG=trace LD_LIBRARY_PATH=<your/path/to/vsomeip/lib> VSOMEIP_LIB_DIR=<your/path/to/vsomeip/lib> cargo run --example mE_client
+```
+
+and then in another terminal, again, within this repo:
+
+```bash
+RUST_LOG=trace cargo run --example uE_service
+```
+
+You should then see messages coming through in the terminal which you ran mE_client:
+
+> Here we received response: HelloResponse { message: "The response to the request: me_client@i=3", special_fields: SpecialFields { unknown_fields: UnknownFields { fields: None }, cached_size: CachedSize { size: 0 } } }
+
+You may also run the other examples similarly.
+
 ## Configuring the plugin
 
 ### up-linux-streamer-plugin configuration
