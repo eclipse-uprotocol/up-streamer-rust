@@ -102,7 +102,7 @@ In zenoh/Cargo.toml, modify rust-version:
 rust-version = "1.74.0"
 ```
 
-### Make a build of Zenoh and copy to standalon folder
+### Make a build of Zenoh and copy to standalone folder
 
 Within the zenoh folder:
 
@@ -125,3 +125,17 @@ RUST_LOG=trace LD_LIBRARY_PATH=<your/path/to/vsomeip/lib>  VSOMEIP_LIB_DIR=<your
 You can also run without the `RUST_LOG=trace` environment variable prepended and should for production use cases. It can be used for debugging purposes.
 
 ### You're done!
+
+## Configuring the plugin
+
+### up-linux-streamer-plugin configuration
+
+A configuration file is required to be supplied to `zenohd` as shown in the `Using the Plugin` section.
+
+`DEFAULT_CONFIG.json5` is provided as a starting point, but can have certain parameters modified. Please reference it for guidance.
+
+### Host device presentation to mechatronics
+
+A configuration file is required to hold the ue_ids of all uEntities present on the host device which will communicate with the mechatronics network.
+
+`DEFAULT_CONFIG.json5` has guidance on these configurations as well.
