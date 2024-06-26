@@ -101,5 +101,5 @@ Follow the steps under up-linux-streamer-plugin to obtain a `zenohd` Zenoh Route
 ## Implementation Status
 
 - [x] Routing of Request, Response, and Notification Messages
-- [ ] Routing of Publish messages (requires further development of uSubscription interface)
+- [ ] Routing of Publish messages (requires further development of an actual uSubscription service and client; currently stubbed to use a static file)
 - [x] Mechanism to retrieve messages received on and sent over transports
