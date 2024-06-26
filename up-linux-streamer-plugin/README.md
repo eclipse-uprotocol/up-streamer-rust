@@ -40,7 +40,7 @@ git clone git@github.com:eclipse-zenoh/zenoh.git
 Currently this is:
 
 ```bash
-git checkout 0.11.0-rc.3
+git checkout release/0.11.0
 ```
 
 You can `git checkout -b <my_relevant_tag>` here if you wish to save these changes to some fork for later usage.

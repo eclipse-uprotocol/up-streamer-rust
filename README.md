@@ -1,9 +1,16 @@
 # up-streamer-rust
 
+## Workspace contents
+
+* up-streamer
+* up-linux-streamer-plugin
+
+### up-streamer
+
 Generic, pluggable uStreamer that should be usable in most places we need
 to bridge from one transport to another.
 
-## Overview
+### Overview
 
 Implementation of the uProtocol's uStreamer specification in Rust.
 
@@ -75,7 +82,7 @@ cargo doc --package up-streamer --open
 
 which will open your browser to view the docs.
 
-## Getting Started
+## Getting Started as a library
 
 ### Working with the library
 
@@ -86,6 +93,10 @@ which will open your browser to view the docs.
 ### Usage
 
 After following along with the [cargo docs](#generating-cargo-docs-locally) generated to add all your forwarding rules, you'll then need to keep the instantiated `UStreamer` around and then pause the main thread, so it will not exit, while the routing happens in the background threads spun up.
+
+## Getting Started as a Zenoh plugin
+
+Follow the steps under up-linux-streamer-plugin to obtain a `zenohd` Zenoh Router which is compatible and deploy.
 
 ## Implementation Status
 
