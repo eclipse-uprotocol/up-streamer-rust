@@ -1,5 +1,46 @@
 # up-linux-streamer-plugin
 
+## The Concept
+
+```mermaid
+classDiagram
+
+namespace EclipseRepos {
+    class LinuxStreamerZenohPlugin {
+        libzenoh_plugin_linux_streamer.so
+    }
+    class ZenohRouter
+    class up-transport-zenoh-rust
+    class up-transport-vsomeip-rust
+    class up-rust
+}
+
+
+namespace ExternalRepos {
+    class vsomeip {
+        vsomeip.so
+    }
+    class zenoh
+    class ZenohRouter {
+        zenohd
+    }
+}
+
+note for LinuxStreamerZenohPlugin "Deployed to vehicle"
+note for vsomeip "Deployed to vehicle"
+note for ZenohRouter "Deployed to vehicle"
+
+LinuxStreamerZenohPlugin o-- up-transport-zenoh-rust: uses
+LinuxStreamerZenohPlugin o-- up-transport-vsomeip-rust: uses
+
+up-transport-zenoh-rust ..> up-rust: builds upon
+up-transport-vsomeip-rust ..> up-rust: builds upon
+
+up-transport-vsomeip-rust ..> vsomeip: builds upon
+up-transport-zenoh-rust ..> zenoh: builds upon
+LinuxStreamerZenohPlugin ..> ZenohRouter: loaded by
+```
+
 ## Using the plugin
 
 ### Build the plugin
