@@ -28,7 +28,7 @@ fn main() -> std::io::Result<()> {
             "https://raw.githubusercontent.com/googleapis/googleapis/master/google/type/timeofday.proto",
             "https://raw.githubusercontent.com/eclipse-uprotocol/up-spec/main/up-core-api/uprotocol/uoptions.proto",
             "https://raw.githubusercontent.com/COVESA/uservices/main/src/main/proto/example/hello_world/v1/hello_world_topics.proto",
-            "https://raw.githubusercontent.com/PLeVasseur/uservices/feature/update-uprotocol-options-path/src/main/proto/example/hello_world/v1/hello_world_service.proto",
+            "https://raw.githubusercontent.com/COVESA/uservices/main/src/main/proto/example/hello_world/v1/hello_world_service.proto"
         ],
     "helloworld",
     ) {
