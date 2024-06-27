@@ -11,10 +11,10 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
-use chrono::Timelike;
 use chrono::Local;
-use hello_world_protos::timeofday::TimeOfDay;
+use chrono::Timelike;
 use hello_world_protos::hello_world_topics::Timer;
+use hello_world_protos::timeofday::TimeOfDay;
 use log::trace;
 use std::fs::canonicalize;
 use std::path::PathBuf;

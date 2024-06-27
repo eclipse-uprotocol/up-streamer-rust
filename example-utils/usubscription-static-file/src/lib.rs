@@ -21,22 +21,26 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use up_rust::core::usubscription::{
     FetchSubscribersRequest, FetchSubscribersResponse, FetchSubscriptionsRequest,
-    FetchSubscriptionsResponse, NotificationsRequest, SubscriptionRequest, SubscriptionResponse,
-    USubscription, UnsubscribeRequest, SubscriberInfo, Subscription
+    FetchSubscriptionsResponse, NotificationsRequest, SubscriberInfo, Subscription,
+    SubscriptionRequest, SubscriptionResponse, USubscription, UnsubscribeRequest,
 };
 use up_rust::{UStatus, UUri};
 
-pub struct USubscriptionStaticFile {}
+pub struct USubscriptionStaticFile {
+    static_file: PathBuf,
+}
 
 impl USubscriptionStaticFile {
-    pub fn new() -> Self {
-        USubscriptionStaticFile {}
+    pub fn new(static_file: Option<PathBuf>) -> Self {
+        // Set static_file to static_file if it has value, else set to "static-configs/testdata.json"
+        let static_file =
+            static_file.unwrap_or_else(|| PathBuf::from("static-configs/testdata.json"));
+        USubscriptionStaticFile { static_file }
     }
 }
 
 #[async_trait]
 impl USubscription for USubscriptionStaticFile {
-
     async fn subscribe(
         &self,
         subscription_request: SubscriptionRequest,
@@ -51,10 +55,12 @@ impl USubscription for USubscriptionStaticFile {
         // Reads in a file and builds it into a subscription_cache data type
         // This is a static file, so we will just return the same set of subscribers
         // for all URIs
-        println!("fetch_subscriptions for topic: {}", fetch_subscriptions_request.subscriber());
+        println!(
+            "fetch_subscriptions for topic: {}",
+            fetch_subscriptions_request.subscriber()
+        );
 
-        let crate_dir = env!("CARGO_MANIFEST_DIR");
-        let subscription_json_file = PathBuf::from(crate_dir).join("static-configs/testdata.json");
+        let subscription_json_file = self.static_file.clone();
 
         let mut subscriptions_vec = Vec::new();
 
@@ -69,7 +75,6 @@ impl USubscription for USubscriptionStaticFile {
                 match fs::read_to_string(&subscription_json_file) {
                     Ok(data) => match serde_json::from_str::<Value>(&data) {
                         Ok(res) => {
-
                             if let Some(obj) = res.as_object() {
                                 for (key, value) in obj {
                                     println!("key: {}, value: {}", key, value);
@@ -104,7 +109,7 @@ impl USubscription for USubscriptionStaticFile {
                                         }
                                         Err(error) => {
                                             println!("Error with Deserializing Key: {}", error);
-                                            continue
+                                            continue;
                                         }
                                     };
 

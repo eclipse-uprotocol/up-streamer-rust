@@ -95,8 +95,7 @@ async fn main() -> Result<(), UStatus> {
         ..Default::default()
     };
 
-    let publish_receiver: Arc<dyn UListener> =
-        Arc::new(PublishReceiver::new(service.clone()));
+    let publish_receiver: Arc<dyn UListener> = Arc::new(PublishReceiver::new(service.clone()));
     // TODO: Need to revisit how the vsomeip config file is used in non point-to-point cases
     service
         .register_listener(&source_filter, None, publish_receiver.clone())

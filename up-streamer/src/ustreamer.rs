@@ -22,11 +22,14 @@ use log::*;
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 use std::ops::Deref;
+use std::path::PathBuf;
 use std::str;
 use std::thread;
 use subscription_cache::SubscriptionCache;
+use up_rust::core::usubscription::{
+    FetchSubscriptionsRequest, FetchSubscriptionsResponse, SubscriberInfo, USubscription,
+};
 use up_rust::{UCode, UListener, UMessage, UStatus, UTransport, UUIDBuilder, UUri};
-use up_rust::core::usubscription::{FetchSubscriptionsRequest, FetchSubscriptionsResponse, SubscriberInfo, USubscription};
 
 const USTREAMER_TAG: &str = "UStreamer:";
 const USTREAMER_FN_NEW_TAG: &str = "new():";
@@ -68,23 +71,18 @@ type TransportForwardersContainer =
 // and the Sender necessary to hand off to the listener for the in `UTransport`
 struct TransportForwarders {
     message_queue_size: usize,
-    forwarders: TransportForwardersContainer
+    forwarders: TransportForwardersContainer,
 }
 
 impl TransportForwarders {
-    pub fn new(
-        message_queue_size: usize
-    ) -> Self {
+    pub fn new(message_queue_size: usize) -> Self {
         Self {
             message_queue_size,
-            forwarders: Mutex::new(HashMap::new())
+            forwarders: Mutex::new(HashMap::new()),
         }
     }
 
-    pub async fn insert(
-        &mut self,
-        out_transport: Arc<dyn UTransport>
-    ) -> Sender<Arc<UMessage>> {
+    pub async fn insert(&mut self, out_transport: Arc<dyn UTransport>) -> Sender<Arc<UMessage>> {
         let out_comparable_transport = ComparableTransport::new(out_transport.clone());
 
         let mut transport_forwarders = self.forwarders.lock().await;
@@ -96,14 +94,7 @@ impl TransportForwarders {
                     "{TRANSPORT_FORWARDERS_TAG}:{TRANSPORT_FORWARDERS_FN_INSERT_TAG} Inserting..."
                 );
                 let (tx, rx) = channel::bounded(self.message_queue_size);
-                (
-                    0,
-                    Arc::new(TransportForwarder::new(
-                        out_transport,
-                        rx
-                    )),
-                    tx,
-                )
+                (0, Arc::new(TransportForwarder::new(out_transport, rx)), tx)
             });
         *active += 1;
         sender.clone()
@@ -265,6 +256,7 @@ impl ForwardingListeners {
 ///
 /// ## Typical usage
 /// ```
+/// use usubscription_static_file::USubscriptionStaticFile;
 /// use std::sync::Arc;
 /// use async_std::sync::Mutex;
 /// use up_rust::{UListener, UTransport};
@@ -387,7 +379,8 @@ impl ForwardingListeners {
 /// let remote_authority = "remote";
 /// let remote_endpoint = Endpoint::new("remote_endpoint", remote_authority, remote_transport);
 ///
-/// let mut streamer = UStreamer::new("hoge", 100);
+/// let usubscription = Arc::new(USubscriptionStaticFile::new(None));
+/// let mut streamer = UStreamer::new("hoge", 100, usubscription);
 ///
 /// // Add forwarding rules to endpoint local<->remote
 /// assert_eq!(
@@ -462,11 +455,7 @@ impl UStreamer {
     /// * message_queue_size - Determines size of channel used to communicate between `ForwardingListener`
     ///                        and the worker tasks for each currently endpointd `UTransport`
     /// * usubscription - Subscription service which will be used to store subscription info for topics.
-    pub fn new(
-        name: &str,
-        message_queue_size: u16,
-        usubscription: Arc<dyn USubscription>,
-    ) -> Self {
+    pub fn new(name: &str, message_queue_size: u16, usubscription: Arc<dyn USubscription>) -> Self {
         let name = format!("{USTREAMER_TAG}:{name}:");
         // Try to initiate logging.
         // Required in case of dynamic lib, otherwise no logs.
@@ -516,9 +505,7 @@ impl UStreamer {
         Self {
             name: name.to_string(),
             registered_forwarding_rules: Mutex::new(HashSet::new()),
-            transport_forwarders: TransportForwarders::new(
-                message_queue_size as usize
-            ),
+            transport_forwarders: TransportForwarders::new(message_queue_size as usize),
             forwarding_listeners: ForwardingListeners::new(),
             subscription_cache: subscription_cache_foo.clone(),
             usubscription,
@@ -727,10 +714,7 @@ const TRANSPORT_FORWARDER_FN_MESSAGE_FORWARDING_LOOP_TAG: &str = "message_forwar
 pub(crate) struct TransportForwarder {}
 
 impl TransportForwarder {
-    fn new(
-        out_transport: Arc<dyn UTransport>,
-        message_receiver: Receiver<Arc<UMessage>>
-    ) -> Self {
+    fn new(out_transport: Arc<dyn UTransport>, message_receiver: Receiver<Arc<UMessage>>) -> Self {
         let out_transport_clone = out_transport.clone();
         let message_receiver_clone = message_receiver.clone();
 
@@ -738,7 +722,7 @@ impl TransportForwarder {
             task::block_on(Self::message_forwarding_loop(
                 UUIDBuilder::build().to_hyphenated_string(),
                 out_transport_clone,
-                message_receiver_clone
+                message_receiver_clone,
             ))
         });
 
@@ -748,7 +732,7 @@ impl TransportForwarder {
     async fn message_forwarding_loop(
         id: String,
         out_transport: Arc<dyn UTransport>,
-        message_receiver: Receiver<Arc<UMessage>>
+        message_receiver: Receiver<Arc<UMessage>>,
     ) {
         while let Ok(msg) = message_receiver.recv().await {
             debug!(
@@ -933,7 +917,7 @@ mod tests {
             remote_transport.clone(),
         );
 
-        let usubscription = Arc::new(USubscriptionStaticFile::new());
+        let usubscription = Arc::new(USubscriptionStaticFile::new(None));
         let mut ustreamer = UStreamer::new("foo_bar_streamer", 100, usubscription);
         // Add forwarding rules to endpoint local<->remote
         assert!(ustreamer
@@ -1006,7 +990,7 @@ mod tests {
             remote_transport_b.clone(),
         );
 
-        let usubscription = Arc::new(USubscriptionStaticFile::new());
+        let usubscription = Arc::new(USubscriptionStaticFile::new(None));
         let mut ustreamer = UStreamer::new("foo_bar_streamer", 100, usubscription);
 
         // Add forwarding rules to endpoint local<->remote_a
@@ -1067,7 +1051,7 @@ mod tests {
             remote_transport.clone(),
         );
 
-        let usubscription = Arc::new(USubscriptionStaticFile::new());
+        let usubscription = Arc::new(USubscriptionStaticFile::new(None));
         let mut ustreamer = UStreamer::new("foo_bar_streamer", 100, usubscription);
 
         // Add forwarding rules to endpoint local<->remote_a

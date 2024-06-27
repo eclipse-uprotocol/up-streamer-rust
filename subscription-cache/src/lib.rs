@@ -13,11 +13,13 @@
 
 use async_std::sync::Mutex;
 use protobuf::MessageField;
-use std::hash::{Hash, Hasher};
 use std::collections::{HashMap, HashSet};
+use std::hash::{Hash, Hasher};
+use up_rust::core::usubscription::{
+    EventDeliveryConfig, FetchSubscriptionsResponse, SubscribeAttributes, SubscriberInfo,
+    SubscriptionStatus,
+};
 use up_rust::UUri;
-use up_rust::core::usubscription::{EventDeliveryConfig, FetchSubscriptionsResponse, SubscribeAttributes,
-    SubscriberInfo, SubscriptionStatus};
 
 pub type SubscribersMap = Mutex<HashMap<MessageField<UUri>, HashSet<SubscriptionInformation>>>;
 
@@ -25,7 +27,7 @@ pub struct SubscriptionInformation {
     pub subscriber: MessageField<SubscriberInfo>,
     pub status: MessageField<SubscriptionStatus>,
     pub attributes: MessageField<SubscribeAttributes>,
-    pub config: MessageField<EventDeliveryConfig>
+    pub config: MessageField<EventDeliveryConfig>,
 }
 
 impl Eq for SubscriptionInformation {}
@@ -48,7 +50,7 @@ impl Clone for SubscriptionInformation {
             subscriber: self.subscriber.clone(),
             status: self.status.clone(),
             attributes: self.attributes.clone(),
-            config: self.config.clone()
+            config: self.config.clone(),
         }
     }
 }
@@ -56,8 +58,6 @@ impl Clone for SubscriptionInformation {
 pub struct SubscriptionCache {
     subscription_cache_map: SubscribersMap,
 }
-
-
 
 /// A [`SubscriptionCache`] is used to store and manage subscriptions to
 /// topics. It is kept local to the streamer. The streamer will receive updates
@@ -72,7 +72,7 @@ impl SubscriptionCache {
                 subscriber: subscription.subscriber,
                 status: subscription.status,
                 attributes: subscription.attributes,
-                config: subscription.config
+                config: subscription.config,
             };
             subscription_cache_hash_map
                 .entry(uri)
@@ -84,7 +84,9 @@ impl SubscriptionCache {
         }
     }
 
-    pub async fn fetch_cache(&self) -> HashMap<MessageField<UUri>, HashSet<SubscriptionInformation>> {
+    pub async fn fetch_cache(
+        &self,
+    ) -> HashMap<MessageField<UUri>, HashSet<SubscriptionInformation>> {
         let cache_map = self.subscription_cache_map.lock().await;
         let mut cloned_map = HashMap::new();
 
