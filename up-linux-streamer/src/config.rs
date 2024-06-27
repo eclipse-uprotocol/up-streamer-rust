@@ -6,6 +6,8 @@ use std::path::PathBuf;
 pub struct Config {
     pub(crate) up_streamer_config: UpStreamerConfig,
     pub(crate) host_config: HostConfig,
+    pub(crate) usubscription_config: USubscriptionConfig,
+    pub(crate) zenoh_transport_config: ZenohTransportConfig,
     pub(crate) someip_config: SomeipConfig,
 }
 
@@ -20,6 +22,18 @@ pub struct UpStreamerConfig {
 pub struct HostConfig {
     pub(crate) transport: HostTransport,
     pub(crate) authority: String,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct USubscriptionConfig {
+    pub(crate) file_path: String,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct ZenohTransportConfig {
+    pub(crate) config_file: String,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]

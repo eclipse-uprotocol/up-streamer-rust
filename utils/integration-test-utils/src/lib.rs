@@ -13,6 +13,10 @@
 
 mod up_client_foo;
 pub use up_client_foo::UPClientFoo;
+
+mod up_client_failing_register;
+pub use up_client_failing_register::UPClientFailingRegister;
+
 mod integration_test_utils;
 
 pub use integration_test_utils::{

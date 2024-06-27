@@ -11,8 +11,10 @@ To run one of the examples below and see client and service communicate, you'll 
 Launch the `uE_service` example in another terminal:
 
 ```bash
-LD_LIBRARY_PATH=$LD_LIBRARY_PATH:<path/to/vsomeip/lib> cargo run --example uE_service
+LD_LIBRARY_PATH=$LD_LIBRARY_PATH:<path/to/vsomeip/lib> cargo run --example uE_service -- --endpoint tcp/0.0.0.0:7445
 ```
+
+In this example, the "--endpoint" flag will set the endpoint address upon which the zenoh client will listen.
 
 Launch the `mE_client` example in another terminal:
 
@@ -58,7 +60,7 @@ LD_LIBRARY_PATH=$LD_LIBRARY_PATH:<path/to/vsomeip/lib> cargo run --example mE_se
 Launch the `uE_client` example in another terminal:
 
 ```bash
-LD_LIBRARY_PATH=$LD_LIBRARY_PATH:<path/to/vsomeip/lib> cargo run --example uE_client 
+LD_LIBRARY_PATH=$LD_LIBRARY_PATH:<path/to/vsomeip/lib> cargo run --example uE_client -- --endpoint tcp/0.0.0.0:7444
 ```
 
 We omit a detail explanation of the expected terminal output as it's a mirror of the `Mechatronics client to high compute service` heading above.
