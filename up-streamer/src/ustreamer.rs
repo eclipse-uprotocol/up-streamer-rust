@@ -11,6 +11,8 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
+#![allow(clippy::mutable_key_type)]
+
 use crate::endpoint::Endpoint;
 use async_std::channel::{Receiver, Sender};
 use async_std::sync::{Arc, Mutex};
@@ -20,7 +22,13 @@ use log::*;
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 use std::ops::Deref;
+use std::path::PathBuf;
+use std::str;
 use std::thread;
+use subscription_cache::SubscriptionCache;
+use up_rust::core::usubscription::{
+    FetchSubscriptionsRequest, FetchSubscriptionsResponse, SubscriberInfo, USubscription,
+};
 use up_rust::{UCode, UListener, UMessage, UStatus, UTransport, UUIDBuilder, UUri};
 
 const USTREAMER_TAG: &str = "UStreamer:";
@@ -145,10 +153,12 @@ impl ForwardingListeners {
         out_authority: &str,
         forwarding_id: &str,
         out_sender: Sender<Arc<UMessage>>,
+        subscription_cache: Arc<Mutex<SubscriptionCache>>,
     ) -> Option<Arc<ForwardingListener>> {
         let in_comparable_transport = ComparableTransport::new(in_transport.clone());
-
         let mut forwarding_listeners = self.listeners.lock().await;
+        let initial_subscriber_cache =
+            task::block_on(subscription_cache.lock().await.fetch_cache());
 
         let (active, forwarding_listener) = forwarding_listeners
             .entry((in_comparable_transport.clone(), out_authority.to_string()))
@@ -159,9 +169,27 @@ impl ForwardingListeners {
                     .register_listener(&any_uuri(), Some(&uauthority_to_uuri(out_authority)), forwarding_listener.clone()));
 
                 if let Err(err) = reg_res {
-                    warn!("{FORWARDING_LISTENERS_TAG}:{FORWARDING_LISTENERS_FN_INSERT_TAG} unable to register listener, error: {err}");
+                    warn!("{FORWARDING_LISTENERS_TAG}:{FORWARDING_LISTENERS_FN_INSERT_TAG} unable to register request listener, error: {err}");
                 } else {
-                    debug!("{FORWARDING_LISTENERS_TAG}:{FORWARDING_LISTENERS_FN_INSERT_TAG} able to register listener");
+                    debug!("{FORWARDING_LISTENERS_TAG}:{FORWARDING_LISTENERS_FN_INSERT_TAG} able to register request listener");
+                }
+
+                for (topic, subscribers) in initial_subscriber_cache {
+                    let mut authority_name_hash_set: HashSet<String> = HashSet::new();
+                    for subscriber in subscribers {
+                        authority_name_hash_set.insert(subscriber.subscriber.get_or_default().uri.get_or_default().authority_name.clone());
+                    }
+                    // TODO: Should we also check if topic's authority matches in_transport's authority, i.e., topic belongs to in_transport
+                    // topic.authority_name == in_authority
+                    if authority_name_hash_set.contains(out_authority) {
+                        let pub_reg_res = task::block_on(in_transport
+                            .register_listener(&topic, None, forwarding_listener.clone()));
+                        if let Err(err) = pub_reg_res {
+                            warn!("{FORWARDING_LISTENERS_TAG}:{FORWARDING_LISTENERS_FN_INSERT_TAG} unable to register listener, error: {err}");
+                        } else {
+                            debug!("{FORWARDING_LISTENERS_TAG}:{FORWARDING_LISTENERS_FN_INSERT_TAG} able to register listener");
+                        }
+                    }
                 }
 
                 (
@@ -228,6 +256,7 @@ impl ForwardingListeners {
 ///
 /// ## Typical usage
 /// ```
+/// use usubscription_static_file::USubscriptionStaticFile;
 /// use std::sync::Arc;
 /// use async_std::sync::Mutex;
 /// use up_rust::{UListener, UTransport};
@@ -350,7 +379,8 @@ impl ForwardingListeners {
 /// let remote_authority = "remote";
 /// let remote_endpoint = Endpoint::new("remote_endpoint", remote_authority, remote_transport);
 ///
-/// let mut streamer = UStreamer::new("hoge", 100);
+/// let usubscription = Arc::new(USubscriptionStaticFile::new(None));
+/// let mut streamer = UStreamer::new("hoge", 100, usubscription);
 ///
 /// // Add forwarding rules to endpoint local<->remote
 /// assert_eq!(
@@ -410,6 +440,10 @@ pub struct UStreamer {
     registered_forwarding_rules: ForwardingRules,
     transport_forwarders: TransportForwarders,
     forwarding_listeners: ForwardingListeners,
+    subscription_cache: Arc<Mutex<SubscriptionCache>>,
+    // TODO: Use this when USubsription is implemented
+    #[allow(dead_code)]
+    usubscription: Arc<dyn USubscription>,
 }
 
 impl UStreamer {
@@ -420,22 +454,61 @@ impl UStreamer {
     /// * name - Used to uniquely identify this UStreamer in logs
     /// * message_queue_size - Determines size of channel used to communicate between `ForwardingListener`
     ///                        and the worker tasks for each currently endpointd `UTransport`
-    pub fn new(name: &str, message_queue_size: u16) -> Self {
+    /// * usubscription - Subscription service which will be used to store subscription info for topics.
+    pub fn new(name: &str, message_queue_size: u16, usubscription: Arc<dyn USubscription>) -> Self {
         let name = format!("{USTREAMER_TAG}:{name}:");
         // Try to initiate logging.
         // Required in case of dynamic lib, otherwise no logs.
         // But cannot be done twice in case of static link.
+        std::env::set_var("RUST_LOG", "debug");
         let _ = env_logger::try_init();
         debug!(
             "{}:{}:{} UStreamer created",
             &name, USTREAMER_TAG, USTREAMER_FN_NEW_TAG
         );
 
+        let uuri: UUri = UUri {
+            authority_name: "*".to_string(),
+            ue_id: 0x0000_FFFF,     // any instance, any service
+            ue_version_major: 0xFF, // any
+            resource_id: 0xFFFF,    // any
+            ..Default::default()
+        };
+
+        let details_vector = Vec::new();
+        let subscriber_info = SubscriberInfo {
+            uri: Some(uuri).into(),
+            details: details_vector,
+            ..Default::default()
+        };
+
+        let mut fetch_request = FetchSubscriptionsRequest {
+            request: None,
+            offset: None,
+            ..Default::default()
+        };
+        fetch_request.set_subscriber(subscriber_info);
+        let subscriptions = task::block_on(usubscription.fetch_subscriptions(fetch_request));
+        //let subscription_cache_foo = Arc::new(Mutex::new(SubscriptionCache::new(subscriptions.expect("Subscriptions is an Error"))));
+
+        let subscription_cache_foo = match subscriptions {
+            Ok(subs) => Arc::new(Mutex::new(SubscriptionCache::new(subs))),
+            Err(_subs) => {
+                // Handle the error case here, such as returning a default value or creating a default SubscriptionCache
+                let empty_fetch_response = FetchSubscriptionsResponse {
+                    ..Default::default()
+                };
+                Arc::new(Mutex::new(SubscriptionCache::new(empty_fetch_response)))
+            }
+        };
+
         Self {
             name: name.to_string(),
             registered_forwarding_rules: Mutex::new(HashSet::new()),
             transport_forwarders: TransportForwarders::new(message_queue_size as usize),
             forwarding_listeners: ForwardingListeners::new(),
+            subscription_cache: subscription_cache_foo.clone(),
+            usubscription,
         }
     }
 
@@ -471,6 +544,8 @@ impl UStreamer {
     /// * [`UMessageType::UMESSAGE_TYPE_NOTIFICATION`][up_rust::UMessageType::UMESSAGE_TYPE_NOTIFICATION]
     /// * [`UMessageType::UMESSAGE_TYPE_REQUEST`][up_rust::UMessageType::UMESSAGE_TYPE_REQUEST]
     /// * [`UMessageType::UMESSAGE_TYPE_RESPONSE`][up_rust::UMessageType::UMESSAGE_TYPE_RESPONSE]
+    /// As well as a [`UMessageType::UMESSAGE_TYPE_PUBLISH`][up_rust::UMessageType::UMESSAGE_TYPE_PUBLISH]
+    /// type message which only has a source / topic contained in its attributes.
     ///
     /// # Parameters
     ///
@@ -524,6 +599,7 @@ impl UStreamer {
                             &out.authority,
                             &Self::forwarding_id(&r#in, &out),
                             out_sender,
+                            self.subscription_cache.clone(),
                         )
                         .await;
                     Ok(())
@@ -547,6 +623,8 @@ impl UStreamer {
     /// * [`UMessageType::UMESSAGE_TYPE_NOTIFICATION`][up_rust::UMessageType::UMESSAGE_TYPE_NOTIFICATION]
     /// * [`UMessageType::UMESSAGE_TYPE_REQUEST`][up_rust::UMessageType::UMESSAGE_TYPE_REQUEST]
     /// * [`UMessageType::UMESSAGE_TYPE_RESPONSE`][up_rust::UMessageType::UMESSAGE_TYPE_RESPONSE]
+    /// As well as a [`UMessageType::UMESSAGE_TYPE_PUBLISH`][up_rust::UMessageType::UMESSAGE_TYPE_PUBLISH]
+    /// type message which only has a source / topic contained in its attributes.
     ///
     /// # Parameters
     ///
@@ -639,6 +717,7 @@ impl TransportForwarder {
     fn new(out_transport: Arc<dyn UTransport>, message_receiver: Receiver<Arc<UMessage>>) -> Self {
         let out_transport_clone = out_transport.clone();
         let message_receiver_clone = message_receiver.clone();
+
         thread::spawn(|| {
             task::block_on(Self::message_forwarding_loop(
                 UUIDBuilder::build().to_hyphenated_string(),
@@ -663,7 +742,6 @@ impl TransportForwarder {
                 TRANSPORT_FORWARDER_FN_MESSAGE_FORWARDING_LOOP_TAG,
                 msg
             );
-
             let send_res = out_transport.send(msg.deref().clone()).await;
             if let Err(err) = send_res {
                 warn!(
@@ -734,6 +812,7 @@ mod tests {
     use async_trait::async_trait;
     use std::sync::Arc;
     use up_rust::{UListener, UMessage, UStatus, UTransport, UUri};
+    use usubscription_static_file::USubscriptionStaticFile;
 
     pub struct UPClientFoo;
 
@@ -838,7 +917,8 @@ mod tests {
             remote_transport.clone(),
         );
 
-        let mut ustreamer = UStreamer::new("foo_bar_streamer", 100);
+        let usubscription = Arc::new(USubscriptionStaticFile::new(None));
+        let mut ustreamer = UStreamer::new("foo_bar_streamer", 100, usubscription);
         // Add forwarding rules to endpoint local<->remote
         assert!(ustreamer
             .add_forwarding_rule(local_endpoint.clone(), remote_endpoint.clone())
@@ -910,7 +990,8 @@ mod tests {
             remote_transport_b.clone(),
         );
 
-        let mut ustreamer = UStreamer::new("foo_bar_streamer", 100);
+        let usubscription = Arc::new(USubscriptionStaticFile::new(None));
+        let mut ustreamer = UStreamer::new("foo_bar_streamer", 100, usubscription);
 
         // Add forwarding rules to endpoint local<->remote_a
         assert!(ustreamer
@@ -970,7 +1051,8 @@ mod tests {
             remote_transport.clone(),
         );
 
-        let mut ustreamer = UStreamer::new("foo_bar_streamer", 100);
+        let usubscription = Arc::new(USubscriptionStaticFile::new(None));
+        let mut ustreamer = UStreamer::new("foo_bar_streamer", 100, usubscription);
 
         // Add forwarding rules to endpoint local<->remote_a
         assert!(ustreamer

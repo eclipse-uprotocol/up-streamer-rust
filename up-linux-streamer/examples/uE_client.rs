@@ -1,11 +1,25 @@
+/********************************************************************************
+ * Copyright (c) 2024 Contributors to the Eclipse Foundation
+ *
+ * See the NOTICE file(s) distributed with this work for additional
+ * information regarding copyright ownership.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ********************************************************************************/
+
 use async_trait::async_trait;
 use hello_world_protos::hello_world_service::{HelloRequest, HelloResponse};
 use protobuf::Message;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 use up_rust::{UListener, UMessage, UMessageBuilder, UPayloadFormat, UStatus, UTransport, UUri};
 use up_transport_zenoh::UPClientZenoh;
-use zenoh::config::Config;
+use zenoh::config::{Config, EndPoint};
 
 const SERVICE_AUTHORITY: &str = "me_authority";
 const SERVICE_UE_ID: u16 = 0x4321;
@@ -49,7 +63,17 @@ async fn main() -> Result<(), UStatus> {
     println!("uE_client");
 
     // TODO: Probably make somewhat configurable?
-    let zenoh_config = Config::default();
+    // Create a configuration object
+    let mut zenoh_config = Config::default();
+
+    // Specify the address to listen on using IPv4
+    let ipv4_endpoint = EndPoint::from_str("tcp/0.0.0.0:7445");
+
+    // Add the IPv4 endpoint to the Zenoh configuration
+    zenoh_config
+        .listen
+        .endpoints
+        .push(ipv4_endpoint.expect("FAIL"));
     // TODO: Add error handling if we fail to create a UPClientZenoh
     let client: Arc<dyn UTransport> = Arc::new(
         UPClientZenoh::new(zenoh_config, "linux".to_string())
