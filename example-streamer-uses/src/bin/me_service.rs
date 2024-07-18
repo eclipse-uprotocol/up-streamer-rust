@@ -23,11 +23,21 @@ use up_rust::{UListener, UMessage, UMessageBuilder, UStatus, UTransport, UUri};
 use up_transport_vsomeip::UPTransportVsomeip;
 
 const SERVICE_AUTHORITY: &str = "me_authority";
-const SERVICE_UE_ID: u16 = 0x4321;
+const SERVICE_UE_ID: u32 = 0x4321;
 const SERVICE_UE_VERSION_MAJOR: u8 = 1;
 const SERVICE_RESOURCE_ID: u16 = 0x0421;
 
 const REMOTE_AUTHORITY: &str = "linux";
+
+fn service_uuri() -> UUri {
+    UUri::try_from_parts(
+        SERVICE_AUTHORITY,
+        SERVICE_UE_ID,
+        SERVICE_UE_VERSION_MAJOR,
+        0,
+    )
+    .unwrap()
+}
 
 struct ServiceRequestResponder {
     client: Arc<dyn UTransport>,
@@ -66,10 +76,6 @@ impl UListener for ServiceRequestResponder {
             .unwrap();
         self.client.send(response_msg).await.unwrap();
     }
-
-    async fn on_error(&self, err: UStatus) {
-        println!("ServiceRequestResponder: Encountered an error: {err:?}");
-    }
 }
 
 #[tokio::main]
@@ -88,32 +94,24 @@ async fn main() -> Result<(), UStatus> {
     // TODO: Add error handling if we fail to create a UPTransportVsomeip
     let service: Arc<dyn UTransport> = Arc::new(
         UPTransportVsomeip::new_with_config(
-            &SERVICE_AUTHORITY.to_string(),
+            service_uuri(),
             &REMOTE_AUTHORITY.to_string(),
-            SERVICE_UE_ID,
             &vsomeip_config.unwrap(),
             None,
         )
         .unwrap(),
     );
 
-    let source_filter = UUri {
-        authority_name: "*".to_string(),
-        ue_id: 0x0000_FFFF,
-        ue_version_major: 0xFF,
-        resource_id: 0xFFFF,
-        ..Default::default()
-    };
-    let sink_filter = UUri {
-        authority_name: SERVICE_AUTHORITY.to_string(),
-        ue_id: SERVICE_UE_ID as u32,
-        ue_version_major: SERVICE_UE_VERSION_MAJOR as u32,
-        resource_id: SERVICE_RESOURCE_ID as u32,
-        ..Default::default()
-    };
+    let source_filter = UUri::any();
+    let sink_filter = UUri::try_from_parts(
+        SERVICE_AUTHORITY,
+        SERVICE_UE_ID,
+        SERVICE_UE_VERSION_MAJOR,
+        SERVICE_RESOURCE_ID,
+    )
+    .unwrap();
     let service_request_responder: Arc<dyn UListener> =
         Arc::new(ServiceRequestResponder::new(service.clone()));
-    // TODO: Need to revisit how the vsomeip config file is used in non point-to-point cases
     service
         .register_listener(
             &source_filter,

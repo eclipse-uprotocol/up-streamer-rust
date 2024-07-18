@@ -15,7 +15,7 @@ use async_std::sync::Mutex;
 use async_trait::async_trait;
 use log::debug;
 use std::sync::Arc;
-use up_rust::{UListener, UMessage, UStatus};
+use up_rust::{UListener, UMessage};
 
 #[derive(Clone)]
 pub struct LocalClientListener {
@@ -39,10 +39,6 @@ impl UListener for LocalClientListener {
     async fn on_receive(&self, msg: UMessage) {
         self.message_store.lock().await.push(msg.clone());
         debug!("within local_client_listener! msg: {:?}", msg);
-    }
-
-    async fn on_error(&self, err: UStatus) {
-        debug!("within local_client_listener! err: {:?}", err);
     }
 }
 
@@ -74,10 +70,6 @@ impl UListener for RemoteClientListener {
     async fn on_receive(&self, msg: UMessage) {
         self.message_store.lock().await.push(msg.clone());
         debug!("within remote_client_listener! msg: {:?}", msg);
-    }
-
-    async fn on_error(&self, err: UStatus) {
-        debug!("within remote_client_listener! err: {:?}", err);
     }
 }
 

@@ -20,13 +20,23 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::thread;
 use up_rust::{UListener, UMessage, UMessageBuilder, UStatus, UTransport, UUri};
-use up_transport_zenoh::UPClientZenoh;
+use up_transport_zenoh::UPTransportZenoh;
 use zenoh::config::{Config, EndPoint};
 
 const SERVICE_AUTHORITY: &str = "linux";
-const SERVICE_UE_ID: u16 = 0x1236;
+const SERVICE_UE_ID: u32 = 0x1236;
 const SERVICE_UE_VERSION_MAJOR: u8 = 1;
 const SERVICE_RESOURCE_ID: u16 = 0x0896;
+
+fn service_uuri() -> UUri {
+    UUri::try_from_parts(
+        SERVICE_AUTHORITY,
+        SERVICE_UE_ID,
+        SERVICE_UE_VERSION_MAJOR,
+        0,
+    )
+    .unwrap()
+}
 
 struct ServiceRequestResponder {
     client: Arc<dyn UTransport>,
@@ -74,10 +84,6 @@ impl UListener for ServiceRequestResponder {
             .unwrap();
         self.client.send(response_msg).await.unwrap();
     }
-
-    async fn on_error(&self, err: UStatus) {
-        println!("ServiceRequestResponder: Encountered an error: {err:?}");
-    }
 }
 
 #[tokio::main]
@@ -88,41 +94,37 @@ async fn main() -> Result<(), UStatus> {
 
     println!("uE_service");
 
-    // TODO: Probably make somewhat configurable?
     let mut zenoh_config = Config::default();
 
     if !args.endpoint.is_empty() {
         // Specify the address to listen on using IPv4
-        let ipv4_endpoint = EndPoint::from_str(args.endpoint.as_str());
+        let ipv4_endpoint =
+            EndPoint::from_str(args.endpoint.as_str()).expect("Unable to set endpoint");
 
         // Add the IPv4 endpoint to the Zenoh configuration
         zenoh_config
             .listen
-            .endpoints
-            .push(ipv4_endpoint.expect("FAIL"));
+            .set_endpoints(zenoh::config::ModeDependentValue::Unique(vec![
+                ipv4_endpoint,
+            ]))
+            .expect("Unable to set Zenoh Config");
     }
 
-    // TODO: Add error handling if we fail to create a UPClientZenoh
+    let service_uri: String = (&service_uuri()).into();
     let service: Arc<dyn UTransport> = Arc::new(
-        UPClientZenoh::new(zenoh_config, "linux".to_string())
+        UPTransportZenoh::new(zenoh_config, service_uri)
             .await
             .unwrap(),
     );
 
-    let source_filter = UUri {
-        authority_name: "*".to_string(),
-        ue_id: 0x0000_FFFF,
-        ue_version_major: 0xFF,
-        resource_id: 0xFFFF,
-        ..Default::default()
-    };
-    let sink_filter = UUri {
-        authority_name: SERVICE_AUTHORITY.to_string(),
-        ue_id: SERVICE_UE_ID as u32,
-        ue_version_major: SERVICE_UE_VERSION_MAJOR as u32,
-        resource_id: SERVICE_RESOURCE_ID as u32,
-        ..Default::default()
-    };
+    let source_filter = UUri::any();
+    let sink_filter = UUri::try_from_parts(
+        SERVICE_AUTHORITY,
+        SERVICE_UE_ID,
+        SERVICE_UE_VERSION_MAJOR,
+        SERVICE_RESOURCE_ID,
+    )
+    .unwrap();
 
     let service_request_responder: Arc<dyn UListener> =
         Arc::new(ServiceRequestResponder::new(service.clone()));

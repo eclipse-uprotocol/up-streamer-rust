@@ -22,15 +22,24 @@ use std::thread;
 use up_rust::{UListener, UMessage, UStatus, UTransport, UUri};
 use up_transport_vsomeip::UPTransportVsomeip;
 
-const SERVICE_AUTHORITY: &str = "me_authority";
-const SERVICE_UE_ID: u16 = 0x1236;
-
-const REMOTE_AUTHORITY: &str = "linux";
+const SUBSCRIBER_AUTHORITY: &str = "me_authority";
+const SUBSCRIBER_UE_ID: u32 = 0x1236;
+const SUBSCRIBER_UE_VERSION_MAJOR: u8 = 1;
 
 const PUB_TOPIC_AUTHORITY: &str = "linux";
-const PUB_TOPIC_UE_ID: u16 = 0x3039;
+const PUB_TOPIC_UE_ID: u32 = 0x3039;
 const PUB_TOPIC_UE_VERSION_MAJOR: u8 = 1;
 const PUB_TOPIC_RESOURCE_ID: u16 = 0x8001;
+
+fn subscriber_uuri() -> UUri {
+    UUri::try_from_parts(
+        SUBSCRIBER_AUTHORITY,
+        SUBSCRIBER_UE_ID,
+        SUBSCRIBER_UE_VERSION_MAJOR,
+        0,
+    )
+    .unwrap()
+}
 
 #[allow(dead_code)]
 struct PublishReceiver;
@@ -54,10 +63,6 @@ impl UListener for PublishReceiver {
             }
         };
     }
-
-    async fn on_error(&self, err: UStatus) {
-        println!("ServiceRequestResponder: Encountered an error: {err:?}");
-    }
 }
 
 #[tokio::main]
@@ -76,22 +81,21 @@ async fn main() -> Result<(), UStatus> {
     // TODO: Add error handling if we fail to create a UPTransportVsomeip
     let subscriber: Arc<dyn UTransport> = Arc::new(
         UPTransportVsomeip::new_with_config(
-            &SERVICE_AUTHORITY.to_string(),
-            &REMOTE_AUTHORITY.to_string(),
-            SERVICE_UE_ID,
+            subscriber_uuri(),
+            &PUB_TOPIC_AUTHORITY.to_string(),
             &vsomeip_config.unwrap(),
             None,
         )
         .unwrap(),
     );
 
-    let source_filter = UUri {
-        authority_name: PUB_TOPIC_AUTHORITY.to_string(),
-        ue_id: PUB_TOPIC_UE_ID as u32,
-        ue_version_major: PUB_TOPIC_UE_VERSION_MAJOR as u32,
-        resource_id: PUB_TOPIC_RESOURCE_ID as u32,
-        ..Default::default()
-    };
+    let source_filter = UUri::try_from_parts(
+        PUB_TOPIC_AUTHORITY,
+        PUB_TOPIC_UE_ID,
+        PUB_TOPIC_UE_VERSION_MAJOR,
+        PUB_TOPIC_RESOURCE_ID,
+    )
+    .unwrap();
 
     let publish_receiver: Arc<dyn UListener> = Arc::new(PublishReceiver);
     // TODO: Need to revisit how the vsomeip config file is used in non point-to-point cases

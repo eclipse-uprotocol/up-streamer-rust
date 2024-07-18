@@ -16,15 +16,12 @@ use async_broadcast::{Receiver, Sender};
 use async_std::sync::{Condvar, Mutex};
 use async_std::task;
 use log::{debug, error};
-use rand::random;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
-use up_rust::{UListener, UMessage, UStatus, UTransport, UUIDBuilder, UUri};
-
-const CLEAR_RAND_B: u64 = 0x6000_0000_0000_0000;
+use up_rust::{UListener, UMessage, UStatus, UTransport, UUri, UUID};
 
 pub type Signal = Arc<(Mutex<bool>, Condvar)>;
 
@@ -58,39 +55,44 @@ pub async fn check_send_receive_message_discrepancy(
     }
 }
 
+// TODO: Fix this function to work with UUIDv7
 pub async fn check_messages_in_order(messages: Arc<Mutex<Vec<UMessage>>>) {
     let messages = messages.lock().await;
     if messages.is_empty() {
         return;
     }
 
-    // Step 1: Group messages by id.lsb
-    let mut grouped_messages: HashMap<u64, Vec<&UMessage>> = HashMap::new();
+    // Step 1: Group messages by source UUri
+    #[allow(clippy::mutable_key_type)]
+    let mut grouped_messages: HashMap<UUri, Vec<&UMessage>> = HashMap::new();
     for msg in messages.iter() {
-        let lsb = msg.attributes.as_ref().unwrap().id.lsb;
-        grouped_messages.entry(lsb).or_default().push(msg);
+        let source_uuri = msg
+            .attributes
+            .as_ref()
+            .unwrap()
+            .source
+            .as_ref()
+            .unwrap()
+            .clone();
+        grouped_messages.entry(source_uuri).or_default().push(msg);
     }
 
-    // Step 2: Check each group for strict increasing order of id.msb
-    for (lsb, group) in grouped_messages {
-        debug!("lsb: {lsb}");
+    // Step 2: Check each group for strict increasing order of id.msb first 48 bytes
+    for (source_uuri, group) in grouped_messages {
+        debug!("source_uuri: {source_uuri}");
         if let Some(first_msg) = group.first() {
-            let mut prev_msb = first_msg.attributes.as_ref().unwrap().id.msb;
+            let mut prev_timestamp = first_msg.attributes.as_ref().unwrap().id.msb >> 16;
             for msg in group.iter().skip(1) {
-                let curr_msb = msg.attributes.as_ref().unwrap().id.msb;
-                debug!("prev_msb: {prev_msb}, curr_msb: {curr_msb}");
-                if curr_msb <= prev_msb {
-                    panic!("!! -- Message ordering issue for lsb: {} -- !!", lsb);
+                let curr_timestamp = msg.attributes.as_ref().unwrap().id.msb >> 16;
+                debug!("prev_timestamp: {prev_timestamp}, curr_timestamp: {curr_timestamp}");
+                // relaxing to < instead of <= since we now do not have the counter for tie breaker
+                if curr_timestamp < prev_timestamp {
+                    panic!("!! -- Message ordering issue for source_uuri: {} with prev_timestamp: {} and curr_timestamp: {}-- !!", source_uuri, prev_timestamp, curr_timestamp);
                 }
-                prev_msb = curr_msb;
+                prev_timestamp = curr_timestamp;
             }
         }
     }
-}
-
-#[inline(always)]
-fn override_lsb_rand_b(lsb: u64, new_rand_b: u64) -> u64 {
-    lsb & CLEAR_RAND_B | new_rand_b
 }
 
 pub async fn wait_for_pause(signal: Signal) {
@@ -251,7 +253,6 @@ async fn poll_for_new_command(
 async fn send_message_set(
     client: &UPClientFoo,
     name: &str,
-    client_rand_b: u64,
     msg_type: &str,
     msg_set: &mut [UMessage],
     active_connection_listing: &ActiveConnections,
@@ -260,11 +261,8 @@ async fn send_message_set(
 ) {
     for (index, msg) in &mut msg_set.iter_mut().enumerate() {
         if let Some(attributes) = msg.attributes.as_mut() {
-            let new_id = UUIDBuilder::build();
+            let new_id = UUID::build();
             attributes.id.0 = Some(Box::new(new_id));
-            let uuid = attributes.id.as_mut().unwrap();
-            let lsb = &mut uuid.lsb;
-            *lsb = override_lsb_rand_b(*lsb, client_rand_b);
         }
 
         debug!(
@@ -303,8 +301,6 @@ pub async fn run_client(
 
             let mut sent_messages = Vec::with_capacity(client_history.sent_message_vec_capacity);
 
-            let client_rand_b = random::<u64>() >> 2;
-
             loop {
                 debug!("top of loop");
 
@@ -329,7 +325,6 @@ pub async fn run_client(
                 send_message_set(
                     &client,
                     &client_configuration.name,
-                    client_rand_b,
                     "Notification",
                     &mut client_messages.notification_msgs,
                     &active_connection_listing,
@@ -340,7 +335,6 @@ pub async fn run_client(
                 send_message_set(
                     &client,
                     &client_configuration.name,
-                    client_rand_b,
                     "Request",
                     &mut client_messages.request_msgs,
                     &active_connection_listing,
@@ -351,7 +345,6 @@ pub async fn run_client(
                 send_message_set(
                     &client,
                     &client_configuration.name,
-                    client_rand_b,
                     "Response",
                     &mut client_messages.response_msgs,
                     &active_connection_listing,

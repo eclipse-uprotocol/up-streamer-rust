@@ -15,15 +15,16 @@ mod config;
 
 use crate::config::{Config, HostTransport};
 use clap::Parser;
-use log::trace;
+use log::{error, trace};
 use std::fs::File;
 use std::io::Read;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::{env, thread};
-use up_rust::{UCode, UStatus, UTransport};
+use up_rust::{UCode, UStatus, UTransport, UUri};
 use up_streamer::{Endpoint, UStreamer};
 use up_transport_vsomeip::UPTransportVsomeip;
-use up_transport_zenoh::UPClientZenoh;
+use up_transport_zenoh::UPTransportZenoh;
 use usubscription_static_file::USubscriptionStaticFile;
 use zenoh::config::Config as ZenohConfig;
 
@@ -79,17 +80,34 @@ async fn main() -> Result<(), UStatus> {
         }
     };
 
+    let streamer_uuri = UUri::try_from_parts(
+        &config.streamer_uuri.authority,
+        config.streamer_uuri.ue_id,
+        config.streamer_uuri.ue_version_major,
+        0,
+    )
+    .expect("Unable to form streamer_uuri");
+
+    trace!("streamer_uuri: {streamer_uuri:#?}");
+    let streamer_uri: String = (&streamer_uuri).into();
+    // TODO: Remove this once the error reporting from UPTransportZenoh no longer "hides"
+    // the underlying reason for the failure on converting uri -> UUri
+    trace!("streamer_uri: {streamer_uri}");
+    let _zenoh_internal_uuri = UUri::from_str(&streamer_uri).map_err(|e| {
+        let msg = format!("Unable to transform the uri to UUri, e: {e:?}");
+        error!("{msg}");
+        UStatus::fail_with_code(UCode::INVALID_ARGUMENT, msg)
+    })?;
+
     let host_transport: Arc<dyn UTransport> = Arc::new(match config.host_config.transport {
-        HostTransport::Zenoh => {
-            UPClientZenoh::new(zenoh_config, config.host_config.authority.clone())
-                .await
-                .expect("Unable to initialize Zenoh UTransport")
-        } // other host transports can be added here as they become available
+        HostTransport::Zenoh => UPTransportZenoh::new(zenoh_config, streamer_uri)
+            .await
+            .expect("Unable to initialize Zenoh UTransport"), // other host transports can be added here as they become available
     });
 
     let host_endpoint = Endpoint::new(
         "host_endpoint",
-        &config.host_config.authority,
+        &config.streamer_uuri.authority,
         host_transport.clone(),
     );
 
@@ -110,14 +128,21 @@ async fn main() -> Result<(), UStatus> {
             );
         }
 
+        let host_uuri = UUri::try_from_parts(
+            &config.streamer_uuri.authority,
+            config
+                .someip_config
+                .default_someip_application_id_for_someip_subscriptions as u32,
+            1,
+            0,
+        )
+        .expect("Unable to make host_uuri");
+
         // There will be at most one vsomeip_transport, as there is a connection into device and a streamer
         let someip_transport: Arc<dyn UTransport> = Arc::new(
             UPTransportVsomeip::new_with_config(
-                &config.host_config.authority,
+                host_uuri,
                 &config.someip_config.authority,
-                config
-                    .someip_config
-                    .default_someip_application_id_for_someip_subscriptions,
                 &someip_config_file_abs_path,
                 None,
             )

@@ -8,6 +8,17 @@
       // Lower numbers mean that some messages will be dropped
       message_queue_size: 10000
     },
+    streamer_uuri: {
+      // Determines the authority_name of the host device
+      // Used when initializing host transport
+      authority: "linux",
+      // Determines the ue_id of the streamer
+      // Used when initializing host transport
+      ue_id: 78,
+      // Determines the ue_version_major of the streamer
+      // Used when initializing host transport
+      ue_version_major: 1
+    },
     usubscription_config: {
       // Lists the path to the subscription file when using static file
       file_path: "./utils/usubscription-static-file/static-configs/testdata.json"
@@ -20,9 +31,6 @@
     host_config: {
       // Determines which transport to initialize for the host device
       transport: "Zenoh",
-      // Determines the authority_name of the host device
-      // Used when initializing host transport
-      authority: "linux"
     },
     someip_config: {
       // Determines the authority_name of the mechatronics network

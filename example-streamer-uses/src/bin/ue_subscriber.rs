@@ -20,13 +20,27 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::thread;
 use up_rust::{UListener, UMessage, UStatus, UTransport, UUri};
-use up_transport_zenoh::UPClientZenoh;
+use up_transport_zenoh::UPTransportZenoh;
 use zenoh::config::{Config, EndPoint};
 
 const PUB_TOPIC_AUTHORITY: &str = "me_authority";
-const PUB_TOPIC_UE_ID: u16 = 0x5BA0;
+const PUB_TOPIC_UE_ID: u32 = 0x5BA0;
 const PUB_TOPIC_UE_VERSION_MAJOR: u8 = 1;
 const PUB_TOPIC_RESOURCE_ID: u16 = 0x8001;
+
+const SUB_TOPIC_AUTHORITY: &str = "linux";
+const SUB_TOPIC_UE_ID: u32 = 0x5BB0;
+const SUB_TOPIC_UE_VERSION_MAJOR: u8 = 1;
+
+fn subscriber_uuri() -> UUri {
+    UUri::try_from_parts(
+        SUB_TOPIC_AUTHORITY,
+        SUB_TOPIC_UE_ID,
+        SUB_TOPIC_UE_VERSION_MAJOR,
+        0,
+    )
+    .unwrap()
+}
 
 #[allow(dead_code)]
 struct PublishReceiver;
@@ -56,10 +70,6 @@ impl UListener for PublishReceiver {
             }
         };
     }
-
-    async fn on_error(&self, err: UStatus) {
-        println!("ServiceRequestResponder: Encountered an error: {err:?}");
-    }
 }
 
 #[tokio::main]
@@ -70,38 +80,38 @@ async fn main() -> Result<(), UStatus> {
 
     println!("uE_subscriber");
 
-    // TODO: Probably make somewhat configurable?
-    // Create a configuration object
     let mut zenoh_config = Config::default();
 
     if !args.endpoint.is_empty() {
         // Specify the address to listen on using IPv4
-        let ipv4_endpoint = EndPoint::from_str(args.endpoint.as_str());
+        let ipv4_endpoint =
+            EndPoint::from_str(args.endpoint.as_str()).expect("Unable to set endpoint");
 
         // Add the IPv4 endpoint to the Zenoh configuration
         zenoh_config
             .listen
-            .endpoints
-            .push(ipv4_endpoint.expect("FAIL"));
+            .set_endpoints(zenoh::config::ModeDependentValue::Unique(vec![
+                ipv4_endpoint,
+            ]))
+            .expect("Unable to set Zenoh Config");
     }
 
-    // TODO: Add error handling if we fail to create a UPClientZenoh
+    let subscriber_uri: String = (&subscriber_uuri()).into();
     let subscriber: Arc<dyn UTransport> = Arc::new(
-        UPClientZenoh::new(zenoh_config, "linux".to_string())
+        UPTransportZenoh::new(zenoh_config, subscriber_uri)
             .await
             .unwrap(),
     );
 
-    let source_filter = UUri {
-        authority_name: PUB_TOPIC_AUTHORITY.to_string(),
-        ue_id: PUB_TOPIC_UE_ID as u32,
-        ue_version_major: PUB_TOPIC_UE_VERSION_MAJOR as u32,
-        resource_id: PUB_TOPIC_RESOURCE_ID as u32,
-        ..Default::default()
-    };
+    let source_filter = UUri::try_from_parts(
+        PUB_TOPIC_AUTHORITY,
+        PUB_TOPIC_UE_ID,
+        PUB_TOPIC_UE_VERSION_MAJOR,
+        PUB_TOPIC_RESOURCE_ID,
+    )
+    .unwrap();
 
     let publish_receiver: Arc<dyn UListener> = Arc::new(PublishReceiver);
-    // TODO: Need to revisit how the vsomeip config file is used in non point-to-point cases
     subscriber
         .register_listener(&source_filter, None, publish_receiver.clone())
         .await?;

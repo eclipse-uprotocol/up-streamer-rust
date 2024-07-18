@@ -22,19 +22,20 @@ use crate::config::HostTransport;
 use async_std::task;
 use config::Config;
 use std::env;
+use std::str::FromStr;
 use std::sync::{
     atomic::{AtomicBool, Ordering::Relaxed},
     Arc, Mutex,
 };
 use std::time::Duration;
 use tracing::trace;
-use up_rust::UTransport;
+use up_rust::{UTransport, UUri};
 use up_streamer::{Endpoint, UStreamer};
 use up_transport_vsomeip::UPTransportVsomeip;
-use up_transport_zenoh::UPClientZenoh;
+use up_transport_zenoh::UPTransportZenoh;
 use usubscription_static_file::USubscriptionStaticFile;
-use zenoh::plugins::{RunningPluginTrait, ZenohPlugin};
-use zenoh::runtime::Runtime;
+use zenoh::internal::plugins::{RunningPluginTrait, ZenohPlugin};
+use zenoh::internal::runtime::Runtime;
 use zenoh_core::zlock;
 use zenoh_plugin_trait::{plugin_long_version, plugin_version, Plugin, PluginControl};
 use zenoh_result::{zerror, ZResult};
@@ -49,7 +50,7 @@ zenoh_plugin_trait::declare_plugin!(UpLinuxStreamerPlugin);
 impl ZenohPlugin for UpLinuxStreamerPlugin {}
 impl Plugin for UpLinuxStreamerPlugin {
     type StartArgs = Runtime;
-    type Instance = zenoh::plugins::RunningPlugin;
+    type Instance = zenoh::internal::plugins::RunningPlugin;
 
     // A mandatory const to define, in case of the plugin is built as a standalone executable
     const DEFAULT_NAME: &'static str = "up_linux_streamer";
@@ -145,17 +146,32 @@ async fn run(runtime: Runtime, config: Config, flag: Arc<AtomicBool>) {
         Err(error) => panic!("Failed to create uStreamer: {}", error),
     };
 
+    let streamer_uuri = UUri::try_from_parts(
+        &config.streamer_uuri.authority,
+        config.streamer_uuri.ue_id,
+        config.streamer_uuri.ue_version_major,
+        0,
+    )
+    .expect("Unable to form streamer_uuri");
+
+    trace!("streamer_uuri: {streamer_uuri:#?}");
+    let streamer_uri: String = (&streamer_uuri).into();
+    // TODO: Remove this once the error reporting from UPTransportZenoh no longer "hides"
+    // the underlying reason for the failure on converting uri -> UUri
+    trace!("streamer_uri: {streamer_uri}");
+    let _zenoh_internal_uuri = UUri::from_str(&streamer_uri).map_err(|e| {
+        let msg = format!("Unable to transform the uri to UUri, e: {e:?}");
+        panic!("{msg}");
+    });
     let host_transport: Arc<dyn UTransport> = Arc::new(match config.host_config.transport {
-        HostTransport::Zenoh => {
-            UPClientZenoh::new_with_runtime(runtime.clone(), config.host_config.authority.clone())
-                .await
-                .expect("Unable to initialize Zenoh UTransport")
-        } // other host transports can be added here as they become available
+        HostTransport::Zenoh => UPTransportZenoh::new_with_runtime(runtime.clone(), streamer_uri)
+            .await
+            .expect("Unable to initialize Zenoh UTransport"), // other host transports can be added here as they become available
     });
 
     let host_endpoint = Endpoint::new(
         "host_endpoint",
-        &config.host_config.authority,
+        &config.streamer_uuri.authority,
         host_transport.clone(),
     );
 
@@ -174,14 +190,21 @@ async fn run(runtime: Runtime, config: Config, flag: Arc<AtomicBool>) {
             );
         }
 
+        let host_uuri = UUri::try_from_parts(
+            &config.streamer_uuri.authority,
+            config
+                .someip_config
+                .default_someip_application_id_for_someip_subscriptions as u32,
+            1,
+            0,
+        )
+        .expect("Unable to make host_uuri");
+
         // There will be at most one vsomeip_transport, as there is a connection into device and a streamer
         let someip_transport: Arc<dyn UTransport> = Arc::new(
             UPTransportVsomeip::new_with_config(
-                &config.host_config.authority,
+                host_uuri,
                 &config.someip_config.authority,
-                config
-                    .someip_config
-                    .default_someip_application_id_for_someip_subscriptions,
                 &someip_config_file_abs_path,
                 None,
             )

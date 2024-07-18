@@ -23,18 +23,22 @@ use up_rust::{UListener, UMessage, UMessageBuilder, UStatus, UTransport, UUri};
 use up_transport_vsomeip::UPTransportVsomeip;
 
 const SERVICE_AUTHORITY: &str = "linux";
-const SERVICE_UE_ID: u16 = 0x1236;
+const SERVICE_UE_ID: u32 = 0x1236;
 const SERVICE_UE_VERSION_MAJOR: u8 = 1;
 const SERVICE_RESOURCE_ID: u16 = 0x0896;
 
 const CLIENT_AUTHORITY: &str = "me_authority";
-const CLIENT_UE_ID: u16 = 0x5678;
+const CLIENT_UE_ID: u32 = 0x5678;
 const CLIENT_UE_VERSION_MAJOR: u8 = 1;
 const CLIENT_RESOURCE_ID: u16 = 0;
 
 const REQUEST_TTL: u32 = 1000;
 
 const REMOTE_AUTHORITY: &str = "linux";
+
+fn client_uuri() -> UUri {
+    UUri::try_from_parts(CLIENT_AUTHORITY, CLIENT_UE_ID, CLIENT_UE_VERSION_MAJOR, 0).unwrap()
+}
 
 struct ServiceResponseListener;
 
@@ -52,10 +56,6 @@ impl UListener for ServiceResponseListener {
         };
 
         println!("Here we received response: {hello_response:?}");
-    }
-
-    async fn on_error(&self, err: UStatus) {
-        println!("ServiceResponseListener: Encountered an error: {err:?}");
     }
 }
 
@@ -75,29 +75,28 @@ async fn main() -> Result<(), UStatus> {
     // TODO: Add error handling if we fail to create a UPTransportVsomeip
     let client: Arc<dyn UTransport> = Arc::new(
         UPTransportVsomeip::new_with_config(
-            &CLIENT_AUTHORITY.to_string(),
+            client_uuri(),
             &REMOTE_AUTHORITY.to_string(),
-            CLIENT_UE_ID,
             &vsomeip_config.unwrap(),
             None,
         )
         .unwrap(),
     );
 
-    let source = UUri {
-        authority_name: CLIENT_AUTHORITY.to_string(),
-        ue_id: CLIENT_UE_ID as u32,
-        ue_version_major: CLIENT_UE_VERSION_MAJOR as u32,
-        resource_id: CLIENT_RESOURCE_ID as u32,
-        ..Default::default()
-    };
-    let sink = UUri {
-        authority_name: SERVICE_AUTHORITY.to_string(),
-        ue_id: SERVICE_UE_ID as u32,
-        ue_version_major: SERVICE_UE_VERSION_MAJOR as u32,
-        resource_id: SERVICE_RESOURCE_ID as u32,
-        ..Default::default()
-    };
+    let source = UUri::try_from_parts(
+        CLIENT_AUTHORITY,
+        CLIENT_UE_ID,
+        CLIENT_UE_VERSION_MAJOR,
+        CLIENT_RESOURCE_ID,
+    )
+    .unwrap();
+    let sink = UUri::try_from_parts(
+        SERVICE_AUTHORITY,
+        SERVICE_UE_ID,
+        SERVICE_UE_VERSION_MAJOR,
+        SERVICE_RESOURCE_ID,
+    )
+    .unwrap();
 
     let service_response_listener: Arc<dyn UListener> = Arc::new(ServiceResponseListener);
     client
