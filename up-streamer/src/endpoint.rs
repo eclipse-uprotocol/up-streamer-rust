@@ -32,7 +32,7 @@ const ENDPOINT_FN_NEW_TAG: &str = "new():";
 ///
 /// # pub mod up_client_foo {
 /// #     use std::sync::Arc;
-/// #     use up_rust::{UMessage, UTransport, UStatus, UUIDBuilder, UUri, UListener};
+/// #     use up_rust::{UMessage, UTransport, UStatus, UUri, UListener};
 /// #     use async_trait::async_trait;
 /// #     pub struct UPClientFoo;
 /// #

@@ -34,8 +34,7 @@ prost = { version = "0.12" }
 prost-types = { version = "0.12" }
 serde_json = { version = "1.0.111" }
 uuid = { version = "1.7.0" }
-up-rust = { default-features = false, git = "https://github.com/eclipse-uprotocol/up-rust", rev = "f5248a89cf1db6232f463ee3ce7b1cb20d79cfdb" }
-
+up-rust = { version = "0.1", default-features = false }
 
 [profile.dev]
 debug = true

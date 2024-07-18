@@ -21,7 +21,7 @@ use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 use std::ops::Deref;
 use std::thread;
-use up_rust::{UCode, UListener, UMessage, UStatus, UTransport, UUIDBuilder, UUri};
+use up_rust::{UCode, UListener, UMessage, UStatus, UTransport, UUri, UUID};
 
 const USTREAMER_TAG: &str = "UStreamer:";
 const USTREAMER_FN_NEW_TAG: &str = "new():";
@@ -235,7 +235,7 @@ impl ForwardingListeners {
 /// # pub mod up_client_foo {
 /// #     use std::sync::Arc;
 /// use async_trait::async_trait;
-/// #     use up_rust::{UListener, UMessage, UStatus, UUIDBuilder, UUri};
+/// #     use up_rust::{UListener, UMessage, UStatus, UUri};
 /// #     use up_rust::UTransport;
 /// #
 /// #     pub struct UPClientFoo;
@@ -287,7 +287,7 @@ impl ForwardingListeners {
 /// # pub mod up_client_bar {
 /// #     use std::sync::Arc;
 /// #     use async_trait::async_trait;
-/// #     use up_rust::{UListener, UMessage, UStatus, UTransport, UUIDBuilder, UUri};
+/// #     use up_rust::{UListener, UMessage, UStatus, UTransport, UUri};
 /// #     pub struct UPClientBar;
 /// #
 /// #     #[async_trait]
@@ -641,7 +641,7 @@ impl TransportForwarder {
         let message_receiver_clone = message_receiver.clone();
         thread::spawn(|| {
             task::block_on(Self::message_forwarding_loop(
-                UUIDBuilder::build().to_hyphenated_string(),
+                UUID::build().to_hyphenated_string(),
                 out_transport_clone,
                 message_receiver_clone,
             ))
@@ -685,7 +685,6 @@ impl TransportForwarder {
 
 const FORWARDING_LISTENER_TAG: &str = "ForwardingListener:";
 const FORWARDING_LISTENER_FN_ON_RECEIVE_TAG: &str = "on_receive():";
-const FORWARDING_LISTENER_FN_ON_ERROR_TAG: &str = "on_error():";
 
 #[derive(Clone)]
 pub(crate) struct ForwardingListener {
@@ -712,19 +711,16 @@ impl UListener for ForwardingListener {
             FORWARDING_LISTENER_FN_ON_RECEIVE_TAG,
             &msg
         );
+
+        // TODO: Discuss on what error cases there are to handle and for what types of messages
+        //  e.g. only Responses?
+
         if let Err(e) = self.sender.send(Arc::new(msg)).await {
             error!(
                 "{}:{}:{} Unable to send message to worker pool: {e:?}",
                 self.forwarding_id, FORWARDING_LISTENER_TAG, FORWARDING_LISTENER_FN_ON_RECEIVE_TAG,
             );
         }
-    }
-
-    async fn on_error(&self, err: UStatus) {
-        error!(
-            "{}:{}:{} Received error instead of message from UTransport, with error: {err:?}",
-            self.forwarding_id, FORWARDING_LISTENER_TAG, FORWARDING_LISTENER_FN_ON_ERROR_TAG
-        );
     }
 }
 
