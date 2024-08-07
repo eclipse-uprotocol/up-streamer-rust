@@ -27,7 +27,6 @@ async-trait = { workspace = true }
 env_logger = { workspace = true }
 futures = { workspace = true }
 log = { workspace = true }
-prost = { workspace = true }
 uuid = { workspace = true }
 serde_json = { workspace = true }
 up-rust = { workspace = true }
@@ -35,4 +34,4 @@ up-rust = { workspace = true }
 [dev-dependencies]
 async-broadcast = { version = "0.7.0" }
 chrono = { version = "0.4.31", features = [] }
-integration-test-utils = { path = "../example-utils/integration-test-utils" }
+integration-test-utils = { path = "../utils/integration-test-utils" }
