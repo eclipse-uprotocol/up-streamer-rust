@@ -21,7 +21,7 @@ use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 use std::ops::Deref;
 use std::thread;
-use up_rust::{UCode, UListener, UMessage, UStatus, UTransport, UUIDBuilder, UUri};
+use up_rust::{UCode, UListener, UMessage, UPayloadFormat, UStatus, UTransport, UUIDBuilder, UUri};
 
 const USTREAMER_TAG: &str = "UStreamer:";
 const USTREAMER_FN_NEW_TAG: &str = "new():";
@@ -713,7 +713,7 @@ impl UListener for ForwardingListener {
             &msg
         );
 
-        if msg.attributes.payload_format.enum_value_or_default() == up_rust::UPayloadFormat::UPAYLOAD_FORMAT_SHM {
+        if msg.attributes.payload_format.enum_value_or_default() == UPayloadFormat::UPAYLOAD_FORMAT_SHM {
             debug!(
                 "{}:{}:{} Received message with type UPAYLOAD_FORMAT_SHM, which is not supported. A pointer to shared memory will not be usable on another device. UAttributes: {:#?}",
                 self.forwarding_id,
