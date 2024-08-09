@@ -1,0 +1,23 @@
+[package]
+name = "subscription-cache"
+rust-version.workspace = true
+version.workspace = true
+repository.workspace = true
+homepage.workspace = true
+edition.workspace = true
+keywords.workspace = true
+license.workspace = true
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+async-std = { workspace = true, features = ["unstable"] }
+async-trait = { workspace = true }
+env_logger = { workspace = true }
+futures = { workspace = true }
+log = { workspace = true }
+uuid = { workspace = true }
+serde_json = { workspace = true }
+serde = { workspace = true }
+up-rust = { workspace = true, features = ["usubscription"] }
+protobuf = { version = "3.3", features = ["with-bytes"] }

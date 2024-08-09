@@ -2,7 +2,7 @@ mod config;
 
 use crate::config::{Config, HostTransport};
 use clap::Parser;
-use log::trace;
+use log::{trace, warn};
 use std::fs::File;
 use std::io::Read;
 use std::sync::Arc;
@@ -11,6 +11,7 @@ use up_rust::{UCode, UStatus, UTransport};
 use up_streamer::{Endpoint, UStreamer};
 use up_transport_vsomeip::UPTransportVsomeip;
 use up_transport_zenoh::UPClientZenoh;
+use usubscription_static_file::USubscriptionStaticFile;
 use zenoh::config::Config as ZenohConfig;
 
 #[derive(Parser)]
@@ -43,12 +44,29 @@ async fn main() -> Result<(), UStatus> {
         )
     })?;
 
+    let subscription_path = config.usubscription_config.file_path;
+    let usubscription = Arc::new(USubscriptionStaticFile::new(subscription_path));
+
     let mut streamer = UStreamer::new(
         "up-linux-streamer",
         config.up_streamer_config.message_queue_size,
+        usubscription,
     );
 
-    let zenoh_config = ZenohConfig::default();
+    let zenoh_config = match ZenohConfig::from_file(config.zenoh_transport_config.config_file) {
+        Ok(config) => {
+            trace!("Able to read zenoh config from file");
+            config
+        }
+        Err(error) => {
+            warn!(
+                "Unable to read zenoh config from file, using default: {}",
+                error
+            );
+            ZenohConfig::default()
+        }
+    };
+
     let host_transport: Arc<dyn UTransport> = Arc::new(match config.host_config.transport {
         HostTransport::Zenoh => {
             UPClientZenoh::new(zenoh_config, config.host_config.authority.clone())

@@ -26,6 +26,8 @@ up-streamer = { path = "../up-streamer" }
 up-transport-zenoh = { git = "https://github.com/eclipse-uprotocol/up-transport-zenoh-rust.git", rev = "7c839e7a94f526a82027564a609f48a79a3f4eae" }
 up-transport-vsomeip = { git = "https://github.com/eclipse-uprotocol/up-transport-vsomeip-rust.git", rev = "acbb0d0c9b8b48dd35c74f461e97151f1e922000", default-features = false }
 zenoh = { version = "0.11.0-rc.3", features = ["unstable"]}
+usubscription-static-file = {path = "../utils/usubscription-static-file"}
+chrono = "0.4"
 
 [dev-dependencies]
 hello-world-protos = { path = "../utils/hello-world-protos" }

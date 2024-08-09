@@ -1,0 +1,18 @@
+[package]
+name = "usubscription-static-file"
+rust-version.workspace = true
+version.workspace = true
+repository.workspace = true
+homepage.workspace = true
+edition.workspace = true
+keywords.workspace = true
+license.workspace = true
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+async-std = { workspace = true, features = ["unstable"] }
+async-trait = "0.1.80"
+serde_json = { version = "1.0.111" }
+subscription-cache = {path="../../subscription-cache"}
+up-rust = { workspace = true, features = ["usubscription"] }

@@ -15,8 +15,7 @@ members = [
     "utils/hello-world-protos",
     "utils/integration-test-utils",
     "up-linux-streamer",
-    "up-streamer",
-]
+    "up-streamer", "subscription-cache", "utils/usubscription-static-file"]
 
 [workspace.package]
 rust-version = "1.76.0"
