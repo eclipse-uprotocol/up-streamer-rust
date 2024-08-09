@@ -715,7 +715,7 @@ impl UListener for ForwardingListener {
 
         if msg.attributes.payload_format.enum_value_or_default() == up_rust::UPayloadFormat::UPAYLOAD_FORMAT_SHM {
             debug!(
-                "{}:{}:{} Received message with type UPAYLOAD_FORMAT_SHM, which is not supported: {:#?}",
+                "{}:{}:{} Received message with type UPAYLOAD_FORMAT_SHM, which is not supported. A pointer to shared memory will not be usable on another device. UAttributes: {:#?}",
                 self.forwarding_id,
                 FORWARDING_LISTENER_TAG,
                 FORWARDING_LISTENER_FN_ON_RECEIVE_TAG,
