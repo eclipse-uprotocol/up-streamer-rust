@@ -3485,6 +3485,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "subscription-cache"
+version = "0.1.5-dev"
+dependencies = [
+ "async-std",
+ "async-trait",
+ "env_logger 0.10.2",
+ "futures",
+ "log",
+ "protobuf",
+ "serde",
+ "serde_json",
+ "up-rust",
+ "uuid",
+]
+
+[[package]]
 name = "subtle"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4003,6 +4019,7 @@ name = "up-linux-streamer"
 version = "0.1.5-dev"
 dependencies = [
  "async-trait",
+ "chrono",
  "clap",
  "env_logger 0.10.2",
  "hello-world-protos",
@@ -4015,6 +4032,7 @@ dependencies = [
  "up-streamer",
  "up-transport-vsomeip",
  "up-transport-zenoh",
+ "usubscription-static-file",
  "zenoh",
 ]
 
@@ -4050,8 +4068,11 @@ dependencies = [
  "futures",
  "integration-test-utils",
  "log",
+ "protobuf",
  "serde_json",
+ "subscription-cache",
  "up-rust",
+ "usubscription-static-file",
  "uuid",
 ]
 
@@ -4119,6 +4140,17 @@ dependencies = [
  "form_urlencoded",
  "idna",
  "percent-encoding",
+]
+
+[[package]]
+name = "usubscription-static-file"
+version = "0.1.5-dev"
+dependencies = [
+ "async-std",
+ "async-trait",
+ "serde_json",
+ "subscription-cache",
+ "up-rust",
 ]
 
 [[package]]

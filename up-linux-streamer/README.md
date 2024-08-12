@@ -6,6 +6,8 @@ Concrete implementation of a uStreamer as a binary.
 
 Reference the `DEFAULT_CONFIG.json5` configuration file to understand configuration options.
 
+As well, the `ZENOH_CONFIG.json5` file is used to set Zenoh configurations. By default, it is only used to set listening endpoints, but can be used with more configurations according to [Zenoh's page on it](https://zenoh.io/docs/manual/configuration/#configuration-files).
+
 ### Bundled vsomeip or bring your own
 
 The default is to build a bundled version of vsomeip for use by the `up-transport-vsomeip` crate.

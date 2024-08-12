@@ -16,6 +16,14 @@
       // Used when initializing host transport
       authority: "linux"
     },
+    usubscription_config: {
+      // Lists the path to the subscription file when using static file
+      file_path: "./utils/usubscription-static-file/static-configs/testdata.json"
+    },
+    zenoh_transport_config: {
+      // Configuration file which is where zenoh config information is stored
+      config_file: "./up-linux-streamer/ZENOH_CONFIG.json5"
+    },
     someip_config: {
       // Determines the authority_name of the mechatronics network
       // Used when initializing SOME/IP transport

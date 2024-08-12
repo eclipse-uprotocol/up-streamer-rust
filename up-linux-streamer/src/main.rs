@@ -11,6 +11,7 @@ use up_rust::{UCode, UStatus, UTransport};
 use up_streamer::{Endpoint, UStreamer};
 use up_transport_vsomeip::UPTransportVsomeip;
 use up_transport_zenoh::UPClientZenoh;
+use usubscription_static_file::USubscriptionStaticFile;
 use zenoh::config::Config as ZenohConfig;
 
 #[derive(Parser)]
@@ -43,12 +44,28 @@ async fn main() -> Result<(), UStatus> {
         )
     })?;
 
-    let mut streamer = UStreamer::new(
+    let subscription_path = config.usubscription_config.file_path;
+    let usubscription = Arc::new(USubscriptionStaticFile::new(subscription_path));
+
+    let mut streamer = match UStreamer::new(
         "up-linux-streamer",
         config.up_streamer_config.message_queue_size,
-    );
+        usubscription,
+    ) {
+        Ok(streamer) => streamer,
+        Err(error) => panic!("Failed to create uStreamer: {}", error),
+    };
 
-    let zenoh_config = ZenohConfig::default();
+    let zenoh_config = match ZenohConfig::from_file(config.zenoh_transport_config.config_file) {
+        Ok(config) => {
+            trace!("Able to read zenoh config from file");
+            config
+        }
+        Err(error) => {
+            panic!("Unable to read zenoh config from file: {}", error);
+        }
+    };
+
     let host_transport: Arc<dyn UTransport> = Arc::new(match config.host_config.transport {
         HostTransport::Zenoh => {
             UPClientZenoh::new(zenoh_config, config.host_config.authority.clone())
