@@ -1,5 +1,5 @@
 /********************************************************************************
- * Copyright (c) 2023 Contributors to the Eclipse Foundation
+ * Copyright (c) 2024 Contributors to the Eclipse Foundation
  *
  * See the NOTICE file(s) distributed with this work for additional
  * information regarding copyright ownership.
@@ -11,7 +11,6 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
-// use prost_build::Config;
 use protobuf_codegen::Customize;
 use std::env;
 use std::fs;
@@ -26,7 +25,7 @@ fn main() -> std::io::Result<()> {
             "https://raw.githubusercontent.com/googleapis/googleapis/master/google/type/timeofday.proto",
             "https://raw.githubusercontent.com/eclipse-uprotocol/up-spec/main/up-core-api/uprotocol/uoptions.proto",
             "https://raw.githubusercontent.com/COVESA/uservices/main/src/main/proto/example/hello_world/v1/hello_world_topics.proto",
-            "https://raw.githubusercontent.com/PLeVasseur/uservices/feature/update-uprotocol-options-path/src/main/proto/example/hello_world/v1/hello_world_service.proto",
+            "https://raw.githubusercontent.com/COVESA/uservices/main/src/main/proto/example/hello_world/v1/hello_world_service.proto"
         ],
     "helloworld",
     ) {

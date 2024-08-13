@@ -1,3 +1,16 @@
+/********************************************************************************
+ * Copyright (c) 2024 Contributors to the Eclipse Foundation
+ *
+ * See the NOTICE file(s) distributed with this work for additional
+ * information regarding copyright ownership.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ********************************************************************************/
+
 #![recursion_limit = "256"]
 
 // TODO: Consider if we're ever likely to want to use this _not_ as a Zenoh plugin, in which
@@ -98,7 +111,7 @@ impl RunningPluginTrait for RunningPlugin {
         _new: &serde_json::Map<String, serde_json::Value>,
     ) -> ZResult<Option<serde_json::Map<String, serde_json::Value>>> {
         // TODO: Learn more about how the config_checker is used
-        return Ok(None);
+        Ok(None)
     }
 }
 

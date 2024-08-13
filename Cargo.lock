@@ -1083,6 +1083,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "example-streamer-uses"
+version = "0.1.5-dev"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "clap",
+ "env_logger 0.10.2",
+ "hello-world-protos",
+ "json5",
+ "log",
+ "protobuf",
+ "serde",
+ "tokio",
+ "up-rust",
+ "up-transport-vsomeip",
+ "up-transport-zenoh 0.1.0 (git+https://github.com/eclipse-uprotocol/up-transport-zenoh-rust.git?rev=7c839e7a94f526a82027564a609f48a79a3f4eae)",
+ "zenoh",
+]
+
+[[package]]
 name = "fastrand"
 version = "1.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
