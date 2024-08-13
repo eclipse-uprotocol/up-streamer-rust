@@ -4,9 +4,9 @@ use std::path::PathBuf;
 #[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
+    pub(crate) __required__: bool,
     pub(crate) up_streamer_config: UpStreamerConfig,
     pub(crate) usubscription_config: USubscriptionConfig,
-    pub(crate) zenoh_transport_config: ZenohTransportConfig,
     pub(crate) host_config: HostConfig,
     pub(crate) someip_config: SomeipConfig,
 }
@@ -28,12 +28,6 @@ pub struct USubscriptionConfig {
 pub struct HostConfig {
     pub(crate) transport: HostTransport,
     pub(crate) authority: String,
-}
-
-#[derive(Deserialize, Serialize, Debug, Clone)]
-#[serde(deny_unknown_fields)]
-pub struct ZenohTransportConfig {
-    pub(crate) config_file: String,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]

@@ -14,7 +14,7 @@ resolver = "2"
 members = [
     "utils/hello-world-protos",
     "utils/integration-test-utils",
-    "up-linux-streamer",
+    "up-linux-streamer", "up-linux-streamer-plugin",
     "up-streamer", "subscription-cache", "utils/usubscription-static-file"]
 
 [workspace.package]

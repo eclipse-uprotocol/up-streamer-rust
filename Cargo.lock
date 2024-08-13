@@ -766,6 +766,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "convert_case"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6245d59a3e82a7fc217c5828a6692dbc6dfb63a0c8c90495621f7b9d79704a0e"
+
+[[package]]
 name = "core-foundation"
 version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -905,6 +911,19 @@ dependencies = [
  "const-oid",
  "pem-rfc7468",
  "zeroize",
+]
+
+[[package]]
+name = "derive_more"
+version = "0.99.18"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5f33878137e4dafd7fa914ad4e259e18a4e8e532b9617a2d0150262bf53abfce"
+dependencies = [
+ "convert_case",
+ "proc-macro2",
+ "quote",
+ "rustc_version",
+ "syn 2.0.66",
 ]
 
 [[package]]
@@ -4031,9 +4050,35 @@ dependencies = [
  "up-rust",
  "up-streamer",
  "up-transport-vsomeip",
- "up-transport-zenoh",
+ "up-transport-zenoh 0.1.0 (git+https://github.com/eclipse-uprotocol/up-transport-zenoh-rust.git?rev=7c839e7a94f526a82027564a609f48a79a3f4eae)",
  "usubscription-static-file",
  "zenoh",
+]
+
+[[package]]
+name = "up-linux-streamer-plugin"
+version = "0.1.5-dev"
+dependencies = [
+ "async-std",
+ "const_format",
+ "env_logger 0.10.2",
+ "futures",
+ "git-version",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "up-rust",
+ "up-streamer",
+ "up-transport-vsomeip",
+ "up-transport-zenoh 0.1.0 (git+https://github.com/eclipse-uprotocol/up-transport-zenoh-rust.git?rev=b977153265d22c4bb4bbbc20dea403342b9ab438)",
+ "usubscription-static-file",
+ "zenoh",
+ "zenoh-core",
+ "zenoh-plugin-trait",
+ "zenoh-result",
+ "zenoh-util",
+ "zenoh_backend_traits",
 ]
 
 [[package]]
@@ -4103,6 +4148,28 @@ dependencies = [
 name = "up-transport-zenoh"
 version = "0.1.0"
 source = "git+https://github.com/eclipse-uprotocol/up-transport-zenoh-rust.git?rev=7c839e7a94f526a82027564a609f48a79a3f4eae#7c839e7a94f526a82027564a609f48a79a3f4eae"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "bitmask-enum",
+ "chrono",
+ "crossbeam-channel",
+ "env_logger 0.10.2",
+ "lazy_static",
+ "log",
+ "prost",
+ "prost-types",
+ "protobuf",
+ "rand",
+ "tokio",
+ "up-rust",
+ "zenoh",
+]
+
+[[package]]
+name = "up-transport-zenoh"
+version = "0.1.0"
+source = "git+https://github.com/eclipse-uprotocol/up-transport-zenoh-rust.git?rev=b977153265d22c4bb4bbbc20dea403342b9ab438#b977153265d22c4bb4bbbc20dea403342b9ab438"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5111,6 +5178,24 @@ dependencies = [
  "winapi",
  "zenoh-core",
  "zenoh-result",
+]
+
+[[package]]
+name = "zenoh_backend_traits"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "458b5c151d7e31de67d45f1ba9cc409ddeb762adc7ce35c3c81d9dcad314da97"
+dependencies = [
+ "async-std",
+ "async-trait",
+ "const_format",
+ "derive_more",
+ "schemars",
+ "serde_json",
+ "zenoh",
+ "zenoh-plugin-trait",
+ "zenoh-result",
+ "zenoh-util",
 ]
 
 [[package]]

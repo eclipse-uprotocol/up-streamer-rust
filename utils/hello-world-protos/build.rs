@@ -21,7 +21,6 @@ fn main() -> std::io::Result<()> {
     // use vendored protoc instead of relying on user provided protobuf installation
     env::set_var("PROTOC", protoc_bin_vendored::protoc_bin_path().unwrap());
 
-    // if let Err(err) = get_and_build_protos(
     if let Err(err) = get_and_build_protos(
         &[
             "https://raw.githubusercontent.com/googleapis/googleapis/master/google/type/timeofday.proto",
