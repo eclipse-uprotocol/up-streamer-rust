@@ -10,7 +10,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 [package]
-name = "up-linux-streamer"
+name = "example-streamer-uses"
 rust-version.workspace = true
 version.workspace = true
 repository.workspace = true
@@ -19,26 +19,42 @@ edition.workspace = true
 keywords.workspace = true
 license.workspace = true
 
-[features]
-default = ["bundled-vsomeip"]
-bundled-vsomeip = ["up-transport-vsomeip/bundled"]
+[[bin]]
+name = "me_client"
+
+[[bin]]
+name = "me_publisher"
+
+[[bin]]
+name = "me_service"
+
+[[bin]]
+name = "me_subscriber"
+
+[[bin]]
+name = "ue_client"
+
+[[bin]]
+name = "ue_publisher"
+
+[[bin]]
+name = "ue_service"
+
+[[bin]]
+name = "ue_subscriber"
 
 [dependencies]
 async-trait = { workspace = true }
 chrono = { version = "0.4" }
 clap = { version = "4.5.9", features = ["derive"] }
 env_logger = { version = "0.10.2" }
+hello-world-protos = { path = "../utils/hello-world-protos" }
 log = { workspace = true }
 json5 = { workspace = true }
 protobuf = { workspace = true }
 serde = { workspace = true }
 tokio = { workspace = true }
 up-rust = { workspace = true }
-up-streamer = { path = "../up-streamer" }
 up-transport-zenoh = { git = "https://github.com/eclipse-uprotocol/up-transport-zenoh-rust.git", rev = "7c839e7a94f526a82027564a609f48a79a3f4eae" }
 up-transport-vsomeip = { git = "https://github.com/eclipse-uprotocol/up-transport-vsomeip-rust.git", rev = "acbb0d0c9b8b48dd35c74f461e97151f1e922000", default-features = false }
 zenoh = { version = "0.11.0-rc.3", features = ["unstable"]}
-usubscription-static-file = {path = "../utils/usubscription-static-file"}
-
-[dev-dependencies]
-hello-world-protos = { path = "../utils/hello-world-protos" }

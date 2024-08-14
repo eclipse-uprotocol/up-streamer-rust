@@ -1,0 +1,57 @@
+# Copyright (c) 2024 Contributors to the Eclipse Foundation
+#
+# See the NOTICE file(s) distributed with this work for additional
+# information regarding copyright ownership.
+#
+# This program and the accompanying materials are made available under the
+# terms of the Apache License Version 2.0 which is available at
+# https://www.apache.org/licenses/LICENSE-2.0
+#
+# SPDX-License-Identifier: Apache-2.0
+
+[package]
+name = "up-linux-streamer-plugin"
+rust-version.workspace = true
+version.workspace = true
+repository.workspace = true
+homepage.workspace = true
+edition.workspace = true
+keywords.workspace = true
+license.workspace = true
+
+[features]
+default = ["bundled-vsomeip", "dynamic_plugin", "zenoh/default", "zenoh/unstable", "zenoh/plugins"]
+bundled-vsomeip = ["up-transport-vsomeip/bundled"]
+dynamic_plugin = []
+
+[lib]
+# When auto-detecting the "example" plugin, `zenohd` will look for a dynamic library named "zenoh_plugin_example"
+# `zenohd` will expect the file to be named according to OS conventions:
+#   - libzenoh_plugin_example.so on linux
+#   - libzenoh_plugin_example.dylib on macOS
+#   - zenoh_plugin_example.dll on Windows
+name = "zenoh_plugin_up_linux_streamer"
+# This crate type will make `cargo` output a dynamic library instead of a rust static library
+crate-type = ["cdylib"]
+
+[dependencies]
+async-std = { version = "=1.12.0", default-features = false }
+const_format = "0.2.30"
+futures = { version = "0.3.25" }
+git-version = { version = "0.3.5" }
+tracing = { version = "0.1" }
+serde = { version = "1.0.154" }
+serde_json = { version = "1.0.94" }
+tokio = { version = "1.35.1", default-features = false }
+up-rust = { git = "https://github.com/eclipse-uprotocol/up-rust", rev = "3a50104421a801d52e1d9c68979db54c013ce43d" }
+up-transport-zenoh = { git = "https://github.com/eclipse-uprotocol/up-transport-zenoh-rust.git", rev = "b977153265d22c4bb4bbbc20dea403342b9ab438" }
+up-transport-vsomeip = { git = "https://github.com/eclipse-uprotocol/up-transport-vsomeip-rust.git", rev = "acbb0d0c9b8b48dd35c74f461e97151f1e922000", default-features = false }
+up-streamer = { path = "../up-streamer" }
+usubscription-static-file = {path = "../utils/usubscription-static-file"}
+zenoh = { version = "0.11.0-rc.3", features = ["plugins", "unstable"] }
+zenoh-core = { version = "0.11.0-rc.3" }
+zenoh-plugin-trait = { version = "0.11.0-rc.3" }
+zenoh-result = { version = "0.11.0-rc.3" }
+zenoh-util = { version = "0.11.0-rc.3" }
+zenoh_backend_traits = { version = "0.11.0-rc.3" }
+env_logger = "0.10.2"

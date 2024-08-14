@@ -1,0 +1,51 @@
+////
+//// This file presents the default configuration used by both the `up-linux-streamer-plugin` plugin.
+//// The "up_linux_streamer" JSON5 object below can be used as such in the "plugins" part of a config file for the zenoh router (zenohd).
+////
+{
+  plugins: {
+    up_linux_streamer: {
+      // Should be left as true -- enforces that if the plugin .so cannot be found
+      // zenohd will panic and crash
+      __required__: true,
+      up_streamer_config: {
+        // The message queue size of each route between endpoints within the UStreamer
+        // Lower numbers mean that some messages will be dropped
+        message_queue_size: 10000
+      },
+      usubscription_config: {
+        // Lists the path to the subscription file when using static file
+        file_path: "usubscription-static-configs/testdata.json"
+      },
+      // Configurations related to the host device we are running the streamer on
+      host_config: {
+        // Determines which transport to initialize for the host device
+        transport: "Zenoh",
+        // Determines the authority_name of the host device
+        // Used when initializing host transport
+        authority: "linux"
+      },
+      someip_config: {
+        // Determines the authority_name of the mechatronics network
+        // Used when initializing SOME/IP transport
+        authority: "me_authority",
+        // The vsomeip configuration file to be used when initializing the vsomeip transport
+        //
+        // Some guidance:
+        //   * each uEntity (uE) present on the host device should be listed in this file
+        //     * this is needed to ensure that messages from the host are able to have an
+        //       appropriate SOME/IP client_id when interacting with the mechatronics network
+        //   * the `name` field does not matter, but could be used to reflect what a uE is generally
+        //     called
+        //   * the `id` field should be chosen such that it matches the ue_id of the uE on the host
+        //     device
+        config_file: "vsomeip-configs/point_to_point.json",
+        // An ID to use for a vsomeip application which will represent all subscriptions to
+        // publish messages output over vsomeip
+        default_someip_application_id_for_someip_subscriptions: 10,
+        // Whether to enable bridging across to the mechatronics network
+        enabled: true
+      },
+    }
+  }
+}
