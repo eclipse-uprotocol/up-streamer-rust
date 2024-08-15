@@ -26,7 +26,9 @@ use std::ops::Deref;
 use std::str;
 use std::thread;
 use subscription_cache::SubscriptionCache;
-use up_rust::core::usubscription::{FetchSubscriptionsRequest, SubscriberInfo, USubscription};
+use up_rust::core::usubscription::{
+    FetchSubscriptionsRequest, NotificationsRequest, SubscriberInfo, USubscription,
+};
 use up_rust::{UCode, UListener, UMessage, UPayloadFormat, UStatus, UTransport, UUIDBuilder, UUri};
 
 const USTREAMER_TAG: &str = "UStreamer:";
@@ -591,9 +593,28 @@ impl UStreamer {
             ..Default::default()
         };
 
-        // TODO: Create a NotificationsRequest and send over host transport
+        let notification_request = NotificationsRequest {
+            topic: Some(uuri).into(),
+            ..Default::default()
+        };
 
-        // TODO: We need to form a FetchSubscriptionsRequest and send over host transport
+        if let Ok(notification_response) =
+            task::block_on(usubscription.register_for_notifications(notification_request))
+        {
+            debug!(
+                "{}:{}:{} NotificationsResponse: {:?}",
+                name, USTREAMER_TAG, USTREAMER_FN_NEW_TAG, notification_response
+            );
+        } else {
+            return Err(UStatus::fail_with_code(
+                UCode::INVALID_ARGUMENT,
+                format!(
+                    "{}:{}:{} Unable to fetch notifications",
+                    name, USTREAMER_TAG, USTREAMER_FN_NEW_TAG
+                ),
+            ));
+        }
+
         let mut fetch_request = FetchSubscriptionsRequest {
             request: None,
             offset: None,
