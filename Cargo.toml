@@ -38,9 +38,9 @@ json5 = { version =  "0.4.1" }
 serde = { version = "1.0.154", features = ["derive"] }
 serde_json = { version = "1.0.94" }
 uuid = { version = "1.7.0" }
-up-rust = { default-features = false, git = "https://github.com/eclipse-uprotocol/up-rust", rev = "3a50104421a801d52e1d9c68979db54c013ce43d" }
 tokio = { version = "1.35.1", default-features = false }
 protobuf = { version = "3.3", features = ["with-bytes"] }
+up-rust = { version = "0.1.5", default-features = false }
 
 [profile.dev]
 debug = true

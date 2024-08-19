@@ -19,6 +19,7 @@ use std::path::PathBuf;
 pub struct Config {
     pub(crate) __required__: bool,
     pub(crate) up_streamer_config: UpStreamerConfig,
+    pub(crate) streamer_uuri: StreamerUuri,
     pub(crate) usubscription_config: USubscriptionConfig,
     pub(crate) host_config: HostConfig,
     pub(crate) someip_config: SomeipConfig,
@@ -32,6 +33,14 @@ pub struct UpStreamerConfig {
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(deny_unknown_fields)]
+pub struct StreamerUuri {
+    pub(crate) authority: String,
+    pub(crate) ue_id: u32,
+    pub(crate) ue_version_major: u8,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct USubscriptionConfig {
     pub(crate) file_path: String,
 }
@@ -40,7 +49,6 @@ pub struct USubscriptionConfig {
 #[serde(deny_unknown_fields)]
 pub struct HostConfig {
     pub(crate) transport: HostTransport,
-    pub(crate) authority: String,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]

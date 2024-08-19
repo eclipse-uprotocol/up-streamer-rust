@@ -24,11 +24,21 @@ use up_rust::{UMessageBuilder, UStatus, UTransport, UUri};
 use up_transport_vsomeip::UPTransportVsomeip;
 
 const PUB_TOPIC_AUTHORITY: &str = "me_authority";
-const PUB_TOPIC_UE_ID: u16 = 0x5BA0;
+const PUB_TOPIC_UE_ID: u32 = 0x5BA0;
 const PUB_TOPIC_UE_VERSION_MAJOR: u8 = 1;
 const PUB_TOPIC_RESOURCE_ID: u16 = 0x8001;
 
 const REMOTE_AUTHORITY: &str = "linux";
+
+fn publisher_uuri() -> UUri {
+    UUri::try_from_parts(
+        PUB_TOPIC_AUTHORITY,
+        PUB_TOPIC_UE_ID,
+        PUB_TOPIC_UE_VERSION_MAJOR,
+        0,
+    )
+    .unwrap()
+}
 
 #[tokio::main]
 async fn main() -> Result<(), UStatus> {
@@ -43,25 +53,23 @@ async fn main() -> Result<(), UStatus> {
     trace!("vsomeip_config: {vsomeip_config:?}");
 
     // There will be a single vsomeip_transport, as there is a connection into device and a streamer
-    // TODO: Add error handling if we fail to create a UPTransportVsomeip
     let publisher: Arc<dyn UTransport> = Arc::new(
         UPTransportVsomeip::new_with_config(
-            &PUB_TOPIC_AUTHORITY.to_string(),
+            publisher_uuri(),
             &REMOTE_AUTHORITY.to_string(),
-            PUB_TOPIC_UE_ID,
             &vsomeip_config.unwrap(),
             None,
         )
         .unwrap(),
     );
 
-    let source = UUri {
-        authority_name: PUB_TOPIC_AUTHORITY.to_string(),
-        ue_id: PUB_TOPIC_UE_ID as u32,
-        ue_version_major: PUB_TOPIC_UE_VERSION_MAJOR as u32,
-        resource_id: PUB_TOPIC_RESOURCE_ID as u32,
-        ..Default::default()
-    };
+    let source = UUri::try_from_parts(
+        PUB_TOPIC_AUTHORITY,
+        PUB_TOPIC_UE_ID,
+        PUB_TOPIC_UE_VERSION_MAJOR,
+        PUB_TOPIC_RESOURCE_ID,
+    )
+    .unwrap();
 
     loop {
         tokio::time::sleep(Duration::from_millis(1000)).await;
