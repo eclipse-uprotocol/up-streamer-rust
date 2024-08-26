@@ -20,7 +20,7 @@ members = [
 
 [workspace.package]
 rust-version = "1.76.0"
-version = "0.1.5-dev" # uProtocol version
+version = "0.1.0"
 repository = "https://github.com/eclipse-uprotocol/up-streamer-rust"
 homepage = "https://github.com/eclipse-uprotocol"
 edition = "2021"

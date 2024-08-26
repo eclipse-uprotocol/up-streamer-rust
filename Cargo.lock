@@ -1154,7 +1154,7 @@ dependencies = [
 
 [[package]]
 name = "example-streamer-uses"
-version = "0.1.5-dev"
+version = "0.1.0"
 dependencies = [
  "async-trait",
  "chrono",
@@ -1721,7 +1721,7 @@ dependencies = [
 
 [[package]]
 name = "integration-test-utils"
-version = "0.1.5-dev"
+version = "0.1.0"
 dependencies = [
  "async-broadcast",
  "async-std",
@@ -3570,7 +3570,7 @@ dependencies = [
 
 [[package]]
 name = "subscription-cache"
-version = "0.1.5-dev"
+version = "0.1.0"
 dependencies = [
  "async-std",
  "async-trait",
@@ -4114,7 +4114,7 @@ dependencies = [
 
 [[package]]
 name = "up-linux-streamer"
-version = "0.1.5-dev"
+version = "0.1.0"
 dependencies = [
  "async-trait",
  "chrono",
@@ -4136,7 +4136,7 @@ dependencies = [
 
 [[package]]
 name = "up-linux-streamer-plugin"
-version = "0.1.5-dev"
+version = "0.1.0"
 dependencies = [
  "async-std",
  "const_format",
@@ -4182,7 +4182,7 @@ dependencies = [
 
 [[package]]
 name = "up-streamer"
-version = "0.1.5-dev"
+version = "0.1.0"
 dependencies = [
  "async-broadcast",
  "async-std",
@@ -4271,7 +4271,7 @@ dependencies = [
 
 [[package]]
 name = "usubscription-static-file"
-version = "0.1.5-dev"
+version = "0.1.0"
 dependencies = [
  "async-std",
  "async-trait",
