@@ -1,5 +1,7 @@
 # up-linux-streamer-plugin
 
+_Note_: Currently not usable. Must be updated to use tokio instead of async-std.
+
 ## The Concept
 
 ```mermaid

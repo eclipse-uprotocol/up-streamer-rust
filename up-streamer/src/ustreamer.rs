@@ -12,10 +12,8 @@
  ********************************************************************************/
 
 use crate::endpoint::Endpoint;
-use async_std::channel::{Receiver, Sender};
-use async_std::sync::{Arc, Mutex};
-use async_std::{channel, task};
 use async_trait::async_trait;
+use lazy_static::lazy_static;
 use log::*;
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
@@ -24,8 +22,14 @@ use std::fmt::{Debug, Display, Formatter};
 use std::hash::{Hash, Hasher};
 use std::ops::Deref;
 use std::str;
+use std::sync::Arc;
 use std::thread;
 use subscription_cache::SubscriptionCache;
+use tokio::runtime::Builder;
+use tokio::runtime::Runtime;
+use tokio::sync::broadcast::{Receiver, Sender};
+use tokio::sync::Mutex;
+use tokio::task;
 use up_rust::core::usubscription::{FetchSubscriptionsRequest, SubscriberInfo, USubscription};
 use up_rust::{UCode, UListener, UMessage, UPayloadFormat, UStatus, UTransport, UUri, UUID};
 
@@ -34,19 +38,20 @@ const USTREAMER_FN_NEW_TAG: &str = "new():";
 const USTREAMER_FN_ADD_FORWARDING_RULE_TAG: &str = "add_forwarding_rule():";
 const USTREAMER_FN_DELETE_FORWARDING_RULE_TAG: &str = "delete_forwarding_rule():";
 
+const THREAD_NUM: usize = 10;
+
+// Create a separate tokio Runtime for running the callback
+lazy_static! {
+    static ref CB_RUNTIME: Runtime = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(THREAD_NUM)
+        .enable_all()
+        .build()
+        .expect("Unable to create callback runtime");
+}
+
 fn uauthority_to_uuri(authority_name: &str) -> UUri {
     UUri {
         authority_name: authority_name.to_string(),
-        ue_id: 0x0000_FFFF,     // any instance, any service
-        ue_version_major: 0xFF, // any
-        resource_id: 0xFFFF,    // any
-        ..Default::default()
-    }
-}
-
-fn any_uuri() -> UUri {
-    UUri {
-        authority_name: "*".to_string(),
         ue_id: 0x0000_FFFF,     // any instance, any service
         ue_version_major: 0xFF, // any
         resource_id: 0xFFFF,    // any
@@ -128,7 +133,7 @@ impl TransportForwarders {
                 debug!(
                     "{TRANSPORT_FORWARDERS_TAG}:{TRANSPORT_FORWARDERS_FN_INSERT_TAG} Inserting..."
                 );
-                let (tx, rx) = channel::bounded(self.message_queue_size);
+                let (tx, rx) = tokio::sync::broadcast::channel(self.message_queue_size);
                 (0, Arc::new(TransportForwarder::new(out_transport, rx)), tx)
             });
         *active += 1;
@@ -213,10 +218,10 @@ impl ForwardingListeners {
 
         // Perform async registration and fetching
 
-        uuris_to_backpedal.insert((any_uuri(), Some(uauthority_to_uuri(out_authority))));
+        uuris_to_backpedal.insert((UUri::any(), Some(uauthority_to_uuri(out_authority))));
         if let Err(err) = in_transport
             .register_listener(
-                &any_uuri(),
+                &UUri::any(),
                 Some(&uauthority_to_uuri(out_authority)),
                 forwarding_listener.clone(),
             )
@@ -329,11 +334,13 @@ impl ForwardingListeners {
             warn!("{FORWARDING_LISTENERS_TAG}:{FORWARDING_LISTENERS_FN_REMOVE_TAG} removing ForwardingListener, out_authority: {out_authority:?}");
             if let Some((_, forwarding_listener)) = removed {
                 warn!("ForwardingListeners::remove: ForwardingListener found we can remove, out_authority: {out_authority:?}");
-                let unreg_res = task::block_on(in_transport.unregister_listener(
-                    &uauthority_to_uuri(out_authority),
-                    Some(&any_uuri()),
-                    forwarding_listener,
-                ));
+                let unreg_res = in_transport
+                    .unregister_listener(
+                        &uauthority_to_uuri(out_authority),
+                        Some(&UUri::any()),
+                        forwarding_listener,
+                    )
+                    .await;
 
                 if let Err(err) = unreg_res {
                     warn!("{FORWARDING_LISTENERS_TAG}:{FORWARDING_LISTENERS_FN_REMOVE_TAG} unable to unregister listener, error: {err}");
@@ -360,7 +367,7 @@ impl ForwardingListeners {
 /// use usubscription_static_file::USubscriptionStaticFile;
 /// use std::sync::Arc;
 /// use std::path::PathBuf;
-/// use async_std::sync::Mutex;
+/// use tokio::sync::Mutex;
 /// use up_rust::{UListener, UTransport};
 /// use up_streamer::{Endpoint, UStreamer};
 /// # pub mod up_client_foo {
@@ -600,8 +607,11 @@ impl UStreamer {
             ..Default::default()
         };
         fetch_request.set_subscriber(subscriber_info);
-        let subscriptions = task::block_on(usubscription.fetch_subscriptions(fetch_request))
-            .expect("Failed to fetch subscriptions");
+        let subscriptions = task::block_in_place(|| {
+            CB_RUNTIME
+                .block_on(usubscription.fetch_subscriptions(fetch_request))
+                .expect("Failed to fetch subscriptions")
+        });
 
         let subscription_cache_result = SubscriptionCache::new(subscriptions);
 
@@ -842,14 +852,25 @@ pub(crate) struct TransportForwarder {}
 impl TransportForwarder {
     fn new(out_transport: Arc<dyn UTransport>, message_receiver: Receiver<Arc<UMessage>>) -> Self {
         let out_transport_clone = out_transport.clone();
-        let message_receiver_clone = message_receiver.clone();
+        let message_receiver_clone = message_receiver.resubscribe();
 
         thread::spawn(|| {
-            task::block_on(Self::message_forwarding_loop(
-                UUID::build().to_hyphenated_string(),
-                out_transport_clone,
-                message_receiver_clone,
-            ))
+            // Create a new single-threaded runtime
+            let runtime = Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .expect("Failed to create Tokio runtime");
+
+            runtime.block_on(async move {
+                trace!("Within blocked runtime");
+                Self::message_forwarding_loop(
+                    UUID::build().to_hyphenated_string(),
+                    out_transport_clone,
+                    message_receiver_clone,
+                )
+                .await;
+                info!("Broke out of loop! You probably dropped the UPClientVsomeip");
+            });
         });
 
         Self {}
@@ -858,7 +879,7 @@ impl TransportForwarder {
     async fn message_forwarding_loop(
         id: String,
         out_transport: Arc<dyn UTransport>,
-        message_receiver: Receiver<Arc<UMessage>>,
+        mut message_receiver: Receiver<Arc<UMessage>>,
     ) {
         while let Ok(msg) = message_receiver.recv().await {
             debug!(
@@ -930,7 +951,7 @@ impl UListener for ForwardingListener {
             );
             return;
         }
-        if let Err(e) = self.sender.send(Arc::new(msg)).await {
+        if let Err(e) = self.sender.send(Arc::new(msg)) {
             error!(
                 "{}:{}:{} Unable to send message to worker pool: {e:?}",
                 self.forwarding_id, FORWARDING_LISTENER_TAG, FORWARDING_LISTENER_FN_ON_RECEIVE_TAG,
@@ -1033,7 +1054,7 @@ mod tests {
         }
     }
 
-    #[async_std::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_simple_with_a_single_input_and_output_endpoint() {
         // Local endpoint
         let local_authority = "local";
@@ -1102,7 +1123,7 @@ mod tests {
             .is_err());
     }
 
-    #[async_std::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_advanced_where_there_is_a_local_endpoint_and_two_remote_endpoints() {
         // Local endpoint
         let local_authority = "local";
@@ -1167,7 +1188,7 @@ mod tests {
             .is_ok());
     }
 
-    #[async_std::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_advanced_where_there_is_a_local_endpoint_and_two_remote_endpoints_but_the_remote_endpoints_have_the_same_instance_of_utransport(
     ) {
         // Local endpoint

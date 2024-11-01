@@ -17,7 +17,7 @@ use up_rust::{UCode, UStatus, UTransport};
 use up_streamer::{Endpoint, UStreamer};
 use usubscription_static_file::USubscriptionStaticFile;
 
-#[async_std::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn usubscription_bad_data() {
     let utransport_foo: Arc<dyn UTransport> =
         Arc::new(UPClientFailingRegister::new("upclient_foo").await);

@@ -12,14 +12,14 @@
  ********************************************************************************/
 
 use async_broadcast::{Receiver, Sender};
-use async_std::sync::Mutex;
-use async_std::task;
 use async_trait::async_trait;
 use log::{debug, error};
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::thread;
+use tokio::runtime::Builder;
+use tokio::sync::Mutex;
 use up_rust::{
     ComparableListener, UAttributes, UCode, UListener, UMessage, UMessageType, UStatus, UTransport,
     UUri,
@@ -70,7 +70,13 @@ impl UPClientFoo {
         let authority_listeners = self.authority_listeners.clone();
         let times_received = self.times_received.clone();
         thread::spawn(move || {
-            task::block_on(async {
+            // Create a new single-threaded runtime
+            let runtime = Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .expect("Failed to create Tokio runtime");
+
+            runtime.block_on(async move {
                 while let Ok(received) = protocol_receiver.recv().await {
                     match &received {
                         Ok(msg) => {

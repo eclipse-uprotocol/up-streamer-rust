@@ -35,7 +35,7 @@ struct StreamerArgs {
     config: String,
 }
 
-#[tokio::main]
+#[tokio::main(flavor = "multi_thread")]
 async fn main() -> Result<(), UStatus> {
     env_logger::init();
 

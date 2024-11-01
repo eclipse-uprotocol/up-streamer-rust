@@ -90,9 +90,8 @@ async fn main() -> Result<(), UStatus> {
         // Add the IPv4 endpoint to the Zenoh configuration
         zenoh_config
             .listen
-            .set_endpoints(zenoh::config::ModeDependentValue::Unique(vec![
-                ipv4_endpoint,
-            ]))
+            .endpoints
+            .set(vec![ipv4_endpoint])
             .expect("Unable to set Zenoh Config");
     }
 
