@@ -10,7 +10,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 [package]
-name = "example-streamer-uses"
+name = "up-linux-streamer-mqtt-zenoh"
 rust-version.workspace = true
 version.workspace = true
 repository.workspace = true
@@ -19,46 +19,23 @@ edition.workspace = true
 keywords.workspace = true
 license.workspace = true
 
-[[bin]]
-name = "mqtt_client"
-
-[[bin]]
-name = "someip_client"
-
-[[bin]]
-name = "someip_publisher"
-
-[[bin]]
-name = "someip_service"
-
-[[bin]]
-name = "someip_subscriber"
-
-[[bin]]
-name = "zenoh_client"
-
-[[bin]]
-name = "zenoh_publisher"
-
-[[bin]]
-name = "zenoh_service"
-
-[[bin]]
-name = "zenoh_subscriber"
 
 [dependencies]
 async-trait = { workspace = true }
 chrono = { version = "0.4" }
 clap = { version = "4.5.9", features = ["derive"] }
 env_logger = { version = "0.10.2" }
-hello-world-protos = { path = "../utils/hello-world-protos" }
 log = { workspace = true }
 json5 = { workspace = true }
 protobuf = { workspace = true }
 serde = { workspace = true }
 tokio = { workspace = true }
 up-rust = { workspace = true }
+up-streamer = { path = "../up-streamer" }
 up-transport-zenoh = { version = "0.3.0"  }
-up-transport-vsomeip = { git = "https://github.com/eclipse-uprotocol/up-transport-vsomeip-rust.git", tag = "v0.1.0", default-features = false }
 up-client-mqtt5-rust = { git = "https://github.com/eclipse-uprotocol/up-transport-mqtt5-rust", rev = "18fe342b428e65c5cbd39a060a5a5d8a6a96f86b" }
 zenoh = { version = "1.0.0-alpha.6", features = ["unstable"]}
+usubscription-static-file = {path = "../utils/usubscription-static-file"}
+
+[dev-dependencies]
+hello-world-protos = { path = "../utils/hello-world-protos" }

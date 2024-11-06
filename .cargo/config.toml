@@ -1,0 +1,5 @@
+[env]
+VSOMEIP_INSTALL_PATH="/usr/local/lib"
+GENERIC_CPP_STDLIB_PATH="/usr/include/c++/11"
+ARCH_SPECIFIC_CPP_STDLIB_PATH="/usr/include/x86_64-linux-gnu/c++/11"
+OPENSSLDIR="/usr/lib/ssl"

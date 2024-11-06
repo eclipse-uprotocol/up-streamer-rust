@@ -2,24 +2,41 @@
 
 ## Running examples
 
-### Running the `up-linux-streamer`
+## Configuring the environment
 
-To run one of the examples below and see client and service communicate, you'll need to run the `up-linux-streamer` to bridge between the transports in a terminal. See `up-linux-streamer` README for details.
+Set the following variable in your environment by adding it to the projects .cargo/config.toml file:
+The default location for vsomeip should be something like "/usr/local/lib".
+
+```toml
+LD_LIBRARY_PATH=<path/to/vsomeip/lib>
+```
+
+### Running the `up-linux-streamer` as the Streamer instance
+
+To run one of the examples below and see client and service communicate, you'll need to run the `up-linux-streamer` to bridge between the transports in a terminal. See `up-linux-streamer` README for more details.
+
+Run the linux streamer with the default configuration file from the project root directory:
+
+```bash
+cargo run -p up-linux-streamer -- --config up-linux-streamer/DEFAULT_CONFIG.json5
+```
+
+This starts the streamer which should now be idle and logging its vsomeip version every 10 seconds. As soon as a client tries to connect with the streamer, the connection will be logged.
 
 ### Mechatronics client to high compute service
 
-Launch the `uE_service` example in another terminal:
+Launch the `uE_service` example in another terminal. This is the compute service which listens for Zenoh messages.
 
 ```bash
-LD_LIBRARY_PATH=$LD_LIBRARY_PATH:<path/to/vsomeip/lib> cargo run --example uE_service -- --endpoint tcp/0.0.0.0:7445
+cargo run -p example-streamer-uses --bin zenoh_service -- --endpoint tcp/0.0.0.0:7445
 ```
 
-In this example, the "--endpoint" flag will set the endpoint address upon which the zenoh client will listen.
+In this example, the "--endpoint" flag will set the endpoint address upon which the zenoh client will listen. This endpoint must match the one given to the Streamer configuration via the DEFAULT_CONFIG.json5 (or specifically the ZENOH_CONFIG.json5 which the default config references).
 
-Launch the `mE_client` example in another terminal:
+Launch the `mE_client` example in another terminal. This is the mechatronics component which sends data through SomeIP
 
 ```bash
-LD_LIBRARY_PATH=$LD_LIBRARY_PATH:<path/to/vsomeip/lib> cargo run --example mE_client 
+cargo run -p example-streamer-uses --bin me_client
 ```
 
 The service and client will run forever. Every second a new message is sent from the mE_client via vsomeip. That vsomeip message is caught and routed over Zenoh to the uE_service. The response makes the same journey in reverse.

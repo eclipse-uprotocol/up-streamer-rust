@@ -92,7 +92,7 @@ async fn main() -> Result<(), UStatus> {
 
     let args = Args::parse();
 
-    println!("uE_service");
+    println!("zenoh_service");
 
     let mut zenoh_config = Config::default();
 
@@ -101,10 +101,12 @@ async fn main() -> Result<(), UStatus> {
         let ipv4_endpoint =
             EndPoint::from_str(args.endpoint.as_str()).expect("Unable to set endpoint");
 
+        zenoh_config.listen.set_endpoints(ModeDependentValue);
+
         // Add the IPv4 endpoint to the Zenoh configuration
         zenoh_config
             .listen
-            .set_endpoints(zenoh::config::ModeDependentValue::Unique(vec![
+            .set_endpoints(ModeDependentValue::Unique(vec![
                 ipv4_endpoint,
             ]))
             .expect("Unable to set Zenoh Config");
