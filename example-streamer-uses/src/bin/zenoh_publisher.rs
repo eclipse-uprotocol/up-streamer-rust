@@ -23,6 +23,8 @@ use up_rust::{UMessageBuilder, UStatus, UTransport, UUri};
 use up_transport_zenoh::UPTransportZenoh;
 use zenoh::config::{Config, EndPoint};
 
+mod zenoh_common;
+
 const PUB_TOPIC_AUTHORITY: &str = "linux";
 const PUB_TOPIC_UE_ID: u32 = 0x3039;
 const PUB_TOPIC_UE_VERSION_MAJOR: u8 = 1;
@@ -38,37 +40,15 @@ fn publisher_uuri() -> UUri {
     .unwrap()
 }
 
-#[derive(Parser, Debug)]
-#[command(version, about, long_about = None)]
-struct Args {
-    /// The endpoint for Zenoh client to connect to
-    #[arg(short, long, default_value = "tcp/0.0.0.0:7444")]
-    endpoint: String,
-}
-
 #[tokio::main]
 async fn main() -> Result<(), UStatus> {
     env_logger::init();
 
-    let args = Args::parse();
-
-    println!("uE_publisher");
+    println!("zenoh_publisher");
 
     let mut zenoh_config = Config::default();
 
-    if !args.endpoint.is_empty() {
-        // Specify the address to listen on using IPv4
-        let ipv4_endpoint =
-            EndPoint::from_str(args.endpoint.as_str()).expect("Unable to set endpoint");
-
-        // Add the IPv4 endpoint to the Zenoh configuration
-        zenoh_config
-            .listen
-            .set_endpoints(zenoh::config::ModeDependentValue::Unique(vec![
-                ipv4_endpoint,
-            ]))
-            .expect("Unable to set Zenoh Config");
-    }
+    let zenoh_config = zenoh_common::get_zenoh_config();
 
     let publisher_uri: String = (&publisher_uuri()).into();
     let publisher: Arc<dyn UTransport> = Arc::new(

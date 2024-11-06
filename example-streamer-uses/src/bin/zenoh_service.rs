@@ -23,6 +23,8 @@ use up_rust::{UListener, UMessage, UMessageBuilder, UStatus, UTransport, UUri};
 use up_transport_zenoh::UPTransportZenoh;
 use zenoh::config::{Config, EndPoint};
 
+mod zenoh_common;
+
 const SERVICE_AUTHORITY: &str = "linux";
 const SERVICE_UE_ID: u32 = 0x1236;
 const SERVICE_UE_VERSION_MAJOR: u8 = 1;
@@ -96,21 +98,7 @@ async fn main() -> Result<(), UStatus> {
 
     let mut zenoh_config = Config::default();
 
-    if !args.endpoint.is_empty() {
-        // Specify the address to listen on using IPv4
-        let ipv4_endpoint =
-            EndPoint::from_str(args.endpoint.as_str()).expect("Unable to set endpoint");
-
-        zenoh_config.listen.set_endpoints(ModeDependentValue);
-
-        // Add the IPv4 endpoint to the Zenoh configuration
-        zenoh_config
-            .listen
-            .set_endpoints(ModeDependentValue::Unique(vec![
-                ipv4_endpoint,
-            ]))
-            .expect("Unable to set Zenoh Config");
-    }
+    let zenoh_config = zenoh_common::get_zenoh_config();
 
     let service_uri: String = (&service_uuri()).into();
     let service: Arc<dyn UTransport> = Arc::new(

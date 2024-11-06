@@ -25,7 +25,7 @@
     },
     zenoh_transport_config: {
       // Configuration file which is where zenoh config information is stored
-      config_file: "./up-linux-streamer/ZENOH_CONFIG.json5"
+      config_file: "./up-linux-streamer-someip-zenoh/ZENOH_CONFIG.json5"
     },
     // Configurations related to the host device we are running the streamer on
     host_config: {
@@ -46,7 +46,7 @@
       //     called
       //   * the `id` field should be chosen such that it matches the ue_id of the uE on the host
       //     device
-      config_file: "../../up-linux-streamer/vsomeip-configs/point_to_point.json",
+      config_file: "../../up-linux-streamer-someip-zenoh/vsomeip-configs/point_to_point.json",
       // An ID to use for a vsomeip application which will represent all subscriptions to
       // publish messages output over vsomeip
       default_someip_application_id_for_someip_subscriptions: 10,

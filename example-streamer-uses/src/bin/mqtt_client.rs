@@ -66,8 +66,9 @@ impl UListener for ServiceResponseListener {
 async fn main() -> Result<(), UStatus> {
     env_logger::init();
 
-    println!("mqtt_client");
+    println!("Started mqtt_client.");
 
+    // 
     let mqtt_config = MqttConfig {
         mqtt_protocol: MqttProtocol::Mqtt,
         mqtt_hostname: "localhost".to_string(),

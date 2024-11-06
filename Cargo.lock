@@ -1173,7 +1173,7 @@ dependencies = [
  "tokio",
  "up-client-mqtt5-rust",
  "up-rust 0.2.0",
- "up-transport-vsomeip",
+ "up-transport-vsomeip 0.1.0",
  "up-transport-zenoh 0.3.0",
  "zenoh",
 ]
@@ -4171,28 +4171,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "up-linux-streamer"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "chrono",
- "clap",
- "env_logger 0.10.2",
- "hello-world-protos",
- "json5",
- "log",
- "protobuf",
- "serde",
- "tokio",
- "up-rust 0.2.0",
- "up-streamer",
- "up-transport-vsomeip",
- "up-transport-zenoh 0.3.0",
- "usubscription-static-file",
- "zenoh",
-]
-
-[[package]]
 name = "up-linux-streamer-mqtt-zenoh"
 version = "0.1.0"
 dependencies = [
@@ -4229,7 +4207,7 @@ dependencies = [
  "tracing",
  "up-rust 0.2.0",
  "up-streamer",
- "up-transport-vsomeip",
+ "up-transport-vsomeip 0.1.0",
  "up-transport-zenoh 0.1.1",
  "usubscription-static-file",
  "zenoh",
@@ -4238,6 +4216,28 @@ dependencies = [
  "zenoh-result",
  "zenoh-util",
  "zenoh_backend_traits",
+]
+
+[[package]]
+name = "up-linux-streamer-someip-zenoh"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "clap",
+ "env_logger 0.10.2",
+ "hello-world-protos",
+ "json5",
+ "log",
+ "protobuf",
+ "serde",
+ "tokio",
+ "up-rust 0.2.0",
+ "up-streamer",
+ "up-transport-vsomeip 0.2.0",
+ "up-transport-zenoh 0.3.0",
+ "usubscription-static-file",
+ "zenoh",
 ]
 
 [[package]]
@@ -4319,8 +4319,31 @@ dependencies = [
  "serde_json",
  "tokio",
  "up-rust 0.1.5",
- "vsomeip-proc-macro",
- "vsomeip-sys",
+ "vsomeip-proc-macro 0.1.0 (git+https://github.com/eclipse-uprotocol/up-transport-vsomeip-rust.git?tag=v0.1.0)",
+ "vsomeip-sys 0.1.0",
+]
+
+[[package]]
+name = "up-transport-vsomeip"
+version = "0.2.0"
+source = "git+https://github.com/eclipse-uprotocol/up-transport-vsomeip-rust.git?tag=v0.2.0#1eb59ecdbb561fe791a7caf63dad39722770a2fc"
+dependencies = [
+ "async-trait",
+ "bimap",
+ "bytes",
+ "crossbeam-channel",
+ "cxx",
+ "futures",
+ "lazy_static",
+ "log",
+ "once_cell",
+ "protobuf",
+ "serde",
+ "serde_json",
+ "tokio",
+ "up-rust 0.2.0",
+ "vsomeip-proc-macro 0.1.0 (git+https://github.com/eclipse-uprotocol/up-transport-vsomeip-rust.git?tag=v0.2.0)",
+ "vsomeip-sys 0.2.0",
 ]
 
 [[package]]
@@ -4501,9 +4524,37 @@ dependencies = [
 ]
 
 [[package]]
+name = "vsomeip-proc-macro"
+version = "0.1.0"
+source = "git+https://github.com/eclipse-uprotocol/up-transport-vsomeip-rust.git?tag=v0.2.0#1eb59ecdbb561fe791a7caf63dad39722770a2fc"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "rayon",
+ "syn 2.0.87",
+]
+
+[[package]]
 name = "vsomeip-sys"
 version = "0.1.0"
 source = "git+https://github.com/eclipse-uprotocol/up-transport-vsomeip-rust.git?tag=v0.1.0#c9d53f31c74258b66e792401a3717602a8eb725e"
+dependencies = [
+ "autocxx",
+ "autocxx-build",
+ "cmake",
+ "crossbeam-channel",
+ "cxx",
+ "cxx-build",
+ "lazy_static",
+ "log",
+ "miette",
+ "once_cell",
+]
+
+[[package]]
+name = "vsomeip-sys"
+version = "0.2.0"
+source = "git+https://github.com/eclipse-uprotocol/up-transport-vsomeip-rust.git?tag=v0.2.0#1eb59ecdbb561fe791a7caf63dad39722770a2fc"
 dependencies = [
  "autocxx",
  "autocxx-build",

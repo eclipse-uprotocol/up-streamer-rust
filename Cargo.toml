@@ -15,7 +15,7 @@ members = [
     "example-streamer-uses",
     "utils/hello-world-protos",
     "utils/integration-test-utils",
-    "up-linux-streamer", "up-linux-streamer-mqtt-zenoh", "up-linux-streamer-plugin",
+    "up-linux-streamer-someip-zenoh", "up-linux-streamer-mqtt-zenoh", "up-linux-streamer-plugin",
     "up-streamer", "subscription-cache", "utils/usubscription-static-file"]
 
 [workspace.package]
