@@ -24,26 +24,22 @@ use zenoh::config::{Config, EndPoint};
 
 mod zenoh_common;
 
-const SERVICE_AUTHORITY: &str = "me_authority";
-const SERVICE_UE_ID: u32 = 0x4321;
+const SERVICE_AUTHORITY: &str = "linux";
+const SERVICE_UE_ID: u32 = 0x1236;
 const SERVICE_UE_VERSION_MAJOR: u8 = 1;
-const SERVICE_RESOURCE_ID: u16 = 0x0421;
+const SERVICE_RESOURCE_ID: u16 = 0x0896;
 
-const CLIENT_AUTHORITY: &str = "linux";
-const CLIENT_UE_ID: u32 = 0x1236;
+const CLIENT_AUTHORITY: &str = "zenoh_authority";
+const CLIENT_UE_ID: u32 = 0x5678;
 const CLIENT_UE_VERSION_MAJOR: u8 = 1;
 const CLIENT_RESOURCE_ID: u16 = 0;
 
 const REQUEST_TTL: u32 = 1000;
 
+const REMOTE_AUTHORITY: &str = "linux";
+
 fn client_uuri() -> UUri {
-    UUri::try_from_parts(
-        CLIENT_AUTHORITY,
-        CLIENT_UE_ID,
-        CLIENT_UE_VERSION_MAJOR,
-        CLIENT_RESOURCE_ID,
-    )
-    .unwrap()
+    UUri::try_from_parts(CLIENT_AUTHORITY, CLIENT_UE_ID, CLIENT_UE_VERSION_MAJOR, 0).unwrap()
 }
 
 #[derive(Parser, Debug)]
@@ -85,11 +81,11 @@ async fn main() -> Result<(), UStatus> {
 
     let zenoh_config = zenoh_common::get_zenoh_config();
 
-    let client: Arc<dyn UTransport> = Arc::new(
-        UPTransportZenoh::new(zenoh_config, client_uri)
-            .await
-            .unwrap(),
-    );
+    let client = UPTransportZenoh::new(zenoh_config, client_uri)
+        .await
+        .unwrap();
+
+    let wrapped_client: Arc<dyn UTransport> = Arc::new(client);
 
     let source = UUri::try_from_parts(
         CLIENT_AUTHORITY,
@@ -104,10 +100,10 @@ async fn main() -> Result<(), UStatus> {
         SERVICE_UE_VERSION_MAJOR,
         SERVICE_RESOURCE_ID,
     )
-    .unwrap();
+    .unwrap(); // this is who we wanna call (should match the mqtt uuri)
 
     let service_response_listener: Arc<dyn UListener> = Arc::new(ServiceResponseListener);
-    client
+    wrapped_client
         .register_listener(&sink, Some(&source), service_response_listener)
         .await?;
 
@@ -126,6 +122,6 @@ async fn main() -> Result<(), UStatus> {
             .unwrap();
         println!("Sending Request message:\n{request_msg:?}");
 
-        client.send(request_msg).await?;
+        wrapped_client.send(request_msg).await?;
     }
 }

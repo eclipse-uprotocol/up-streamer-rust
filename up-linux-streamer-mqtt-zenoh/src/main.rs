@@ -28,6 +28,20 @@ use up_transport_zenoh::UPTransportZenoh;
 use usubscription_static_file::USubscriptionStaticFile;
 use zenoh::config::Config as ZenohConfig;
 
+const SERVICE_AUTHORITY: &str = "zenoh_authority";
+const SERVICE_UE_ID: u32 = 0x4444;
+const SERVICE_UE_VERSION_MAJOR: u8 = 1;
+
+fn streamer_uuri() -> UUri {
+    UUri::try_from_parts(
+        SERVICE_AUTHORITY,
+        SERVICE_UE_ID,
+        SERVICE_UE_VERSION_MAJOR,
+        0,
+    )
+    .unwrap()
+}
+
 #[derive(Parser)]
 #[command()]
 struct StreamerArgs {
@@ -68,35 +82,10 @@ async fn main() -> Result<(), UStatus> {
     )
     .expect("Failed to create uStreamer");
 
-    let streamer_uuri = UUri::try_from_parts(
-        &config.streamer_uuri.authority,
-        config.streamer_uuri.ue_id,
-        config.streamer_uuri.ue_version_major,
-        0,
-    )
-    .expect("Unable to form streamer_uuri");
+    let zenoh_config =
+        ZenohConfig::from_file("up-linux-streamer-mqtt-zenoh/ZENOH_CONFIG.json5").unwrap();
 
-    trace!("streamer_uuri: {streamer_uuri:#?}");
-    let streamer_uri: String = (&streamer_uuri).into();
-    // TODO: Remove this once the error reporting from UPTransportZenoh no longer "hides"
-    // the underlying reason for the failure on converting uri -> UUri
-    trace!("streamer_uri: {streamer_uri}");
-
-    let zenoh_config = match ZenohConfig::from_file(config.zenoh_transport_config.config_file) {
-        Ok(config) => {
-            trace!("Able to read zenoh config from file");
-            config
-        }
-        Err(error) => {
-            panic!("Unable to read zenoh config from file: {}", error);
-        }
-    };
-
-    let _zenoh_internal_uuri = UUri::from_str(&streamer_uri).map_err(|e| {
-        let msg = format!("Unable to transform the uri to UUri, e: {e:?}");
-        error!("{msg}");
-        UStatus::fail_with_code(UCode::INVALID_ARGUMENT, msg)
-    })?;
+    let streamer_uri: String = (&streamer_uuri()).into();
 
     let zenoh_transport: Arc<dyn UTransport> = Arc::new(
         UPTransportZenoh::new(zenoh_config, streamer_uri)
@@ -104,11 +93,7 @@ async fn main() -> Result<(), UStatus> {
             .expect("Unable to initialize Zenoh UTransport"),
     );
 
-    let zenoh_endpoint = Endpoint::new(
-        "host_endpoint",
-        &config.streamer_uuri.authority,
-        zenoh_transport.clone(),
-    );
+    let zenoh_endpoint = Endpoint::new("host_endpoint", "zenoh_authority", zenoh_transport.clone());
 
     let mqtt_config = MqttConfig {
         mqtt_protocol: MqttProtocol::Mqtt,
@@ -125,14 +110,14 @@ async fn main() -> Result<(), UStatus> {
         UPClientMqtt::new(
             mqtt_config,
             UUID::build(),
-            "authority_name".to_string(),
+            "cloud".to_string(),
             UPClientMqttType::Device,
         )
         .await
         .expect("Could not create mqtt transport."),
     );
 
-    let mqtt_endpoint = Endpoint::new("mqtt endpoint", "authority_name", mqtt_transport.clone());
+    let mqtt_endpoint = Endpoint::new("mqtt endpoint", "linux", mqtt_transport.clone());
 
     streamer
         .add_forwarding_rule(zenoh_endpoint.clone(), mqtt_endpoint.clone())

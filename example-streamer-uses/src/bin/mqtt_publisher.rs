@@ -19,42 +19,40 @@ use hello_world_protos::timeofday::TimeOfDay;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
-use up_rust::{UMessageBuilder, UStatus, UTransport, UUri};
-use up_transport_zenoh::UPTransportZenoh;
-use zenoh::config::{Config, EndPoint};
+use up_client_mqtt5_rust::{MqttConfig, MqttProtocol, UPClientMqtt, UPClientMqttType};
+use up_rust::{UListener, UMessage, UMessageBuilder, UStatus, UTransport, UUri, UUID};
 
-mod zenoh_common;
-
-const PUB_TOPIC_AUTHORITY: &str = "linux";
+const PUB_TOPIC_AUTHORITY: &str = "mqtt_authority";
 const PUB_TOPIC_UE_ID: u32 = 0x3039;
 const PUB_TOPIC_UE_VERSION_MAJOR: u8 = 1;
 const PUB_TOPIC_RESOURCE_ID: u16 = 0x8001;
-
-fn publisher_uuri() -> UUri {
-    UUri::try_from_parts(
-        PUB_TOPIC_AUTHORITY,
-        PUB_TOPIC_UE_ID,
-        PUB_TOPIC_UE_VERSION_MAJOR,
-        0,
-    )
-    .unwrap()
-}
 
 #[tokio::main]
 async fn main() -> Result<(), UStatus> {
     env_logger::init();
 
-    println!("zenoh_publisher");
+    println!("Started mqtt_publisher.");
 
-    let zenoh_config = Config::from_file("src/bin/zenoh_common/DEFAULT_CONFIG.json5").unwrap();
+    let mqtt_config = MqttConfig {
+        mqtt_protocol: MqttProtocol::Mqtt,
+        mqtt_hostname: "localhost".to_string(),
+        mqtt_port: 1883,
+        max_buffered_messages: 100,
+        max_subscriptions: 100,
+        session_expiry_interval: 3600,
+        ssl_options: None,
+        username: "user_name".to_string(),
+    };
 
-    let zenoh_config = zenoh_common::get_zenoh_config();
-
-    let publisher_uri: String = (&publisher_uuri()).into();
     let publisher: Arc<dyn UTransport> = Arc::new(
-        UPTransportZenoh::new(zenoh_config, publisher_uri)
-            .await
-            .unwrap(),
+        UPClientMqtt::new(
+            mqtt_config,
+            UUID::build(),
+            "authority_name".to_string(),
+            UPClientMqttType::Cloud,
+        )
+        .await
+        .expect("Could not create mqtt transport."),
     );
 
     let source = UUri::try_from_parts(

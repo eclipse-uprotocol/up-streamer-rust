@@ -19,41 +19,16 @@ use protobuf::Message;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::thread;
-use up_rust::{UListener, UMessage, UStatus, UTransport, UUri};
-use up_transport_zenoh::UPTransportZenoh;
-use zenoh::config::{Config, EndPoint};
+use up_client_mqtt5_rust::{MqttConfig, MqttProtocol, UPClientMqtt, UPClientMqttType};
+use up_rust::{UListener, UMessage, UMessageBuilder, UStatus, UTransport, UUri, UUID};
 
-mod zenoh_common;
-
-const PUB_TOPIC_AUTHORITY: &str = "me_authority";
-const PUB_TOPIC_UE_ID: u32 = 0x5BA0;
+const PUB_TOPIC_AUTHORITY: &str = "linux";
+const PUB_TOPIC_UE_ID: u32 = 0x1236;
 const PUB_TOPIC_UE_VERSION_MAJOR: u8 = 1;
-const PUB_TOPIC_RESOURCE_ID: u16 = 0x8001;
-
-const SUB_TOPIC_AUTHORITY: &str = "linux";
-const SUB_TOPIC_UE_ID: u32 = 0x5BB0;
-const SUB_TOPIC_UE_VERSION_MAJOR: u8 = 1;
-
-fn subscriber_uuri() -> UUri {
-    UUri::try_from_parts(
-        SUB_TOPIC_AUTHORITY,
-        SUB_TOPIC_UE_ID,
-        SUB_TOPIC_UE_VERSION_MAJOR,
-        0,
-    )
-    .unwrap()
-}
+const PUB_TOPIC_RESOURCE_ID: u16 = 0;
 
 #[allow(dead_code)]
 struct PublishReceiver;
-
-#[derive(Parser, Debug)]
-#[command(version, about, long_about = None)]
-struct Args {
-    /// The endpoint for Zenoh client to connect to
-    #[arg(short, long, default_value = "tcp/0.0.0.0:7442")]
-    endpoint: String,
-}
 
 #[async_trait]
 impl UListener for PublishReceiver {
@@ -78,30 +53,39 @@ impl UListener for PublishReceiver {
 async fn main() -> Result<(), UStatus> {
     env_logger::init();
 
-    let args = Args::parse();
+    println!("Started mqtt_subscriber.");
 
-    println!("zenoh_subscriber");
+    let mqtt_config = MqttConfig {
+        mqtt_protocol: MqttProtocol::Mqtt,
+        mqtt_hostname: "localhost".to_string(),
+        mqtt_port: 1883,
+        max_buffered_messages: 100,
+        max_subscriptions: 100,
+        session_expiry_interval: 3600,
+        ssl_options: None,
+        username: "user_name".to_string(),
+    };
 
-    let mut zenoh_config = Config::default();
-
-    //zenoh_config.listen.set_endpoints();
-
-    let zenoh_config = zenoh_common::get_zenoh_config();
-
-    let subscriber_uri: String = (&subscriber_uuri()).into();
     let subscriber: Arc<dyn UTransport> = Arc::new(
-        UPTransportZenoh::new(zenoh_config, subscriber_uri)
-            .await
-            .unwrap(),
+        UPClientMqtt::new(
+            mqtt_config,
+            UUID::build(),
+            "authority_name".to_string(),
+            UPClientMqttType::Cloud,
+        )
+        .await
+        .expect("Could not create mqtt transport."),
     );
 
-    let source_filter = UUri::try_from_parts(
-        PUB_TOPIC_AUTHORITY,
-        PUB_TOPIC_UE_ID,
-        PUB_TOPIC_UE_VERSION_MAJOR,
-        PUB_TOPIC_RESOURCE_ID,
-    )
-    .unwrap();
+    // let source_filter = UUri::try_from_parts(
+    //     PUB_TOPIC_AUTHORITY,
+    //     PUB_TOPIC_UE_ID,
+    //     PUB_TOPIC_UE_VERSION_MAJOR,
+    //     PUB_TOPIC_RESOURCE_ID,
+    // )
+    // .unwrap();
+    //
+    let source_filter = UUri::try_from_parts("*", 0xFFFF_0000, 0xFF, 0xFFFF).unwrap();
 
     let publish_receiver: Arc<dyn UListener> = Arc::new(PublishReceiver);
     subscriber

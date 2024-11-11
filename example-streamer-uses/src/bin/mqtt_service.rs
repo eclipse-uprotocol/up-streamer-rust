@@ -19,11 +19,8 @@ use protobuf::Message;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::thread;
-use up_rust::{UListener, UMessage, UMessageBuilder, UStatus, UTransport, UUri};
-use up_transport_zenoh::UPTransportZenoh;
-use zenoh::config::{Config, EndPoint};
-
-mod zenoh_common;
+use up_client_mqtt5_rust::{MqttConfig, MqttProtocol, UPClientMqtt, UPClientMqttType};
+use up_rust::{UListener, UMessage, UMessageBuilder, UStatus, UTransport, UUri, UUID};
 
 const SERVICE_AUTHORITY: &str = "linux";
 const SERVICE_UE_ID: u32 = 0x1236;
@@ -47,32 +44,6 @@ impl ServiceRequestResponder {
     pub fn new(client: Arc<dyn UTransport>) -> Self {
         Self { client }
     }
-}
-
-#[derive(clap::ValueEnum, Clone, Copy, PartialEq, Eq, Hash, Debug)]
-pub enum WhatAmIType {
-    Peer,
-    Client,
-    Router,
-}
-
-#[derive(clap::Parser, Clone, PartialEq, Eq, Hash, Debug)]
-pub struct Args {
-    #[arg(short, long)]
-    /// A configuration file.
-    config: Option<String>,
-    #[arg(short, long)]
-    /// The Zenoh session mode [default: peer].
-    mode: Option<WhatAmIType>,
-    #[arg(short = 'e', long)]
-    /// Endpoints to connect to.
-    connect: Vec<String>,
-    #[arg(short, long)]
-    /// Endpoints to listen on.
-    listen: Vec<String>,
-    #[arg(long)]
-    /// Disable the multicast-based scouting mechanism.
-    no_multicast_scouting: bool,
 }
 
 #[async_trait]
@@ -108,18 +79,32 @@ impl UListener for ServiceRequestResponder {
 
 #[tokio::main]
 async fn main() -> Result<(), UStatus> {
-    UPTransportZenoh::try_init_log_from_env();
-    let args = Args::parse();
+    env_logger::init();
 
-    println!("zenoh_service");
+    println!("Started mqtt_service.");
 
-    let zenoh_config = Config::from_file("src/bin/zenoh_common/DEFAULT_CONFIG.json5").unwrap();
+    let mqtt_config = MqttConfig {
+        mqtt_protocol: MqttProtocol::Mqtt,
+        mqtt_hostname: "localhost".to_string(),
+        mqtt_port: 1883,
+        max_buffered_messages: 100,
+        max_subscriptions: 100,
+        session_expiry_interval: 3600,
+        ssl_options: None,
+        username: "user_name".to_string(),
+    };
 
     let service_uri: String = (&service_uuri()).into();
+
     let service: Arc<dyn UTransport> = Arc::new(
-        UPTransportZenoh::new(zenoh_config, service_uri)
-            .await
-            .unwrap(),
+        UPClientMqtt::new(
+            mqtt_config,
+            UUID::build(),
+            SERVICE_AUTHORITY.to_string(),
+            UPClientMqttType::Device,
+        )
+        .await
+        .expect("Could not create mqtt transport."),
     );
 
     let source_filter = UUri::any();

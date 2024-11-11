@@ -18,30 +18,20 @@ use protobuf::Message;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
-use up_client_mqtt5_rust::{UPClientMqtt, UPClientMqttType, MqttProtocol, MqttConfig};
+use up_client_mqtt5_rust::{MqttConfig, MqttProtocol, UPClientMqtt, UPClientMqttType};
 use up_rust::{UListener, UMessage, UMessageBuilder, UStatus, UTransport, UUri, UUID};
 
-const SERVICE_AUTHORITY: &str = "mqtt_authority";
-const SERVICE_UE_ID: u32 = 0x4321;
+const SERVICE_AUTHORITY: &str = "linux";
+const SERVICE_UE_ID: u32 = 0x1236;
 const SERVICE_UE_VERSION_MAJOR: u8 = 1;
-const SERVICE_RESOURCE_ID: u16 = 0x0421;
+const SERVICE_RESOURCE_ID: u16 = 0x0896;
 
-const CLIENT_AUTHORITY: &str = "linux";
-const CLIENT_UE_ID: u32 = 0x1236;
+const CLIENT_AUTHORITY: &str = "mqtt_authority";
+const CLIENT_UE_ID: u32 = 0x4321;
 const CLIENT_UE_VERSION_MAJOR: u8 = 1;
 const CLIENT_RESOURCE_ID: u16 = 0;
 
 const REQUEST_TTL: u32 = 1000;
-
-fn client_uuri() -> UUri {
-    UUri::try_from_parts(
-        CLIENT_AUTHORITY,
-        CLIENT_UE_ID,
-        CLIENT_UE_VERSION_MAJOR,
-        CLIENT_RESOURCE_ID,
-    )
-    .unwrap()
-}
 
 struct ServiceResponseListener;
 
@@ -68,7 +58,6 @@ async fn main() -> Result<(), UStatus> {
 
     println!("Started mqtt_client.");
 
-    // 
     let mqtt_config = MqttConfig {
         mqtt_protocol: MqttProtocol::Mqtt,
         mqtt_hostname: "localhost".to_string(),
@@ -80,12 +69,16 @@ async fn main() -> Result<(), UStatus> {
         username: "user_name".to_string(),
     };
 
-    let client: Arc<dyn UTransport> = Arc::new(UPClientMqtt::new(
-        mqtt_config,
-        UUID::build(),
-        "authority_name".to_string(),
-        UPClientMqttType::Cloud,
-    ).await.expect("Could not create mqtt transport."));
+    let client: Arc<dyn UTransport> = Arc::new(
+        UPClientMqtt::new(
+            mqtt_config,
+            UUID::build(),
+            "authority_name".to_string(),
+            UPClientMqttType::Cloud,
+        )
+        .await
+        .expect("Could not create mqtt transport."),
+    );
 
     let source = UUri::try_from_parts(
         CLIENT_AUTHORITY,

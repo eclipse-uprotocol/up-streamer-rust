@@ -18,7 +18,7 @@ To run one of the examples below and see client and service communicate, you'll 
 Run the linux streamer with the default configuration file from the project root directory:
 
 ```bash
-cargo run -p up-linux-streamer -- --config up-linux-streamer/DEFAULT_CONFIG.json5
+cargo run -p up-linux-streamer-mqtt-zenoh -- --config up-linux-streamer-mqtt-zenoh/DEFAULT_CONFIG.json5
 ```
 
 This starts the streamer which should now be idle and logging its vsomeip version every 10 seconds. As soon as a client tries to connect with the streamer, the connection will be logged.

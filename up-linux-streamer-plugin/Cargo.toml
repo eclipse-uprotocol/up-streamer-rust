@@ -44,8 +44,8 @@ serde = { version = "1.0.154" }
 serde_json = { version = "1.0.94" }
 tokio = { version = "1.35.1", default-features = false }
 up-rust = { workspace = true }
-up-transport-zenoh = { version = "0.1.1"  }
-up-transport-vsomeip = { git = "https://github.com/eclipse-uprotocol/up-transport-vsomeip-rust.git", tag = "v0.1.0", default-features = false }
+up-transport-zenoh = { version = "0.3.0"  }
+up-transport-vsomeip = { git = "https://github.com/eclipse-uprotocol/up-transport-vsomeip-rust.git", tag = "v0.2.0", default-features = false }
 up-streamer = { path = "../up-streamer" }
 usubscription-static-file = {path = "../utils/usubscription-static-file"}
 zenoh = { version = "1.0.0-alpha.6", features = ["unstable", "internal", "plugins"]}

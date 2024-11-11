@@ -23,6 +23,15 @@ license.workspace = true
 name = "mqtt_client"
 
 [[bin]]
+name = "mqtt_publisher"
+
+[[bin]]
+name = "mqtt_service"
+
+[[bin]]
+name = "mqtt_subscriber"
+
+[[bin]]
 name = "someip_client"
 
 [[bin]]
@@ -59,6 +68,6 @@ serde = { workspace = true }
 tokio = { workspace = true }
 up-rust = { workspace = true }
 up-transport-zenoh = { version = "0.3.0"  }
-up-transport-vsomeip = { git = "https://github.com/eclipse-uprotocol/up-transport-vsomeip-rust.git", tag = "v0.1.0", default-features = false }
+up-transport-vsomeip = { git = "https://github.com/eclipse-uprotocol/up-transport-vsomeip-rust.git", tag = "v0.2.0", default-features = false }
 up-client-mqtt5-rust = { git = "https://github.com/eclipse-uprotocol/up-transport-mqtt5-rust", rev = "18fe342b428e65c5cbd39a060a5a5d8a6a96f86b" }
 zenoh = { version = "1.0.0-alpha.6", features = ["unstable"]}
