@@ -11,18 +11,19 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
+mod common;
+
 use chrono::Local;
 use chrono::Timelike;
-use clap::Parser;
 use hello_world_protos::hello_world_topics::Timer;
 use hello_world_protos::timeofday::TimeOfDay;
-use std::str::FromStr;
+use log::info;
 use std::sync::Arc;
 use std::time::Duration;
-use up_client_mqtt5_rust::{MqttConfig, MqttProtocol, UPClientMqtt, UPClientMqttType};
-use up_rust::{UListener, UMessage, UMessageBuilder, UStatus, UTransport, UUri, UUID};
+use up_client_mqtt5_rust::{UPClientMqtt, UPClientMqttType};
+use up_rust::{UMessageBuilder, UStatus, UTransport, UUri, UUID};
 
-const PUB_TOPIC_AUTHORITY: &str = "mqtt_authority";
+const PUB_TOPIC_AUTHORITY: &str = "cloud_authority";
 const PUB_TOPIC_UE_ID: u32 = 0x3039;
 const PUB_TOPIC_UE_VERSION_MAJOR: u8 = 1;
 const PUB_TOPIC_RESOURCE_ID: u16 = 0x8001;
@@ -31,30 +32,9 @@ const PUB_TOPIC_RESOURCE_ID: u16 = 0x8001;
 async fn main() -> Result<(), UStatus> {
     env_logger::init();
 
-    println!("Started mqtt_publisher.");
+    info!("Started mqtt_publisher.");
 
-    let mqtt_config = MqttConfig {
-        mqtt_protocol: MqttProtocol::Mqtt,
-        mqtt_hostname: "localhost".to_string(),
-        mqtt_port: 1883,
-        max_buffered_messages: 100,
-        max_subscriptions: 100,
-        session_expiry_interval: 3600,
-        ssl_options: None,
-        username: "user_name".to_string(),
-    };
-
-    let publisher: Arc<dyn UTransport> = Arc::new(
-        UPClientMqtt::new(
-            mqtt_config,
-            UUID::build(),
-            "authority_name".to_string(),
-            UPClientMqttType::Cloud,
-        )
-        .await
-        .expect("Could not create mqtt transport."),
-    );
-
+    // This is the URI of the publisher entity
     let source = UUri::try_from_parts(
         PUB_TOPIC_AUTHORITY,
         PUB_TOPIC_UE_ID,
@@ -62,6 +42,19 @@ async fn main() -> Result<(), UStatus> {
         PUB_TOPIC_RESOURCE_ID,
     )
     .unwrap();
+
+    let mqtt_config = common::get_mqtt_config();
+
+    let publisher: Arc<dyn UTransport> = Arc::new(
+        UPClientMqtt::new(
+            mqtt_config,
+            UUID::build(),
+            PUB_TOPIC_AUTHORITY.to_string(),
+            UPClientMqttType::Device,
+        )
+        .await
+        .expect("Could not create mqtt transport."),
+    );
 
     loop {
         tokio::time::sleep(Duration::from_millis(1000)).await;
@@ -81,10 +74,11 @@ async fn main() -> Result<(), UStatus> {
             ..Default::default()
         };
 
+        // Publish messages signed with the source URI
         let publish_msg = UMessageBuilder::publish(source.clone())
             .build_with_protobuf_payload(&timer_message)
             .unwrap();
-        println!("Sending Publish message:\n{publish_msg:?}");
+        info!("Sending Publish message:\n{publish_msg:?}");
 
         publisher.send(publish_msg).await?;
     }

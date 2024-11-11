@@ -11,61 +11,41 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
+mod common;
+
 use async_trait::async_trait;
-use clap::Parser;
 use hello_world_protos::hello_world_topics::Timer;
-use log::error;
+use log::{debug, error, info};
 use protobuf::Message;
-use std::str::FromStr;
 use std::sync::Arc;
 use std::thread;
 use up_rust::{UListener, UMessage, UStatus, UTransport, UUri};
 use up_transport_zenoh::UPTransportZenoh;
-use zenoh::config::{Config, EndPoint};
 
-mod zenoh_common;
-
-const PUB_TOPIC_AUTHORITY: &str = "me_authority";
-const PUB_TOPIC_UE_ID: u32 = 0x5BA0;
+const PUB_TOPIC_AUTHORITY: &str = "ecu_authority";
+const PUB_TOPIC_UE_ID: u32 = 0x3039;
 const PUB_TOPIC_UE_VERSION_MAJOR: u8 = 1;
 const PUB_TOPIC_RESOURCE_ID: u16 = 0x8001;
 
-const SUB_TOPIC_AUTHORITY: &str = "linux";
+const SUB_TOPIC_AUTHORITY: &str = "cloud_authority";
 const SUB_TOPIC_UE_ID: u32 = 0x5BB0;
 const SUB_TOPIC_UE_VERSION_MAJOR: u8 = 1;
-
-fn subscriber_uuri() -> UUri {
-    UUri::try_from_parts(
-        SUB_TOPIC_AUTHORITY,
-        SUB_TOPIC_UE_ID,
-        SUB_TOPIC_UE_VERSION_MAJOR,
-        0,
-    )
-    .unwrap()
-}
+const SUB_TOPIC_RESOURCE_ID: u16 = 0;
 
 #[allow(dead_code)]
 struct PublishReceiver;
 
-#[derive(Parser, Debug)]
-#[command(version, about, long_about = None)]
-struct Args {
-    /// The endpoint for Zenoh client to connect to
-    #[arg(short, long, default_value = "tcp/0.0.0.0:7442")]
-    endpoint: String,
-}
-
 #[async_trait]
 impl UListener for PublishReceiver {
     async fn on_receive(&self, msg: UMessage) {
-        println!("PublishReceiver: Received a message: {msg:?}");
+        info!("PublishReceiver: Received a message: {msg:?}");
 
         let Some(payload_bytes) = msg.payload else {
             panic!("No bytes available");
         };
         match Timer::parse_from_bytes(&payload_bytes) {
             Ok(timer_message) => {
-                println!("timer: {timer_message:?}");
+                debug!("timer: {timer_message:?}");
             }
             Err(err) => {
                 error!("Unable to parse Timer Message: {err:?}");
@@ -78,23 +58,17 @@ impl UListener for PublishReceiver {
 async fn main() -> Result<(), UStatus> {
     env_logger::init();
 
-    let args = Args::parse();
+    info!("Started zenoh_subscriber");
 
-    println!("zenoh_subscriber");
-
-    let mut zenoh_config = Config::default();
-
-    //zenoh_config.listen.set_endpoints();
-
-    let zenoh_config = zenoh_common::get_zenoh_config();
-
-    let subscriber_uri: String = (&subscriber_uuri()).into();
-    let subscriber: Arc<dyn UTransport> = Arc::new(
-        UPTransportZenoh::new(zenoh_config, subscriber_uri)
-            .await
-            .unwrap(),
-    );
-
+    // This is the URI of the subscriber entity
+    let subscriber_uri = UUri::try_from_parts(
+        SUB_TOPIC_AUTHORITY,
+        SUB_TOPIC_UE_ID,
+        SUB_TOPIC_UE_VERSION_MAJOR,
+        SUB_TOPIC_RESOURCE_ID,
+    )
+    .unwrap();
+    // Here we define which sources we want to accept messages from
     let source_filter = UUri::try_from_parts(
         PUB_TOPIC_AUTHORITY,
         PUB_TOPIC_UE_ID,
@@ -103,7 +77,16 @@ async fn main() -> Result<(), UStatus> {
     )
     .unwrap();
 
+    let zenoh_config = common::get_zenoh_config();
+
+    let subscriber: Arc<dyn UTransport> = Arc::new(
+        UPTransportZenoh::new(zenoh_config, subscriber_uri)
+            .await
+            .unwrap(),
+    );
+
     let publish_receiver: Arc<dyn UListener> = Arc::new(PublishReceiver);
+    // Register the Listener so that messages which pass the source filter get handled.
     subscriber
         .register_listener(&source_filter, None, publish_receiver.clone())
         .await?;

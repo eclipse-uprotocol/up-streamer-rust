@@ -11,34 +11,21 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
+mod common;
+
 use async_trait::async_trait;
-use clap::Parser;
 use hello_world_protos::hello_world_service::{HelloRequest, HelloResponse};
 use log::error;
 use protobuf::Message;
-use std::str::FromStr;
 use std::sync::Arc;
 use std::thread;
 use up_rust::{UListener, UMessage, UMessageBuilder, UStatus, UTransport, UUri};
 use up_transport_zenoh::UPTransportZenoh;
-use zenoh::config::{Config, EndPoint};
 
-mod zenoh_common;
-
-const SERVICE_AUTHORITY: &str = "linux";
+const SERVICE_AUTHORITY: &str = "ecu_authority";
 const SERVICE_UE_ID: u32 = 0x1236;
 const SERVICE_UE_VERSION_MAJOR: u8 = 1;
 const SERVICE_RESOURCE_ID: u16 = 0x0896;
-
-fn service_uuri() -> UUri {
-    UUri::try_from_parts(
-        SERVICE_AUTHORITY,
-        SERVICE_UE_ID,
-        SERVICE_UE_VERSION_MAJOR,
-        0,
-    )
-    .unwrap()
-}
 
 struct ServiceRequestResponder {
     client: Arc<dyn UTransport>,
@@ -47,32 +34,6 @@ impl ServiceRequestResponder {
     pub fn new(client: Arc<dyn UTransport>) -> Self {
         Self { client }
     }
-}
-
-#[derive(clap::ValueEnum, Clone, Copy, PartialEq, Eq, Hash, Debug)]
-pub enum WhatAmIType {
-    Peer,
-    Client,
-    Router,
-}
-
-#[derive(clap::Parser, Clone, PartialEq, Eq, Hash, Debug)]
-pub struct Args {
-    #[arg(short, long)]
-    /// A configuration file.
-    config: Option<String>,
-    #[arg(short, long)]
-    /// The Zenoh session mode [default: peer].
-    mode: Option<WhatAmIType>,
-    #[arg(short = 'e', long)]
-    /// Endpoints to connect to.
-    connect: Vec<String>,
-    #[arg(short, long)]
-    /// Endpoints to listen on.
-    listen: Vec<String>,
-    #[arg(long)]
-    /// Disable the multicast-based scouting mechanism.
-    no_multicast_scouting: bool,
 }
 
 #[async_trait]
@@ -108,21 +69,13 @@ impl UListener for ServiceRequestResponder {
 
 #[tokio::main]
 async fn main() -> Result<(), UStatus> {
-    UPTransportZenoh::try_init_log_from_env();
-    let args = Args::parse();
+    env_logger::init();
 
     println!("zenoh_service");
 
-    let zenoh_config = Config::from_file("src/bin/zenoh_common/DEFAULT_CONFIG.json5").unwrap();
-
-    let service_uri: String = (&service_uuri()).into();
-    let service: Arc<dyn UTransport> = Arc::new(
-        UPTransportZenoh::new(zenoh_config, service_uri)
-            .await
-            .unwrap(),
-    );
-
+    // We set the source filter to "any" so that we process messages from all device that send some.
     let source_filter = UUri::any();
+    // The sink filter gets specified so that we only process messages directed at this entity.
     let sink_filter = UUri::try_from_parts(
         SERVICE_AUTHORITY,
         SERVICE_UE_ID,
@@ -130,6 +83,23 @@ async fn main() -> Result<(), UStatus> {
         SERVICE_RESOURCE_ID,
     )
     .unwrap();
+
+    // The URI of the service entity
+    let service_uri = UUri::try_from_parts(
+        SERVICE_AUTHORITY,
+        SERVICE_UE_ID,
+        SERVICE_UE_VERSION_MAJOR,
+        0,
+    )
+    .unwrap();
+
+    let zenoh_config = common::get_zenoh_config();
+
+    let service: Arc<dyn UTransport> = Arc::new(
+        UPTransportZenoh::new(zenoh_config, service_uri)
+            .await
+            .unwrap(),
+    );
 
     let service_request_responder: Arc<dyn UListener> =
         Arc::new(ServiceRequestResponder::new(service.clone()));

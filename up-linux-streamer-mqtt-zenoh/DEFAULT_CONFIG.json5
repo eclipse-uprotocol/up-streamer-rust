@@ -51,6 +51,6 @@
       // publish messages output over vsomeip
       default_someip_application_id_for_someip_subscriptions: 10,
       // Whether to enable bridging across to the mechatronics network
-      enabled: true
-    },
+      enabled: false
+    }
 }

@@ -11,51 +11,37 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
+mod common;
+
 use chrono::Local;
 use chrono::Timelike;
-use clap::Parser;
 use hello_world_protos::hello_world_topics::Timer;
 use hello_world_protos::timeofday::TimeOfDay;
-use std::str::FromStr;
+use log::info;
 use std::sync::Arc;
 use std::time::Duration;
 use up_rust::{UMessageBuilder, UStatus, UTransport, UUri};
 use up_transport_zenoh::UPTransportZenoh;
-use zenoh::config::{Config, EndPoint};
 
-mod zenoh_common;
-
-const PUB_TOPIC_AUTHORITY: &str = "linux";
+const PUB_TOPIC_AUTHORITY: &str = "ecu_authority";
 const PUB_TOPIC_UE_ID: u32 = 0x3039;
 const PUB_TOPIC_UE_VERSION_MAJOR: u8 = 1;
 const PUB_TOPIC_RESOURCE_ID: u16 = 0x8001;
-
-fn publisher_uuri() -> UUri {
-    UUri::try_from_parts(
-        PUB_TOPIC_AUTHORITY,
-        PUB_TOPIC_UE_ID,
-        PUB_TOPIC_UE_VERSION_MAJOR,
-        0,
-    )
-    .unwrap()
-}
 
 #[tokio::main]
 async fn main() -> Result<(), UStatus> {
     env_logger::init();
 
-    println!("zenoh_publisher");
+    info!("Started zenoh_publisher");
 
-    let zenoh_config = Config::from_file("src/bin/zenoh_common/DEFAULT_CONFIG.json5").unwrap();
-
-    let zenoh_config = zenoh_common::get_zenoh_config();
-
-    let publisher_uri: String = (&publisher_uuri()).into();
-    let publisher: Arc<dyn UTransport> = Arc::new(
-        UPTransportZenoh::new(zenoh_config, publisher_uri)
-            .await
-            .unwrap(),
-    );
+    // This is the URI of the publisher entity
+    let publisher_uri = UUri::try_from_parts(
+        PUB_TOPIC_AUTHORITY,
+        PUB_TOPIC_UE_ID,
+        PUB_TOPIC_UE_VERSION_MAJOR,
+        0,
+    )
+    .unwrap();
 
     let source = UUri::try_from_parts(
         PUB_TOPIC_AUTHORITY,
@@ -64,6 +50,14 @@ async fn main() -> Result<(), UStatus> {
         PUB_TOPIC_RESOURCE_ID,
     )
     .unwrap();
+
+    let zenoh_config = common::get_zenoh_config();
+
+    let publisher: Arc<dyn UTransport> = Arc::new(
+        UPTransportZenoh::new(zenoh_config, publisher_uri)
+            .await
+            .unwrap(),
+    );
 
     loop {
         tokio::time::sleep(Duration::from_millis(1000)).await;
@@ -82,11 +76,11 @@ async fn main() -> Result<(), UStatus> {
             time: Some(time_of_day).into(),
             ..Default::default()
         };
-
+        // Publish messages signed with the source URI
         let publish_msg = UMessageBuilder::publish(source.clone())
             .build_with_protobuf_payload(&timer_message)
             .unwrap();
-        println!("Sending Publish message:\n{publish_msg:?}");
+        info!("Sending Publish message:\n{publish_msg:?}");
 
         publisher.send(publish_msg).await?;
     }

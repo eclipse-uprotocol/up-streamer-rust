@@ -154,21 +154,18 @@ async fn main() -> Result<(), UStatus> {
             &config.someip_config.authority,
             someip_transport.clone(),
         );
-        let forwarding_res = streamer
+
+        // Here we tell the streamer to forward any someip messages to the zenoh endpoint.
+        streamer
             .add_forwarding_rule(mechatronics_endpoint.clone(), host_endpoint.clone())
-            .await;
+            .await
+            .expect("Could not add someip -> zenoh forwarding rule");
 
-        if let Err(err) = forwarding_res {
-            panic!("Unable to add forwarding result: {err:?}");
-        }
-
-        let forwarding_res = streamer
+        // And here we set up the forwarding in the other direction.
+        streamer
             .add_forwarding_rule(host_endpoint.clone(), mechatronics_endpoint.clone())
-            .await;
-
-        if let Err(err) = forwarding_res {
-            panic!("Unable to add forwarding result: {err:?}");
-        }
+            .await
+            .expect("Could not add zenoh -> someip forwarding rule");
     }
 
     thread::park();

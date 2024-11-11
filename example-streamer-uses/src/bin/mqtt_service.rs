@@ -11,31 +11,21 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
+mod common;
+
 use async_trait::async_trait;
-use clap::Parser;
 use hello_world_protos::hello_world_service::{HelloRequest, HelloResponse};
 use log::error;
 use protobuf::Message;
-use std::str::FromStr;
 use std::sync::Arc;
 use std::thread;
-use up_client_mqtt5_rust::{MqttConfig, MqttProtocol, UPClientMqtt, UPClientMqttType};
+use up_client_mqtt5_rust::{UPClientMqtt, UPClientMqttType};
 use up_rust::{UListener, UMessage, UMessageBuilder, UStatus, UTransport, UUri, UUID};
 
-const SERVICE_AUTHORITY: &str = "linux";
+const SERVICE_AUTHORITY: &str = "cloud_authority";
 const SERVICE_UE_ID: u32 = 0x1236;
 const SERVICE_UE_VERSION_MAJOR: u8 = 1;
 const SERVICE_RESOURCE_ID: u16 = 0x0896;
-
-fn service_uuri() -> UUri {
-    UUri::try_from_parts(
-        SERVICE_AUTHORITY,
-        SERVICE_UE_ID,
-        SERVICE_UE_VERSION_MAJOR,
-        0,
-    )
-    .unwrap()
-}
 
 struct ServiceRequestResponder {
     client: Arc<dyn UTransport>,
@@ -83,31 +73,9 @@ async fn main() -> Result<(), UStatus> {
 
     println!("Started mqtt_service.");
 
-    let mqtt_config = MqttConfig {
-        mqtt_protocol: MqttProtocol::Mqtt,
-        mqtt_hostname: "localhost".to_string(),
-        mqtt_port: 1883,
-        max_buffered_messages: 100,
-        max_subscriptions: 100,
-        session_expiry_interval: 3600,
-        ssl_options: None,
-        username: "user_name".to_string(),
-    };
-
-    let service_uri: String = (&service_uuri()).into();
-
-    let service: Arc<dyn UTransport> = Arc::new(
-        UPClientMqtt::new(
-            mqtt_config,
-            UUID::build(),
-            SERVICE_AUTHORITY.to_string(),
-            UPClientMqttType::Device,
-        )
-        .await
-        .expect("Could not create mqtt transport."),
-    );
-
+    // We set the source filter to "any" so that we process messages from all device that send some.
     let source_filter = UUri::any();
+    // The sink filter gets specified so that we only process messages directed at this entity.
     let sink_filter = UUri::try_from_parts(
         SERVICE_AUTHORITY,
         SERVICE_UE_ID,
@@ -115,6 +83,19 @@ async fn main() -> Result<(), UStatus> {
         SERVICE_RESOURCE_ID,
     )
     .unwrap();
+
+    let mqtt_config = common::get_mqtt_config();
+
+    let service: Arc<dyn UTransport> = Arc::new(
+        UPClientMqtt::new(
+            mqtt_config,
+            UUID::build(),
+            SERVICE_AUTHORITY.to_string(),
+            UPClientMqttType::Device, // Todo: make sure that UPClientMqttType::Cloud also works
+        )
+        .await
+        .expect("Could not create mqtt transport."),
+    );
 
     let service_request_responder: Arc<dyn UListener> =
         Arc::new(ServiceRequestResponder::new(service.clone()));

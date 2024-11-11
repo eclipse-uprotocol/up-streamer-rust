@@ -15,10 +15,9 @@ mod config;
 
 use crate::config::Config;
 use clap::Parser;
-use log::{error, trace};
+use log::info;
 use std::fs::File;
 use std::io::Read;
-use std::str::FromStr;
 use std::sync::Arc;
 use std::thread;
 use up_client_mqtt5_rust::{MqttConfig, MqttProtocol, UPClientMqtt, UPClientMqttType};
@@ -28,19 +27,10 @@ use up_transport_zenoh::UPTransportZenoh;
 use usubscription_static_file::USubscriptionStaticFile;
 use zenoh::config::Config as ZenohConfig;
 
-const SERVICE_AUTHORITY: &str = "zenoh_authority";
+const SERVICE_AUTHORITY: &str = "ecu_authority";
 const SERVICE_UE_ID: u32 = 0x4444;
 const SERVICE_UE_VERSION_MAJOR: u8 = 1;
-
-fn streamer_uuri() -> UUri {
-    UUri::try_from_parts(
-        SERVICE_AUTHORITY,
-        SERVICE_UE_ID,
-        SERVICE_UE_VERSION_MAJOR,
-        0,
-    )
-    .unwrap()
-}
+const SERVICE_RESOURCE_ID: u16 = 0;
 
 #[derive(Parser)]
 #[command()]
@@ -53,8 +43,10 @@ struct StreamerArgs {
 async fn main() -> Result<(), UStatus> {
     env_logger::init();
 
-    let args = StreamerArgs::parse();
+    info!("Started up-linux-streamer-mqtt-zenoh");
 
+    // Get the config file.
+    let args = StreamerArgs::parse();
     let mut file = File::open(args.config)
         .map_err(|e| UStatus::fail_with_code(UCode::NOT_FOUND, format!("File not found: {e:?}")))?;
     let mut contents = String::new();
@@ -75,6 +67,7 @@ async fn main() -> Result<(), UStatus> {
     let subscription_path = config.usubscription_config.file_path;
     let usubscription = Arc::new(USubscriptionStaticFile::new(subscription_path));
 
+    // Start the streamer instance.
     let mut streamer = UStreamer::new(
         "up-linux-streamer",
         config.up_streamer_config.message_queue_size,
@@ -82,10 +75,16 @@ async fn main() -> Result<(), UStatus> {
     )
     .expect("Failed to create uStreamer");
 
-    let zenoh_config =
-        ZenohConfig::from_file("up-linux-streamer-mqtt-zenoh/ZENOH_CONFIG.json5").unwrap();
+    // In this implementation we define that the streamer lives in the same ecu component as the zenoh entity and so shares its authority name but with a different service ID.
+    let streamer_uri = UUri::try_from_parts(
+        SERVICE_AUTHORITY,
+        SERVICE_UE_ID,
+        SERVICE_UE_VERSION_MAJOR,
+        SERVICE_RESOURCE_ID,
+    )
+    .unwrap();
 
-    let streamer_uri: String = (&streamer_uuri()).into();
+    let zenoh_config = ZenohConfig::from_file(config.zenoh_transport_config.config_file).unwrap();
 
     let zenoh_transport: Arc<dyn UTransport> = Arc::new(
         UPTransportZenoh::new(zenoh_config, streamer_uri)
@@ -93,7 +92,8 @@ async fn main() -> Result<(), UStatus> {
             .expect("Unable to initialize Zenoh UTransport"),
     );
 
-    let zenoh_endpoint = Endpoint::new("host_endpoint", "zenoh_authority", zenoh_transport.clone());
+    // Because the streamer runs on the ecu side in this implementation, we call the zenoh endpoint the "host".
+    let zenoh_endpoint = Endpoint::new("host_endpoint", "ecu_authority", zenoh_transport.clone());
 
     let mqtt_config = MqttConfig {
         mqtt_protocol: MqttProtocol::Mqtt,
@@ -103,7 +103,7 @@ async fn main() -> Result<(), UStatus> {
         max_subscriptions: 100,
         session_expiry_interval: 3600,
         ssl_options: None,
-        username: "user_name".to_string(),
+        username: "streamer".to_string(),
     };
 
     let mqtt_transport: Arc<dyn UTransport> = Arc::new(
@@ -117,13 +117,16 @@ async fn main() -> Result<(), UStatus> {
         .expect("Could not create mqtt transport."),
     );
 
-    let mqtt_endpoint = Endpoint::new("mqtt endpoint", "linux", mqtt_transport.clone());
+    // In this implementation, the mqtt entity runs in the cloud and has its own authority.
+    let mqtt_endpoint = Endpoint::new("cloud_endpoint", "cloud_authority", mqtt_transport.clone());
 
+    // Here we tell the streamer to forward any zenoh messages to the mqtt endpoint
     streamer
         .add_forwarding_rule(zenoh_endpoint.clone(), mqtt_endpoint.clone())
         .await
         .expect("Could not add zenoh -> mqtt forwarding rule");
 
+    // And here we set up the forwarding in the other direction.
     streamer
         .add_forwarding_rule(mqtt_endpoint.clone(), zenoh_endpoint.clone())
         .await

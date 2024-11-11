@@ -11,23 +11,24 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
+mod common;
+
 use async_trait::async_trait;
-use clap::Parser;
 use hello_world_protos::hello_world_service::{HelloRequest, HelloResponse};
+use log::debug;
 use protobuf::Message;
-use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
-use up_client_mqtt5_rust::{MqttConfig, MqttProtocol, UPClientMqtt, UPClientMqttType};
+use up_client_mqtt5_rust::{UPClientMqtt, UPClientMqttType};
 use up_rust::{UListener, UMessage, UMessageBuilder, UStatus, UTransport, UUri, UUID};
 
-const SERVICE_AUTHORITY: &str = "linux";
+const SERVICE_AUTHORITY: &str = "ecu_authority";
 const SERVICE_UE_ID: u32 = 0x1236;
 const SERVICE_UE_VERSION_MAJOR: u8 = 1;
 const SERVICE_RESOURCE_ID: u16 = 0x0896;
 
-const CLIENT_AUTHORITY: &str = "mqtt_authority";
-const CLIENT_UE_ID: u32 = 0x4321;
+const CLIENT_AUTHORITY: &str = "cloud_authority";
+const CLIENT_UE_ID: u32 = 0x5678;
 const CLIENT_UE_VERSION_MAJOR: u8 = 1;
 const CLIENT_RESOURCE_ID: u16 = 0;
 
@@ -38,7 +39,7 @@ struct ServiceResponseListener;
 #[async_trait]
 impl UListener for ServiceResponseListener {
     async fn on_receive(&self, msg: UMessage) {
-        println!("ServiceResponseListener: Received a message: {msg:?}");
+        debug!("ServiceResponseListener: Received a message: {msg:?}");
 
         let Some(payload_bytes) = msg.payload else {
             panic!("No payload bytes");
@@ -48,7 +49,7 @@ impl UListener for ServiceResponseListener {
             panic!("Unable to parse into HelloResponse");
         };
 
-        println!("Here we received response: {hello_response:?}");
+        debug!("Here we received response: {hello_response:?}");
     }
 }
 
@@ -58,28 +59,7 @@ async fn main() -> Result<(), UStatus> {
 
     println!("Started mqtt_client.");
 
-    let mqtt_config = MqttConfig {
-        mqtt_protocol: MqttProtocol::Mqtt,
-        mqtt_hostname: "localhost".to_string(),
-        mqtt_port: 1883,
-        max_buffered_messages: 100,
-        max_subscriptions: 100,
-        session_expiry_interval: 3600,
-        ssl_options: None,
-        username: "user_name".to_string(),
-    };
-
-    let client: Arc<dyn UTransport> = Arc::new(
-        UPClientMqtt::new(
-            mqtt_config,
-            UUID::build(),
-            "authority_name".to_string(),
-            UPClientMqttType::Cloud,
-        )
-        .await
-        .expect("Could not create mqtt transport."),
-    );
-
+    // Source represents the client (specifically the topic that the client sends to)
     let source = UUri::try_from_parts(
         CLIENT_AUTHORITY,
         CLIENT_UE_ID,
@@ -87,6 +67,7 @@ async fn main() -> Result<(), UStatus> {
         CLIENT_RESOURCE_ID,
     )
     .unwrap();
+    // Sink is the destination entity which the streamer should rout our messages to.
     let sink = UUri::try_from_parts(
         SERVICE_AUTHORITY,
         SERVICE_UE_ID,
@@ -94,6 +75,19 @@ async fn main() -> Result<(), UStatus> {
         SERVICE_RESOURCE_ID,
     )
     .unwrap();
+
+    let mqtt_config = common::get_mqtt_config();
+
+    let client: Arc<dyn UTransport> = Arc::new(
+        UPClientMqtt::new(
+            mqtt_config,
+            UUID::build(),
+            CLIENT_AUTHORITY.to_string(),
+            UPClientMqttType::Device,
+        )
+        .await
+        .expect("Could not create mqtt transport."),
+    );
 
     let service_response_listener: Arc<dyn UListener> = Arc::new(ServiceResponseListener);
     client

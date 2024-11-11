@@ -12,50 +12,34 @@
  ********************************************************************************/
 
 use async_trait::async_trait;
-use clap::Parser;
 use hello_world_protos::hello_world_service::{HelloRequest, HelloResponse};
+use log::{debug, info};
 use protobuf::Message;
-use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 use up_rust::{UListener, UMessage, UMessageBuilder, UStatus, UTransport, UUri};
 use up_transport_zenoh::UPTransportZenoh;
-use zenoh::config::{Config, EndPoint};
 
-mod zenoh_common;
+mod common;
 
-const SERVICE_AUTHORITY: &str = "linux";
+const SERVICE_AUTHORITY: &str = "cloud_authority";
 const SERVICE_UE_ID: u32 = 0x1236;
 const SERVICE_UE_VERSION_MAJOR: u8 = 1;
 const SERVICE_RESOURCE_ID: u16 = 0x0896;
 
-const CLIENT_AUTHORITY: &str = "zenoh_authority";
+const CLIENT_AUTHORITY: &str = "ecu_authority";
 const CLIENT_UE_ID: u32 = 0x5678;
 const CLIENT_UE_VERSION_MAJOR: u8 = 1;
 const CLIENT_RESOURCE_ID: u16 = 0;
 
 const REQUEST_TTL: u32 = 1000;
 
-const REMOTE_AUTHORITY: &str = "linux";
-
-fn client_uuri() -> UUri {
-    UUri::try_from_parts(CLIENT_AUTHORITY, CLIENT_UE_ID, CLIENT_UE_VERSION_MAJOR, 0).unwrap()
-}
-
-#[derive(Parser, Debug)]
-#[command(version, about, long_about = None)]
-struct Args {
-    /// The endpoint for Zenoh client to connect to
-    #[arg(short, long, default_value = "tcp/0.0.0.0:7445")]
-    endpoint: String,
-}
-
 struct ServiceResponseListener;
 
 #[async_trait]
 impl UListener for ServiceResponseListener {
     async fn on_receive(&self, msg: UMessage) {
-        println!("ServiceResponseListener: Received a message: {msg:?}");
+        debug!("ServiceResponseListener: Received a message: {msg:?}");
 
         let Some(payload_bytes) = msg.payload else {
             panic!("No payload bytes");
@@ -65,7 +49,7 @@ impl UListener for ServiceResponseListener {
             panic!("Unable to parse into HelloResponse");
         };
 
-        println!("Here we received response: {hello_response:?}");
+        info!("Here we received response: {hello_response:?}");
     }
 }
 
@@ -73,20 +57,9 @@ impl UListener for ServiceResponseListener {
 async fn main() -> Result<(), UStatus> {
     env_logger::init();
 
-    let args = Args::parse();
+    info!("Stared zenoh_client.");
 
-    println!("zenoh_client");
-
-    let client_uri: String = (&client_uuri()).into();
-
-    let zenoh_config = zenoh_common::get_zenoh_config();
-
-    let client = UPTransportZenoh::new(zenoh_config, client_uri)
-        .await
-        .unwrap();
-
-    let wrapped_client: Arc<dyn UTransport> = Arc::new(client);
-
+    // Source represents the client (specifically the topic that the client sends to)
     let source = UUri::try_from_parts(
         CLIENT_AUTHORITY,
         CLIENT_UE_ID,
@@ -94,14 +67,25 @@ async fn main() -> Result<(), UStatus> {
         CLIENT_RESOURCE_ID,
     )
     .unwrap();
+    // Sink is the entity which the streamer should rout our messages to.
     let sink = UUri::try_from_parts(
         SERVICE_AUTHORITY,
         SERVICE_UE_ID,
         SERVICE_UE_VERSION_MAJOR,
         SERVICE_RESOURCE_ID,
     )
-    .unwrap(); // this is who we wanna call (should match the mqtt uuri)
+    .unwrap();
 
+    let zenoh_config = common::get_zenoh_config();
+
+    let client = UPTransportZenoh::new(zenoh_config, source.clone())
+        .await
+        .unwrap();
+
+    let wrapped_client: Arc<dyn UTransport> = Arc::new(client);
+
+    // Initiate the listener which will wait for messages in the background.
+    // Since we want to listen to responses to the requests we are making we need to flip the sink (destination) and source (origin)
     let service_response_listener: Arc<dyn UListener> = Arc::new(ServiceResponseListener);
     wrapped_client
         .register_listener(&sink, Some(&source), service_response_listener)
@@ -117,10 +101,11 @@ async fn main() -> Result<(), UStatus> {
         };
         i += 1;
 
+        // Build a Request Message addressed to the sink and signed by the source
         let request_msg = UMessageBuilder::request(sink.clone(), source.clone(), REQUEST_TTL)
             .build_with_protobuf_payload(&hello_request)
             .unwrap();
-        println!("Sending Request message:\n{request_msg:?}");
+        info!("Sending Request message:\n{request_msg:?}");
 
         wrapped_client.send(request_msg).await?;
     }
