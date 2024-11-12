@@ -12,6 +12,7 @@
  ********************************************************************************/
 
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(deny_unknown_fields)]
@@ -19,8 +20,12 @@ pub struct Config {
     pub(crate) up_streamer_config: UpStreamerConfig,
     pub(crate) streamer_uuri: StreamerUuri,
     pub(crate) usubscription_config: USubscriptionConfig,
-    pub(crate) zenoh_transport_config: ZenohTransportConfig,
-    pub(crate) host_config: HostConfig,
+    pub(crate) host_transport: HostTransport,
+    pub(crate) zenoh_config: ZenohConfig,
+    pub(crate) someip_config: SomeipConfig,
+    pub(crate) mqtt_config: MqttConfig,
+    pub(crate) enabled_transports: Vec<Transport>,
+    pub(crate) forwarding: Vec<Forwarding>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
@@ -35,6 +40,7 @@ pub struct StreamerUuri {
     pub(crate) authority: String,
     pub(crate) ue_id: u32,
     pub(crate) ue_version_major: u8,
+    pub(crate) resource_id: u16,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
@@ -45,17 +51,53 @@ pub struct USubscriptionConfig {
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(deny_unknown_fields)]
-pub struct HostConfig {
-    pub(crate) transport: HostTransport,
+pub struct ZenohConfig {
+    pub(crate) authority: String,
+    pub(crate) endpoint_name: String,
+    pub(crate) config_file: String,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(deny_unknown_fields)]
-pub struct ZenohTransportConfig {
-    pub(crate) config_file: String,
+pub struct SomeipConfig {
+    pub(crate) authority: String,
+    pub(crate) endpoint_name: String,
+    pub(crate) config_file: PathBuf,
+    pub(crate) default_someip_application_id_for_someip_subscriptions: u16,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct MqttConfig {
+    pub(crate) authority: String,
+    pub(crate) endpoint_name: String,
+    pub(crate) mqtt_hostname: String,
+    pub(crate) mqtt_port: u16,
+    pub(crate) max_buffered_messages: i32,
+    pub(crate) max_subscriptions: i32,
+    pub(crate) session_expiry_interval: i32,
+    pub(crate) username: String,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub enum HostTransport {
     Zenoh,
+    Mqtt,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone, Hash, PartialEq, Eq)]
+pub enum Transport {
+    Zenoh,
+    Mqtt,
+    Someip,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+pub enum Forwarding {
+    ZenohToMqtt,
+    ZenohToSomeip,
+    MqttToZenoh,
+    MqttToSomeip,
+    SomeipToZenoh,
+    SomeipToMqtt,
 }

@@ -22,12 +22,12 @@ use std::thread;
 use up_rust::{UListener, UMessage, UStatus, UTransport, UUri};
 use up_transport_zenoh::UPTransportZenoh;
 
-const PUB_TOPIC_AUTHORITY: &str = "ecu_authority";
+const PUB_TOPIC_AUTHORITY: &str = "cloud_authority";
 const PUB_TOPIC_UE_ID: u32 = 0x3039;
 const PUB_TOPIC_UE_VERSION_MAJOR: u8 = 1;
 const PUB_TOPIC_RESOURCE_ID: u16 = 0x8001;
 
-const SUB_TOPIC_AUTHORITY: &str = "cloud_authority";
+const SUB_TOPIC_AUTHORITY: &str = "ecu_authority";
 const SUB_TOPIC_UE_ID: u32 = 0x5BB0;
 const SUB_TOPIC_UE_VERSION_MAJOR: u8 = 1;
 const SUB_TOPIC_RESOURCE_ID: u16 = 0;

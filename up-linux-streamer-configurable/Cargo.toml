@@ -1,0 +1,42 @@
+# Copyright (c) 2024 Contributors to the Eclipse Foundation
+#
+# See the NOTICE file(s) distributed with this work for additional
+# information regarding copyright ownership.
+#
+# This program and the accompanying materials are made available under the
+# terms of the Apache License Version 2.0 which is available at
+# https://www.apache.org/licenses/LICENSE-2.0
+#
+# SPDX-License-Identifier: Apache-2.0
+
+[package]
+name = "up-linux-streamer-configurable"
+rust-version.workspace = true
+version.workspace = true
+repository.workspace = true
+homepage.workspace = true
+edition.workspace = true
+keywords.workspace = true
+license.workspace = true
+
+
+[dependencies]
+async-trait = { workspace = true }
+chrono = { version = "0.4" }
+clap = { version = "4.5.9", features = ["derive"] }
+env_logger = { version = "0.10.2" }
+log = { workspace = true }
+json5 = { workspace = true }
+protobuf = { workspace = true }
+serde = { workspace = true }
+tokio = { workspace = true }
+up-rust = { workspace = true }
+up-streamer = { path = "../up-streamer" }
+up-transport-zenoh = { version = "0.3.0"  }
+up-client-mqtt5-rust = { git = "https://github.com/eclipse-uprotocol/up-transport-mqtt5-rust", rev = "18fe342b428e65c5cbd39a060a5a5d8a6a96f86b" }
+up-transport-vsomeip = { git = "https://github.com/eclipse-uprotocol/up-transport-vsomeip-rust.git", tag = "v0.2.0", default-features = false }
+zenoh = { version = "1.0.0-alpha.6", features = ["unstable"]}
+usubscription-static-file = {path = "../utils/usubscription-static-file"}
+
+[dev-dependencies]
+hello-world-protos = { path = "../utils/hello-world-protos" }

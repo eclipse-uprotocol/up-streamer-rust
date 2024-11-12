@@ -1,0 +1,4 @@
+{
+    "//ecu_authority/3039/1/8001": ["//cloud_authority/5678/1/1234"],
+    "//cloud_authority/3039/1/8001": ["//ecu_authority/5678/1/1234"]
+}

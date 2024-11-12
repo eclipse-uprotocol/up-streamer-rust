@@ -16,7 +16,7 @@ members = [
     "utils/hello-world-protos",
     "utils/integration-test-utils",
     "up-linux-streamer-someip-zenoh", "up-linux-streamer-mqtt-zenoh", "up-linux-streamer-plugin",
-    "up-streamer", "subscription-cache", "utils/usubscription-static-file"]
+    "up-streamer", "subscription-cache", "utils/usubscription-static-file", "up-linux-streamer-configurable"]
 
 [workspace.package]
 rust-version = "1.76.0"

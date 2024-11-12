@@ -18,19 +18,26 @@
       // Determines the ue_version_major of the streamer
       // Used when initializing host transport
       ue_version_major: 1
+      // Determines the resource_id of the streamer
+      // Used when initializing host transport
+      resource_id: 0
     },
     usubscription_config: {
       // Lists the path to the subscription file when using static file
-      file_path: "./up-linux-streamer-mqtt-zenoh/static_subscriptions.json"
-    },
-    zenoh_transport_config: {
-      // Configuration file which is where zenoh config information is stored
-      config_file: "./up-linux-streamer-mqtt-zenoh/ZENOH_CONFIG.json5"
+      file_path: "./utils/usubscription-static-file/static-configs/testdata.json"
     },
     // Configurations related to the host device we are running the streamer on
-    host_config: {
+    host_transport: {
       // Determines which transport to initialize for the host device
       transport: "Zenoh",
+    },
+    zenoh_config: {
+        // Determines the authority_name of the Zenoh Component
+        authority: "linux_authority",
+        // Determines the name of the endpoint that is given to the streamer for the forwarding
+        endpoint_name: "linux_endpoint",
+      // Configuration file which is where zenoh config information is stored
+      config_file: "up-linux-streamer-configurable/ZENOH_CONFIG.json5"
     },
     someip_config: {
       // Determines the authority_name of the mechatronics network
@@ -52,5 +59,24 @@
       default_someip_application_id_for_someip_subscriptions: 10,
       // Whether to enable bridging across to the mechatronics network
       enabled: false
-    }
+    },
+    mqtt_config: {
+        // Determines the authority of the Mqtt Transport
+        authority: "cloud_authority",
+        // Determines the name of the endpoint that is given to the streamer for the forwarding
+        endpoint_name: "cloud_endpoint",
+        // Host URL of the MQTT broker
+        mqtt_hostname: "localhost",
+        // Port that the broker listens to
+        mqtt_port: 1883,
+        // Max number of messages that will be buffered
+        max_buffered_messages: 100,
+        // Max number of subscriptions that the client can make
+        max_subscriptions: 100,
+        // Expiration time of client connection in seconds
+        session_expiry_interval: 3600,
+        // Username that the client uses to connect to the broker
+        username: "cloud_user"
+    },
+    enabled_transports:
 }

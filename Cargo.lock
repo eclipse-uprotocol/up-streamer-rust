@@ -4231,6 +4231,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "up-linux-streamer-configurable"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "clap",
+ "env_logger 0.10.2",
+ "hello-world-protos",
+ "json5",
+ "log",
+ "protobuf",
+ "serde",
+ "tokio",
+ "up-client-mqtt5-rust",
+ "up-rust",
+ "up-streamer",
+ "up-transport-vsomeip",
+ "up-transport-zenoh",
+ "usubscription-static-file",
+ "zenoh",
+]
+
+[[package]]
 name = "up-linux-streamer-mqtt-zenoh"
 version = "0.1.0"
 dependencies = [
