@@ -33,14 +33,23 @@ async-trait = { version = "0.1" }
 clap = { version = "4.5" }
 env_logger = { version = "0.10.1" }
 futures = { version = "0.3.30" }
+lazy_static = { version = "1.5.0" }
 log = { version = "0.4.20" }
 json5 = { version =  "0.4.1" }
 serde = { version = "1.0.154", features = ["derive"] }
 serde_json = { version = "1.0.94" }
 uuid = { version = "1.7.0" }
-tokio = { version = "1.35.1", default-features = false }
+tokio = { version = "1.35.1", default-features = false, features = ["rt", "rt-multi-thread", "sync", "time"] }
 protobuf = { version = "3.3", features = ["with-bytes"] }
-up-rust = { version = "0.1.5", default-features = false }
+up-rust = { version = "0.2.0", default-features = false }
+up-transport-zenoh = { version = "0.3.0" }
+up-transport-vsomeip = { git = "https://github.com/eclipse-uprotocol/up-transport-vsomeip-rust.git", tag = "v0.3.0", default-features = false }
+zenoh = { version = "1.0.0", features = ["default", "plugins"] }
+zenoh-core = { version = "1.0.0" }
+zenoh-plugin-trait = { version = "1.0.0" }
+zenoh-result = { version = "1.0.0" }
+zenoh-util = { version = "1.0.0" }
+zenoh_backend_traits = { version = "1.0.0" }
 
 [profile.dev]
 debug = true

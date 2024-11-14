@@ -20,23 +20,26 @@ keywords.workspace = true
 license.workspace = true
 
 [features]
-default = ["bundled-vsomeip", "dynamic_plugin", "zenoh/default", "zenoh/unstable", "zenoh/plugins"]
+default = ["dynamic_plugin"]
+zenoh-transport = ["up-transport-zenoh", "zenoh", "zenoh-core", "zenoh-plugin-trait",
+                          "zenoh-result", "zenoh-util", "zenoh_backend_traits"]
+vsomeip-transport = ["up-transport-vsomeip"]
 bundled-vsomeip = ["up-transport-vsomeip/bundled"]
 dynamic_plugin = []
 
 [lib]
-# When auto-detecting the "example" plugin, `zenohd` will look for a dynamic library named "zenoh_plugin_example"
+# When auto-detecting the "up_linux_streamer" plugin, `zenohd` will look for a dynamic library named "zenoh_plugin_up_linux_streamer"
 # `zenohd` will expect the file to be named according to OS conventions:
-#   - libzenoh_plugin_example.so on linux
-#   - libzenoh_plugin_example.dylib on macOS
-#   - zenoh_plugin_example.dll on Windows
+#   - libzenoh_plugin_up_linux_streamer.so on linux
+#   - libzenoh_plugin_up_linux_streamer.dylib on macOS
+#   - zenoh_plugin_up_linux_streamer.dll on Windows
 name = "zenoh_plugin_up_linux_streamer"
 # This crate type will make `cargo` output a dynamic library instead of a rust static library
 crate-type = ["cdylib"]
 
 [dependencies]
-async-std = { version = "=1.12.0", default-features = false }
 const_format = "0.2.30"
+env_logger = "0.10.2"
 futures = { version = "0.3.25" }
 git-version = { version = "0.3.5" }
 tracing = { version = "0.1" }
@@ -44,14 +47,13 @@ serde = { version = "1.0.154" }
 serde_json = { version = "1.0.94" }
 tokio = { version = "1.35.1", default-features = false }
 up-rust = { workspace = true }
-up-transport-zenoh = { version = "0.1.1"  }
-up-transport-vsomeip = { git = "https://github.com/eclipse-uprotocol/up-transport-vsomeip-rust.git", tag = "v0.1.0", default-features = false }
+up-transport-zenoh = { workspace = true, optional = true }
+up-transport-vsomeip = { workspace = true, optional = true }
 up-streamer = { path = "../up-streamer" }
 usubscription-static-file = {path = "../utils/usubscription-static-file"}
-zenoh = { version = "1.0.0-alpha.6", features = ["unstable", "internal", "plugins"]}
-zenoh-core = { version = "1.0.0-alpha.6" }
-zenoh-plugin-trait = { version = "1.0.0-alpha.6" }
-zenoh-result = { version = "1.0.0-alpha.6" }
-zenoh-util = { version = "1.0.0-alpha.6" }
-zenoh_backend_traits = { version = "1.0.0-alpha.6" }
-env_logger = "0.10.2"
+zenoh = { workspace = true, optional = true }
+zenoh-core = { workspace = true, optional = true }
+zenoh-plugin-trait = { workspace = true, optional = true }
+zenoh-result = { workspace = true, optional = true }
+zenoh-util = { workspace = true, optional = true }
+zenoh_backend_traits = { workspace = true, optional = true }

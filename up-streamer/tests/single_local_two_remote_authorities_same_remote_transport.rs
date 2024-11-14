@@ -12,8 +12,6 @@
  ********************************************************************************/
 
 use async_broadcast::broadcast;
-use async_std::sync::{Condvar, Mutex};
-use async_std::task;
 use futures::future::join;
 use integration_test_utils::{
     check_messages_in_order, check_send_receive_message_discrepancy, local_authority,
@@ -30,6 +28,8 @@ use log::debug;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
+use tokio::sync::Mutex;
+use tokio_condvar::Condvar;
 use up_rust::{UListener, UTransport};
 use up_streamer::{Endpoint, UStreamer};
 use usubscription_static_file::USubscriptionStaticFile;
@@ -37,7 +37,7 @@ use usubscription_static_file::USubscriptionStaticFile;
 const DURATION_TO_RUN_CLIENTS: u128 = 1_000;
 const SENT_MESSAGE_VEC_CAPACITY: usize = 10_000;
 
-#[async_std::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn single_local_two_remote_authorities_same_remote_transport() {
     // using async_broadcast to simulate communication protocol
     let (tx_1, rx_1) = broadcast(20000);
@@ -257,7 +257,7 @@ async fn single_local_two_remote_authorities_same_remote_transport() {
     // Now signal both clients to resume
     signal_to_resume(all_signal_should_pause.clone()).await;
 
-    task::sleep(Duration::from_millis(DURATION_TO_RUN_CLIENTS as u64)).await;
+    tokio::time::sleep(Duration::from_millis(DURATION_TO_RUN_CLIENTS as u64)).await;
 
     {
         let mut local_command = local_command.lock().await;

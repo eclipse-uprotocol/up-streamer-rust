@@ -13,14 +13,15 @@
 
 use crate::UPClientFoo;
 use async_broadcast::{Receiver, Sender};
-use async_std::sync::{Condvar, Mutex};
-use async_std::task;
 use log::{debug, error};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
+use tokio::runtime::Builder;
+use tokio::sync::Mutex;
+use tokio_condvar::Condvar;
 use up_rust::{UListener, UMessage, UStatus, UTransport, UUri, UUID};
 
 pub type Signal = Arc<(Mutex<bool>, Condvar)>;
@@ -197,13 +198,13 @@ async fn poll_for_new_command(
         let (lock, cvar) = &*pause_execution;
         let mut should_pause = lock.lock().await;
         while *should_pause {
-            task::sleep(Duration::from_millis(100)).await;
+            tokio::time::sleep(Duration::from_millis(100)).await;
 
             let command = client_command.lock().await;
             if *command == ClientCommand::Stop {
                 let times: u64 = client.times_received.load(Ordering::SeqCst);
                 println!("{name} had rx of: {times}");
-                task::sleep(Duration::from_millis(1000)).await;
+                tokio::time::sleep(Duration::from_millis(1000)).await;
                 return true;
             } else {
                 match &*command {
@@ -292,7 +293,13 @@ pub async fn run_client(
     client_history: ClientHistory,
 ) -> JoinHandle<Vec<UMessage>> {
     std::thread::spawn(move || {
-        task::block_on(async move {
+        // Create a new single-threaded runtime
+        let runtime = Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("Failed to create Tokio runtime");
+
+        runtime.block_on(async move {
             let client = configure_client(&client_configuration).await;
 
             let mut active_connection_listing = Vec::new();
@@ -353,7 +360,7 @@ pub async fn run_client(
                 )
                 .await;
 
-                task::sleep(Duration::from_millis(1)).await;
+                tokio::time::sleep(Duration::from_millis(1)).await;
             }
         })
     })

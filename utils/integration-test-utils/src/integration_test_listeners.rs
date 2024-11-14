@@ -11,10 +11,10 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
-use async_std::sync::Mutex;
 use async_trait::async_trait;
 use log::debug;
 use std::sync::Arc;
+use tokio::sync::Mutex;
 use up_rust::{UListener, UMessage};
 
 #[derive(Clone)]
