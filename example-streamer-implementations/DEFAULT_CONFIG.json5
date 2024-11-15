@@ -11,7 +11,7 @@
     streamer_uuri: {
       // Determines the authority_name of the host device
       // Used when initializing host transport
-      authority: "linux",
+      authority: "authority_B",
       // Determines the ue_id of the streamer
       // Used when initializing host transport
       ue_id: 78,
@@ -21,11 +21,11 @@
     },
     usubscription_config: {
       // Lists the path to the subscription file when using static file
-      file_path: "./utils/usubscription-static-file/static-configs/testdata.json"
+      file_path: "/home/ubuntu/up-streamer-rust/example-streamer-implementations/subscription_data.json"
     },
     zenoh_transport_config: {
       // Configuration file which is where zenoh config information is stored
-      config_file: "./up-linux-streamer/ZENOH_CONFIG.json5"
+      config_file: "/home/ubuntu/up-streamer-rust/example-streamer-implementations/ZENOH_CONFIG.json5"
     },
     // Configurations related to the host device we are running the streamer on
     host_config: {
@@ -35,7 +35,7 @@
     someip_config: {
       // Determines the authority_name of the mechatronics network
       // Used when initializing SOME/IP transport
-      authority: "me_authority",
+      authority: "authority_C",
       // The vsomeip configuration file to be used when initializing the vsomeip transport
       //
       // Some guidance:
@@ -46,11 +46,9 @@
       //     called
       //   * the `id` field should be chosen such that it matches the ue_id of the uE on the host
       //     device
-      config_file: "../../up-linux-streamer/vsomeip-configs/point_to_point.json",
+      config_file: "/home/ubuntu/up-streamer-rust/example-streamer-implementations/vsomeip-configs/point_to_point.json",
       // An ID to use for a vsomeip application which will represent all subscriptions to
       // publish messages output over vsomeip
-      default_someip_application_id_for_someip_subscriptions: 10,
-      // Whether to enable bridging across to the mechatronics network
-      enabled: true
+      default_someip_application_id_for_someip_subscriptions: 10
     },
 }

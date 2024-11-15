@@ -63,7 +63,6 @@ pub struct SomeipConfig {
     pub(crate) authority: String,
     pub(crate) config_file: PathBuf,
     pub(crate) default_someip_application_id_for_someip_subscriptions: u16,
-    pub(crate) enabled: bool,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
