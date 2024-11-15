@@ -15,7 +15,7 @@ members = [
     "example-streamer-uses",
     "utils/hello-world-protos",
     "utils/integration-test-utils",
-    "up-linux-streamer", "up-linux-streamer-plugin",
+    "example-streamer-implementations", "up-linux-streamer-plugin",
     "up-streamer", "subscription-cache", "utils/usubscription-static-file"]
 
 [workspace.package]
@@ -44,6 +44,7 @@ protobuf = { version = "3.3", features = ["with-bytes"] }
 up-rust = { version = "0.2.0", default-features = false }
 up-transport-zenoh = { version = "0.3.0" }
 up-transport-vsomeip = { git = "https://github.com/eclipse-uprotocol/up-transport-vsomeip-rust.git", tag = "v0.3.0", default-features = false }
+up-transport-mqtt5 = { version = "0.1.0" }
 zenoh = { version = "1.0.0", features = ["default", "plugins"] }
 zenoh-core = { version = "1.0.0" }
 zenoh-plugin-trait = { version = "1.0.0" }

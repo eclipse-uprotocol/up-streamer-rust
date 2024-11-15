@@ -116,7 +116,7 @@ rust-version = "1.74.0"
 
 ### Make a build of Zenoh and copy to standalone folder
 
-Within the zenoh folder:
+Within the Zenoh folder:
 
 ```bash
 cargo build

@@ -1,66 +1,76 @@
-# Examples
 
-## Running examples
+# Running entities
 
-### Running the `up-linux-streamer`
+## Running a UStreamer
 
-To run one of the examples below and see client and service communicate, you'll need to run the `up-linux-streamer` to bridge between the transports in a terminal. See `up-linux-streamer` README for details.
+To run one of the examples below and see two entities communicate, you'll need to run one of the two example implementations of the UStreamer to bridge between the transports in a terminal. Check out the `example-streamer-implementation` README for details.
 
-### Mechatronics client to high compute service
+## Running two UEntities
 
-Launch the `uE_service` example in another terminal:
+To launch any of the entities choose the correct bin and give it the appropriate feature flags:
+
+| --bin      | --features        |
+| ---------- | -------------     |
+| mqtt_*     | mqtt-transport    |
+| zenoh_*    | zenoh-transport   |
+| someip*    | vsomeip-transport |
+
+Combined:
 
 ```bash
-LD_LIBRARY_PATH=$LD_LIBRARY_PATH:<path/to/vsomeip/lib> cargo run --example uE_service -- --endpoint tcp/0.0.0.0:7445
+cargo run --bin <transport-entity> --features <*-transport>
 ```
 
-In this example, the "--endpoint" flag will set the endpoint address upon which the zenoh client will listen.
-
-Launch the `mE_client` example in another terminal:
+To check which combinations of entities are possible for a test run check the `example-streamer-implementation` README.
+Before running any entity that uses MQTT remember to first start up a MQTT broker, for example the mosquitto broker found in this repo:
 
 ```bash
-LD_LIBRARY_PATH=$LD_LIBRARY_PATH:<path/to/vsomeip/lib> cargo run --example mE_client 
+cd ../utils/mosquitto
+docker compose up
 ```
 
-The service and client will run forever. Every second a new message is sent from the mE_client via vsomeip. That vsomeip message is caught and routed over Zenoh to the uE_service. The response makes the same journey in reverse.
+# Working setup: a mechatronics client and a high compute service
 
-It's intended that you see the following in the terminal running the `mE_client`:
+This example should help with understanding what the streamer does and how it can be used. The first part of the system that we are building here is a mechatronics component, which could be some embedded chip deep down in the belly of a car, connected to some mechanical parts like a windshield wiper. This component can (or wants to) only use SOME/IP as a transport protocol either because thats what its developers like to use or because of some hardware limitation. The second component is a high compute unit running some small Linux system that serves as the vehicles boardcomputer. The software thats running here uses Zenoh as its preferred transport protocol because a solution architect once decided that it should do that. The UStreamer comes into play as the system that allows these two components to communicate with each other while staying true to their respective protocols.
 
-> Sending Request message:
-UMessage { attributes: MessageField(Some(UAttributes { id: MessageField(Some(UUID { msb: 112888656100425728, lsb: 9811577761723054400, special_fields: SpecialFields { unknown_fields: UnknownFields { fields: None }, cached_size: CachedSize { size: 0 } } })), type_: UMESSAGE_TYPE_REQUEST, source: MessageField(Some(UUri { authority_name: "me_authority", ue_id: 22136, ue_version_major: 1, resource_id: 0, special_fields: SpecialFields { unknown_fields: UnknownFields { fields: None }, cached_size: CachedSize { size: 0 } } })), sink: MessageField(Some(UUri { authority_name: "linux", ue_id: 4662, ue_version_major: 1, resource_id: 2198, special_fields: SpecialFields { unknown_fields: UnknownFields { fields: None }, cached_size: CachedSize { size: 0 } } })), priority: UPRIORITY_CS4, ttl: Some(1000), permission_level: None, commstatus: None, reqid: MessageField(None), token: None, traceparent: None, payload_format: UPAYLOAD_FORMAT_PROTOBUF, special_fields: SpecialFields { unknown_fields: UnknownFields { fields: None }, cached_size: CachedSize { size: 0 } } })), **payload: Some(b"\n\rme_client@i=3")**, special_fields: SpecialFields { unknown_fields: UnknownFields { fields: None }, cached_size: CachedSize { size: 0 } } }
+Because the streamer cant run on the mechatronics chip, it runs on the high compute unit. In our setup we want the mechatronics entity to request some information from the high compute unit, so the entity type on the SOME/IP side should be a client. If the chip indeed controls the windshield wipers it might want to periodically ask the board computer to provide information about if and how much its raining. The high compute unit should respond to the chip with the latest data that it has available, so it must be an entity of the type service.
 
-This is the request message we will send _from_ the mE_client over vsomeip.
+## Run the Zenoh-SOME/IP Streamer
 
-Note the payload is listed with `@i=3`. This number is incremented on each send so that we can trace the message back and forth over the `up-linux-streamer`.
+To launch the streamer, go to the example-streamer-implementations folder and run the binary with the correct feature flags and the provided config file in a new terminal:
 
-You should then see something like this in the `uE_service` terminal:
+```bash
+cd ../example-streamer-implementations
+cargo run --bin zenoh_someip --features="zenoh-transport vsomeip-transport" -- --config='DEFAULT_CONFIG.json5'
+```
 
-> ServiceRequestResponder: Received a message: UMessage { attributes: MessageField(Some(UAttributes { id: MessageField(Some(UUID { msb: 112888656100622336, lsb: 10998499817480005337, special_fields: SpecialFields { unknown_fields: UnknownFields { fields: None }, cached_size: CachedSize { size: 0 } } })), type_: UMESSAGE_TYPE_REQUEST, source: MessageField(Some(UUri { authority_name: "me_authority", ue_id: 257, ue_version_major: 1, resource_id: 0, special_fields: SpecialFields { unknown_fields: UnknownFields { fields: None }, cached_size: CachedSize { size: 0 } } })), sink: MessageField(Some(UUri { authority_name: "linux", ue_id: 4662, ue_version_major: 1, resource_id: 2198, special_fields: SpecialFields { unknown_fields: UnknownFields { fields: None }, cached_size: CachedSize { size: 0 } } })), priority: UPRIORITY_CS4, ttl: Some(1000), permission_level: None, commstatus: None, reqid: MessageField(None), token: None, traceparent: None, payload_format: UPAYLOAD_FORMAT_UNSPECIFIED, special_fields: SpecialFields { unknown_fields: UnknownFields { fields: None }, cached_size: CachedSize { size: 0 } } })), **payload: Some(b"\n\rme_client@i=3")**, special_fields: SpecialFields { unknown_fields: UnknownFields { fields: None }, cached_size: CachedSize { size: 0 } } }
+This will start the streamer. By itself it should not do much, except for logging the vsomeip version every now and then.
 
-Note that the message we received in the uE_service through the streamer still shows the payload with `@i=3`.
+## Run the mechatronics client
 
-If you again reference the terminal where `mE_client` is running you should see the the response message printed:
+To launch the mechatronics entity, run the binary `someip_client` example in a new terminal:
 
-> ServiceResponseListener: Received a message: UMessage { attributes: MessageField(Some(UAttributes { id: MessageField(Some(UUID { msb: 112888656101015552, lsb: 9811577761723054400, special_fields: SpecialFields { unknown_fields: UnknownFields { fields: None }, cached_size: CachedSize { size: 0 } } })), type_: UMESSAGE_TYPE_RESPONSE, source: MessageField(Some(UUri { authority_name: "linux", ue_id: 4662, ue_version_major: 1, resource_id: 2198, special_fields: SpecialFields { unknown_fields: UnknownFields { fields: None }, cached_size: CachedSize { size: 0 } } })), sink: MessageField(Some(UUri { authority_name: "me_authority", ue_id: 257, ue_version_major: 1, resource_id: 0, special_fields: SpecialFields { unknown_fields: UnknownFields { fields: None }, cached_size: CachedSize { size: 0 } } })), priority: UPRIORITY_CS4, ttl: None, permission_level: None, commstatus: Some(INTERNAL), reqid: MessageField(Some(UUID { msb: 112888656100425728, lsb: 9811577761723054400, special_fields: SpecialFields { unknown_fields: UnknownFields { fields: None }, cached_size: CachedSize { size: 0 } } })), token: None, traceparent: None, payload_format: UPAYLOAD_FORMAT_UNSPECIFIED, special_fields: SpecialFields { unknown_fields: UnknownFields { fields: None }, cached_size: CachedSize { size: 0 } } })), **payload: Some(b"\nThe response to the request: me_client@i=3")**, special_fields: SpecialFields { unknown_fields: UnknownFields { fields: None }, cached_size: CachedSize { size: 0 } } }
+```bash
+cargo run --bin someip_client --features someip_transport
+```
 
-Note that the response also contains `@i=3` showing that we have received a response for the original request containing that in the payload.
+You should see in the log that the client is trying to send messages of type UMESSAGE_TYPE_REQUEST. These messages should now also show up in the logs of your streamer terminal just after the SOME/IP client sends them. Since there is no other component they are not yet being forwarded anywhere though.
+
+## Run the high compute unit
+
+Lastly to launch the high compute unit that has access to whatever data the mechatronics part is requesting, launch a zenoh service in yet another terminal:
+
+```bash
+cargo run --bin zenoh_service --features zenoh_transport
+```
+
+Immediately after launching you should see that this entity is logging incoming requests of type UMESSAGE_TYPE_REQUEST and right after is trying to answer them with UMESSAGE_TYPE_RESPONSE messages. These should then show up again in the log of the UStreamer, and also in the log of the mechatronics SOME/IP client.
+
+The service and client will run forever. Every second a new request is made from the someip_client via vsomeip. That vsomeip message is caught and routed over Zenoh to the zenoh_service. The response makes the same journey in reverse.
+
+To better track the messages you can also check that the payload is listed with `@i=n` where n is incremented on each send so that we can trace the message back and forth over the streamer.
+
 
 Further, you will see printed the deserialized `HelloResponse` ProtoBuf object:
 
-> Here we received response: HelloResponse { message: "The response to the request: me_client@i=3", special_fields: SpecialFields { unknown_fields: UnknownFields { fields: None }, cached_size: CachedSize { size: 0 } } }
-
-### High compute service to mechatronics client
-
-Launch the `mE_service` example in another terminal:
-
-```bash
-LD_LIBRARY_PATH=$LD_LIBRARY_PATH:<path/to/vsomeip/lib> cargo run --example mE_service
-```
-
-Launch the `uE_client` example in another terminal:
-
-```bash
-LD_LIBRARY_PATH=$LD_LIBRARY_PATH:<path/to/vsomeip/lib> cargo run --example uE_client -- --endpoint tcp/0.0.0.0:7444
-```
-
-We omit a detail explanation of the expected terminal output as it's a mirror of the `Mechatronics client to high compute service` heading above.
+> Here we received response: HelloResponse { message: "The response to the request: someip_client@i=n", special_fields: SpecialFields { unknown_fields: UnknownFields { fields: None }, cached_size: CachedSize { size: 0 } } }

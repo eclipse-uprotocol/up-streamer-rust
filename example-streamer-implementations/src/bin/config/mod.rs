@@ -23,6 +23,7 @@ pub struct Config {
     pub(crate) zenoh_transport_config: ZenohTransportConfig,
     pub(crate) host_config: HostConfig,
     pub(crate) someip_config: SomeipConfig,
+    pub(crate) mqtt_config: MqttConfig,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
@@ -63,10 +64,21 @@ pub struct SomeipConfig {
     pub(crate) authority: String,
     pub(crate) config_file: PathBuf,
     pub(crate) default_someip_application_id_for_someip_subscriptions: u16,
-    pub(crate) enabled: bool,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct MqttConfig {
+    pub(crate) hostname: String,
+    pub(crate) port: u16,
+    pub(crate) max_buffered_messages: i32,
+    pub(crate) max_subscriptions: i32,
+    pub(crate) session_expiry_interval: i32,
+    pub(crate) username: String,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub enum HostTransport {
     Zenoh,
+    Mqtt,
 }
