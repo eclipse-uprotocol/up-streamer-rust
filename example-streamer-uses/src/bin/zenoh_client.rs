@@ -39,7 +39,7 @@ struct ServiceResponseListener;
 #[async_trait]
 impl UListener for ServiceResponseListener {
     async fn on_receive(&self, msg: UMessage) {
-        debug!("ServiceResponseListener: Received a message: {msg:?}");
+        info!("ServiceResponseListener: Received a message: {msg:?}");
 
         let Some(payload_bytes) = msg.payload else {
             panic!("No payload bytes");
