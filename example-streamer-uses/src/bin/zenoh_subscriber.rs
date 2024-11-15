@@ -11,24 +11,24 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
-use async_trait::async_trait;
+mod common;
+
 use clap::Parser;
-use hello_world_protos::hello_world_topics::Timer;
-use log::error;
-use protobuf::Message;
+use common::PublishReceiver;
+use log::info;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::thread;
-use up_rust::{UListener, UMessage, UStatus, UTransport, UUri};
+use up_rust::{UListener, UStatus, UTransport, UUri};
 use up_transport_zenoh::UPTransportZenoh;
 use zenoh::config::{Config, EndPoint};
 
-const PUB_TOPIC_AUTHORITY: &str = "me_authority";
+const PUB_TOPIC_AUTHORITY: &str = "authority_A";
 const PUB_TOPIC_UE_ID: u32 = 0x5BA0;
 const PUB_TOPIC_UE_VERSION_MAJOR: u8 = 1;
 const PUB_TOPIC_RESOURCE_ID: u16 = 0x8001;
 
-const SUB_TOPIC_AUTHORITY: &str = "linux";
+const SUB_TOPIC_AUTHORITY: &str = "authority_B";
 const SUB_TOPIC_UE_ID: u32 = 0x5BB0;
 const SUB_TOPIC_UE_VERSION_MAJOR: u8 = 1;
 
@@ -42,9 +42,6 @@ fn subscriber_uuri() -> UUri {
     .unwrap()
 }
 
-#[allow(dead_code)]
-struct PublishReceiver;
-
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
@@ -53,32 +50,13 @@ struct Args {
     endpoint: String,
 }
 
-#[async_trait]
-impl UListener for PublishReceiver {
-    async fn on_receive(&self, msg: UMessage) {
-        println!("PublishReceiver: Received a message: {msg:?}");
-
-        let Some(payload_bytes) = msg.payload else {
-            panic!("No bytes available");
-        };
-        match Timer::parse_from_bytes(&payload_bytes) {
-            Ok(timer_message) => {
-                println!("timer: {timer_message:?}");
-            }
-            Err(err) => {
-                error!("Unable to parse Timer Message: {err:?}");
-            }
-        };
-    }
-}
-
 #[tokio::main]
 async fn main() -> Result<(), UStatus> {
     env_logger::init();
 
     let args = Args::parse();
 
-    println!("uE_subscriber");
+    info!("Started zenoh_subscriber");
 
     let mut zenoh_config = Config::default();
 
