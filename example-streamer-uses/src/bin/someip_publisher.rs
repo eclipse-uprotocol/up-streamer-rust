@@ -13,20 +13,23 @@
 
 use chrono::Local;
 use chrono::Timelike;
-use clap::Parser;
 use hello_world_protos::hello_world_topics::Timer;
 use hello_world_protos::timeofday::TimeOfDay;
-use std::str::FromStr;
+use log::info;
+use log::trace;
+use std::fs::canonicalize;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 use up_rust::{UMessageBuilder, UStatus, UTransport, UUri};
-use up_transport_zenoh::UPTransportZenoh;
-use zenoh::config::{Config, EndPoint};
+use up_transport_vsomeip::UPTransportVsomeip;
 
-const PUB_TOPIC_AUTHORITY: &str = "linux";
-const PUB_TOPIC_UE_ID: u32 = 0x3039;
+const PUB_TOPIC_AUTHORITY: &str = "authority_A";
+const PUB_TOPIC_UE_ID: u32 = 0x5BA0;
 const PUB_TOPIC_UE_VERSION_MAJOR: u8 = 1;
 const PUB_TOPIC_RESOURCE_ID: u16 = 0x8001;
+
+const REMOTE_AUTHORITY: &str = "authority_B";
 
 fn publisher_uuri() -> UUri {
     UUri::try_from_parts(
@@ -38,42 +41,27 @@ fn publisher_uuri() -> UUri {
     .unwrap()
 }
 
-#[derive(Parser, Debug)]
-#[command(version, about, long_about = None)]
-struct Args {
-    /// The endpoint for Zenoh client to connect to
-    #[arg(short, long, default_value = "tcp/0.0.0.0:7444")]
-    endpoint: String,
-}
-
 #[tokio::main]
 async fn main() -> Result<(), UStatus> {
     env_logger::init();
 
-    let args = Args::parse();
+    info!("Started someip_publisher");
 
-    println!("uE_publisher");
+    let crate_dir = env!("CARGO_MANIFEST_DIR");
+    // TODO: Make configurable to pass the path to the vsomeip config as a command line argument
+    let vsomeip_config = PathBuf::from(crate_dir).join("vsomeip-configs/someip_publisher.json");
+    let vsomeip_config = canonicalize(vsomeip_config).ok();
+    trace!("vsomeip_config: {vsomeip_config:?}");
 
-    let mut zenoh_config = Config::default();
-
-    if !args.endpoint.is_empty() {
-        // Specify the address to listen on using IPv4
-        let ipv4_endpoint =
-            EndPoint::from_str(args.endpoint.as_str()).expect("Unable to set endpoint");
-
-        // Add the IPv4 endpoint to the Zenoh configuration
-        zenoh_config
-            .listen
-            .endpoints
-            .set(vec![ipv4_endpoint])
-            .expect("Unable to set Zenoh Config");
-    }
-
-    let publisher_uri: String = (&publisher_uuri()).into();
+    // There will be a single vsomeip_transport, as there is a connection into device and a streamer
     let publisher: Arc<dyn UTransport> = Arc::new(
-        UPTransportZenoh::new(zenoh_config, publisher_uri)
-            .await
-            .unwrap(),
+        UPTransportVsomeip::new_with_config(
+            publisher_uuri(),
+            &REMOTE_AUTHORITY.to_string(),
+            &vsomeip_config.unwrap(),
+            None,
+        )
+        .unwrap(),
     );
 
     let source = UUri::try_from_parts(
@@ -105,7 +93,7 @@ async fn main() -> Result<(), UStatus> {
         let publish_msg = UMessageBuilder::publish(source.clone())
             .build_with_protobuf_payload(&timer_message)
             .unwrap();
-        println!("Sending Publish message:\n{publish_msg:?}");
+        info!("Sending Publish message:\n{publish_msg:?}");
 
         publisher.send(publish_msg).await?;
     }

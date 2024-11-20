@@ -20,41 +20,58 @@ keywords.workspace = true
 license.workspace = true
 
 [[bin]]
-name = "me_client"
+name = "someip_client"
 required-features = ["vsomeip-transport"]
 
 [[bin]]
-name = "me_publisher"
+name = "someip_publisher"
 required-features = ["vsomeip-transport"]
 
 [[bin]]
-name = "me_service"
+name = "someip_service"
 required-features = ["vsomeip-transport"]
 
 [[bin]]
-name = "me_subscriber"
+name = "someip_subscriber"
 required-features = ["vsomeip-transport"]
 
 [[bin]]
-name = "ue_client"
+name = "zenoh_client"
 required-features = ["zenoh-transport"]
 
 [[bin]]
-name = "ue_publisher"
+name = "zenoh_publisher"
 required-features = ["zenoh-transport"]
 
 [[bin]]
-name = "ue_service"
+name = "zenoh_service"
 required-features = ["zenoh-transport"]
 
 [[bin]]
-name = "ue_subscriber"
+name = "zenoh_subscriber"
 required-features = ["zenoh-transport"]
+
+[[bin]]
+name = "mqtt_client"
+required-features = ["mqtt-transport"]
+
+[[bin]]
+name = "mqtt_publisher"
+required-features = ["mqtt-transport"]
+
+[[bin]]
+name = "mqtt_service"
+required-features = ["mqtt-transport"]
+
+[[bin]]
+name = "mqtt_subscriber"
+required-features = ["mqtt-transport"]
 
 [features]
 zenoh-transport = ["up-transport-zenoh", "zenoh"]
 vsomeip-transport = ["up-transport-vsomeip"]
 bundled-vsomeip = ["up-transport-vsomeip/bundled"]
+mqtt-transport = ["up-transport-mqtt5"]
 
 [dependencies]
 async-trait = { workspace = true }
@@ -70,4 +87,5 @@ tokio = { workspace = true }
 up-rust = { workspace = true }
 up-transport-zenoh = { workspace = true, optional = true }
 up-transport-vsomeip = { workspace = true, optional = true }
+up-transport-mqtt5 = { workspace = true, optional = true }
 zenoh = { workspace = true, optional = true }

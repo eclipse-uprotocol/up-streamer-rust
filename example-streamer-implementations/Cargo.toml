@@ -20,13 +20,17 @@ keywords.workspace = true
 license.workspace = true
 
 [[bin]]
-name = "up-linux-streamer"
-path = "src/main.rs"
+name = "zenoh_someip"
 required-features = ["zenoh-transport", "vsomeip-transport"]
+
+[[bin]]
+name = "zenoh_mqtt"
+required-features = ["zenoh-transport", "mqtt-transport"]
 
 [features]
 default = []
 zenoh-transport = ["up-transport-zenoh", "zenoh"]
+mqtt-transport = ["up-transport-mqtt5"]
 vsomeip-transport = ["up-transport-vsomeip"]
 bundled-vsomeip = ["up-transport-vsomeip/bundled"]
 
@@ -44,6 +48,7 @@ up-rust = { workspace = true }
 up-streamer = { path = "../up-streamer" }
 up-transport-zenoh = { workspace = true, optional = true }
 up-transport-vsomeip = { workspace = true, optional = true }
+up-transport-mqtt5 = { workspace = true, optional = true }
 zenoh = { workspace = true, optional = true }
 usubscription-static-file = {path = "../utils/usubscription-static-file"}
 

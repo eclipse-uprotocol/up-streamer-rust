@@ -11,23 +11,25 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
-use async_trait::async_trait;
+mod common;
+
 use clap::Parser;
-use hello_world_protos::hello_world_service::{HelloRequest, HelloResponse};
-use protobuf::Message;
+use common::ServiceResponseListener;
+use hello_world_protos::hello_world_service::HelloRequest;
+use log::{debug, info};
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
-use up_rust::{UListener, UMessage, UMessageBuilder, UStatus, UTransport, UUri};
+use up_rust::{UListener, UMessageBuilder, UStatus, UTransport, UUri};
 use up_transport_zenoh::UPTransportZenoh;
 use zenoh::config::{Config, EndPoint};
 
-const SERVICE_AUTHORITY: &str = "me_authority";
+const SERVICE_AUTHORITY: &str = "authority_A";
 const SERVICE_UE_ID: u32 = 0x4321;
 const SERVICE_UE_VERSION_MAJOR: u8 = 1;
 const SERVICE_RESOURCE_ID: u16 = 0x0421;
 
-const CLIENT_AUTHORITY: &str = "linux";
+const CLIENT_AUTHORITY: &str = "authority_B";
 const CLIENT_UE_ID: u32 = 0x1236;
 const CLIENT_UE_VERSION_MAJOR: u8 = 1;
 const CLIENT_RESOURCE_ID: u16 = 0;
@@ -52,32 +54,13 @@ struct Args {
     endpoint: String,
 }
 
-struct ServiceResponseListener;
-
-#[async_trait]
-impl UListener for ServiceResponseListener {
-    async fn on_receive(&self, msg: UMessage) {
-        println!("ServiceResponseListener: Received a message: {msg:?}");
-
-        let Some(payload_bytes) = msg.payload else {
-            panic!("No payload bytes");
-        };
-
-        let Ok(hello_response) = HelloResponse::parse_from_bytes(&payload_bytes) else {
-            panic!("Unable to parse into HelloResponse");
-        };
-
-        println!("Here we received response: {hello_response:?}");
-    }
-}
-
 #[tokio::main]
 async fn main() -> Result<(), UStatus> {
     env_logger::init();
 
     let args = Args::parse();
 
-    println!("uE_client");
+    info!("Started zenoh_client");
 
     let mut zenoh_config = Config::default();
 
@@ -134,7 +117,8 @@ async fn main() -> Result<(), UStatus> {
         let request_msg = UMessageBuilder::request(sink.clone(), source.clone(), REQUEST_TTL)
             .build_with_protobuf_payload(&hello_request)
             .unwrap();
-        println!("Sending Request message:\n{request_msg:?}");
+        debug!("Invoking URI {} with response URI {}", &sink, &source);
+        info!("Sending Request message:\n{:?}", &request_msg);
 
         client.send(request_msg).await?;
     }

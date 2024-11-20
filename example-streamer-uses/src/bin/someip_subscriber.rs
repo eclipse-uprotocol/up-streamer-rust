@@ -11,58 +11,34 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
-use async_trait::async_trait;
-use hello_world_protos::hello_world_topics::Timer;
-use log::{error, trace};
-use protobuf::Message;
+mod common;
+
+use common::PublishReceiver;
+use log::trace;
 use std::fs::canonicalize;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::thread;
-use up_rust::{UListener, UMessage, UStatus, UTransport, UUri};
+use up_rust::{UListener, UStatus, UTransport, UUri};
 use up_transport_vsomeip::UPTransportVsomeip;
 
-const SUBSCRIBER_AUTHORITY: &str = "me_authority";
-const SUBSCRIBER_UE_ID: u32 = 0x1236;
-const SUBSCRIBER_UE_VERSION_MAJOR: u8 = 1;
+const SUB_TOPIC_AUTHORITY: &str = "authority_B";
+const SUB_TOPIC_UE_ID: u32 = 0x5BB0;
+const SUB_TOPIC_UE_VERSION_MAJOR: u8 = 1;
 
-const PUB_TOPIC_AUTHORITY: &str = "linux";
+const PUB_TOPIC_AUTHORITY: &str = "authority_B";
 const PUB_TOPIC_UE_ID: u32 = 0x3039;
 const PUB_TOPIC_UE_VERSION_MAJOR: u8 = 1;
 const PUB_TOPIC_RESOURCE_ID: u16 = 0x8001;
 
 fn subscriber_uuri() -> UUri {
     UUri::try_from_parts(
-        SUBSCRIBER_AUTHORITY,
-        SUBSCRIBER_UE_ID,
-        SUBSCRIBER_UE_VERSION_MAJOR,
+        SUB_TOPIC_AUTHORITY,
+        SUB_TOPIC_UE_ID,
+        SUB_TOPIC_UE_VERSION_MAJOR,
         0,
     )
     .unwrap()
-}
-
-#[allow(dead_code)]
-struct PublishReceiver;
-
-#[async_trait]
-impl UListener for PublishReceiver {
-    async fn on_receive(&self, msg: UMessage) {
-        println!("PublishReceiver: Received a message: {msg:?}");
-
-        let Some(payload_bytes) = msg.payload else {
-            panic!("No bytes available");
-        };
-        match Timer::parse_from_bytes(&payload_bytes) {
-            Ok(timer_message) => {
-                println!("timer: {timer_message:?}");
-                timer_message
-            }
-            Err(err) => {
-                error!("Unable to parse Timer Message: {err:?}");
-                return;
-            }
-        };
-    }
 }
 
 #[tokio::main]
@@ -73,7 +49,7 @@ async fn main() -> Result<(), UStatus> {
 
     let crate_dir = env!("CARGO_MANIFEST_DIR");
     // TODO: Make configurable to pass the path to the vsomeip config as a command line argument
-    let vsomeip_config = PathBuf::from(crate_dir).join("vsomeip-configs/mE_subscriber.json");
+    let vsomeip_config = PathBuf::from(crate_dir).join("vsomeip-configs/someip_subscriber.json");
     let vsomeip_config = canonicalize(vsomeip_config).ok();
     trace!("vsomeip_config: {vsomeip_config:?}");
 

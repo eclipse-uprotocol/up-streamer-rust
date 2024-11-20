@@ -15,54 +15,24 @@ use chrono::Local;
 use chrono::Timelike;
 use hello_world_protos::hello_world_topics::Timer;
 use hello_world_protos::timeofday::TimeOfDay;
-use log::trace;
-use std::fs::canonicalize;
-use std::path::PathBuf;
+use log::info;
 use std::sync::Arc;
 use std::time::Duration;
-use up_rust::{UMessageBuilder, UStatus, UTransport, UUri};
-use up_transport_vsomeip::UPTransportVsomeip;
+use up_rust::{UMessageBuilder, UStatus, UTransport, UUri, UUID};
+use up_transport_mqtt5::{MqttConfig, UPClientMqtt, UPClientMqttType};
 
-const PUB_TOPIC_AUTHORITY: &str = "me_authority";
+const PUB_TOPIC_AUTHORITY: &str = "authority_A";
 const PUB_TOPIC_UE_ID: u32 = 0x5BA0;
 const PUB_TOPIC_UE_VERSION_MAJOR: u8 = 1;
 const PUB_TOPIC_RESOURCE_ID: u16 = 0x8001;
-
-const REMOTE_AUTHORITY: &str = "linux";
-
-fn publisher_uuri() -> UUri {
-    UUri::try_from_parts(
-        PUB_TOPIC_AUTHORITY,
-        PUB_TOPIC_UE_ID,
-        PUB_TOPIC_UE_VERSION_MAJOR,
-        0,
-    )
-    .unwrap()
-}
 
 #[tokio::main]
 async fn main() -> Result<(), UStatus> {
     env_logger::init();
 
-    println!("mE_publisher");
+    info!("Started mqtt_publisher.");
 
-    let crate_dir = env!("CARGO_MANIFEST_DIR");
-    // TODO: Make configurable to pass the path to the vsomeip config as a command line argument
-    let vsomeip_config = PathBuf::from(crate_dir).join("vsomeip-configs/mE_publisher.json");
-    let vsomeip_config = canonicalize(vsomeip_config).ok();
-    trace!("vsomeip_config: {vsomeip_config:?}");
-
-    // There will be a single vsomeip_transport, as there is a connection into device and a streamer
-    let publisher: Arc<dyn UTransport> = Arc::new(
-        UPTransportVsomeip::new_with_config(
-            publisher_uuri(),
-            &REMOTE_AUTHORITY.to_string(),
-            &vsomeip_config.unwrap(),
-            None,
-        )
-        .unwrap(),
-    );
-
+    // This is the URI of the publisher entity
     let source = UUri::try_from_parts(
         PUB_TOPIC_AUTHORITY,
         PUB_TOPIC_UE_ID,
@@ -70,6 +40,30 @@ async fn main() -> Result<(), UStatus> {
         PUB_TOPIC_RESOURCE_ID,
     )
     .unwrap();
+
+    let ssl_options = None;
+
+    let mqtt_config = MqttConfig {
+        mqtt_protocol: up_transport_mqtt5::MqttProtocol::Mqtt,
+        mqtt_port: 1883,
+        mqtt_hostname: "localhost".to_string(),
+        max_buffered_messages: 100,
+        max_subscriptions: 100,
+        session_expiry_interval: 3600,
+        ssl_options,
+        username: "user".to_string(),
+    };
+
+    let publisher: Arc<dyn UTransport> = Arc::new(
+        UPClientMqtt::new(
+            mqtt_config,
+            UUID::build(),
+            PUB_TOPIC_AUTHORITY.to_string(),
+            UPClientMqttType::Device,
+        )
+        .await
+        .expect("Could not create mqtt transport."),
+    );
 
     loop {
         tokio::time::sleep(Duration::from_millis(1000)).await;
@@ -89,10 +83,11 @@ async fn main() -> Result<(), UStatus> {
             ..Default::default()
         };
 
+        // Publish messages signed with the source URI
         let publish_msg = UMessageBuilder::publish(source.clone())
             .build_with_protobuf_payload(&timer_message)
             .unwrap();
-        println!("Sending Publish message:\n{publish_msg:?}");
+        info!("Sending Publish message:\n{publish_msg:?}");
 
         publisher.send(publish_msg).await?;
     }
