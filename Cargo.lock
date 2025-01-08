@@ -1162,7 +1162,7 @@ dependencies = [
  "protobuf",
  "serde",
  "tokio",
- "up-rust 0.3.0",
+ "up-rust",
  "up-transport-mqtt5",
  "up-transport-vsomeip",
  "up-transport-zenoh",
@@ -1734,7 +1734,7 @@ dependencies = [
  "serde_json",
  "tokio",
  "tokio-condvar",
- "up-rust 0.3.0",
+ "up-rust",
  "up-streamer",
  "uuid",
 ]
@@ -3548,7 +3548,7 @@ dependencies = [
  "protobuf",
  "serde",
  "serde_json",
- "up-rust 0.3.0",
+ "up-rust",
  "uuid",
 ]
 
@@ -4094,7 +4094,7 @@ dependencies = [
  "protobuf",
  "serde",
  "tokio",
- "up-rust 0.3.0",
+ "up-rust",
  "up-streamer",
  "up-transport-mqtt5",
  "up-transport-vsomeip",
@@ -4115,7 +4115,7 @@ dependencies = [
  "serde_json",
  "tokio",
  "tracing",
- "up-rust 0.3.0",
+ "up-rust",
  "up-streamer",
  "up-transport-vsomeip",
  "up-transport-zenoh",
@@ -4126,26 +4126,6 @@ dependencies = [
  "zenoh-result",
  "zenoh-util",
  "zenoh_backend_traits",
-]
-
-[[package]]
-name = "up-rust"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "af7f283ab2b74869f69bcd5a87950b87db5110e46764af2ddae3248109f0e374"
-dependencies = [
- "async-trait",
- "bytes",
- "mediatype",
- "protobuf",
- "protobuf-codegen",
- "protoc-bin-vendored",
- "rand",
- "thiserror",
- "tokio",
- "tracing",
- "uriparse",
- "uuid-simd",
 ]
 
 [[package]]
@@ -4185,16 +4165,16 @@ dependencies = [
  "subscription-cache",
  "tokio",
  "tokio-condvar",
- "up-rust 0.3.0",
+ "up-rust",
  "usubscription-static-file",
  "uuid",
 ]
 
 [[package]]
 name = "up-transport-mqtt5"
-version = "0.1.0"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0063dbc750c320501e17ce9d0834a616b26ec49ef6c41887f30bc2788ec25405"
+checksum = "43adade571c38ed57b35440a5e524f642f440be19b3f3a5dd79924e0419ce01b"
 dependencies = [
  "async-channel 1.9.0",
  "async-trait",
@@ -4210,7 +4190,7 @@ dependencies = [
  "serde_json",
  "tokio",
  "tokio-macros",
- "up-rust 0.2.0",
+ "up-rust",
  "url",
  "uuid",
 ]
@@ -4233,7 +4213,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
- "up-rust 0.3.0",
+ "up-rust",
  "vsomeip-proc-macro",
  "vsomeip-sys",
 ]
@@ -4253,7 +4233,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
- "up-rust 0.3.0",
+ "up-rust",
  "zenoh",
 ]
 
@@ -4287,7 +4267,7 @@ dependencies = [
  "log",
  "serde_json",
  "subscription-cache",
- "up-rust 0.3.0",
+ "up-rust",
 ]
 
 [[package]]

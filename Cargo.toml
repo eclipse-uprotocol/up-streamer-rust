@@ -46,7 +46,7 @@ up-transport-zenoh = { version = "0.4.0" }
 # TODO: Update this to dmacattack version for test
 up-transport-vsomeip = { git = "https://github.com/PLeVasseur/up-client-vsomeip-rust", branch = "add-build-script_update-up-rust-version", default-features = false }
 # up-transport-vsomeip = { git = "https://github.com/eclipse-uprotocol/up-transport-vsomeip-rust.git", tag = "v0.3.0", default-features = false }
-up-transport-mqtt5 = { version = "0.1.0" }
+up-transport-mqtt5 = { version = "0.2.0" }
 zenoh = { version = "1.0.0", features = ["default", "plugins"] }
 zenoh-core = { version = "1.0.0" }
 zenoh-plugin-trait = { version = "1.0.0" }
