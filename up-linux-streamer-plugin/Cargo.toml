@@ -47,7 +47,7 @@ serde = { version = "1.0.154" }
 serde_json = { version = "1.0.94" }
 tokio = { version = "1.35.1", default-features = false }
 up-rust = { workspace = true }
-up-transport-zenoh = { workspace = true, optional = true }
+up-transport-zenoh = { workspace = true, optional = true, features = ["zenoh-unstable"] }
 up-transport-vsomeip = { workspace = true, optional = true }
 up-streamer = { path = "../up-streamer" }
 usubscription-static-file = {path = "../utils/usubscription-static-file"}

@@ -1162,7 +1162,7 @@ dependencies = [
  "protobuf",
  "serde",
  "tokio",
- "up-rust",
+ "up-rust 0.3.0",
  "up-transport-mqtt5",
  "up-transport-vsomeip",
  "up-transport-zenoh",
@@ -1734,7 +1734,7 @@ dependencies = [
  "serde_json",
  "tokio",
  "tokio-condvar",
- "up-rust",
+ "up-rust 0.3.0",
  "up-streamer",
  "uuid",
 ]
@@ -3548,7 +3548,7 @@ dependencies = [
  "protobuf",
  "serde",
  "serde_json",
- "up-rust",
+ "up-rust 0.3.0",
  "uuid",
 ]
 
@@ -4094,7 +4094,7 @@ dependencies = [
  "protobuf",
  "serde",
  "tokio",
- "up-rust",
+ "up-rust 0.3.0",
  "up-streamer",
  "up-transport-mqtt5",
  "up-transport-vsomeip",
@@ -4115,7 +4115,7 @@ dependencies = [
  "serde_json",
  "tokio",
  "tracing",
- "up-rust",
+ "up-rust 0.3.0",
  "up-streamer",
  "up-transport-vsomeip",
  "up-transport-zenoh",
@@ -4149,6 +4149,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "up-rust"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "30118ab07c7ca420e2196bbc0f6f380b3100928d03ec1cd960f9220472f48f1a"
+dependencies = [
+ "async-trait",
+ "bytes",
+ "mediatype",
+ "protobuf",
+ "protobuf-codegen",
+ "protoc-bin-vendored",
+ "rand",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "uriparse",
+ "uuid-simd",
+]
+
+[[package]]
 name = "up-streamer"
 version = "0.1.0"
 dependencies = [
@@ -4165,7 +4185,7 @@ dependencies = [
  "subscription-cache",
  "tokio",
  "tokio-condvar",
- "up-rust",
+ "up-rust 0.3.0",
  "usubscription-static-file",
  "uuid",
 ]
@@ -4190,15 +4210,15 @@ dependencies = [
  "serde_json",
  "tokio",
  "tokio-macros",
- "up-rust",
+ "up-rust 0.2.0",
  "url",
  "uuid",
 ]
 
 [[package]]
 name = "up-transport-vsomeip"
-version = "0.2.0"
-source = "git+https://github.com/eclipse-uprotocol/up-transport-vsomeip-rust.git?tag=v0.3.0#d659287126120d4feb75cbcc35a5334def421f50"
+version = "0.3.0"
+source = "git+https://github.com/PLeVasseur/up-client-vsomeip-rust?branch=add-build-script_update-up-rust-version#ed295aba9e979ff7cf59b3d085586677e43c75f5"
 dependencies = [
  "async-trait",
  "bimap",
@@ -4213,26 +4233,27 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
- "up-rust",
+ "up-rust 0.3.0",
  "vsomeip-proc-macro",
  "vsomeip-sys",
 ]
 
 [[package]]
 name = "up-transport-zenoh"
-version = "0.3.0"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "739441e501be7ea887024bcb2df2b452a362ee39d8efb0f2663fae0dc35e564c"
+checksum = "1dba40062ff410f59a9a34a51a9288c8ad92454e4199725264f4f9eaeb604fd9"
 dependencies = [
  "anyhow",
  "async-trait",
  "bytes",
  "lazy_static",
  "protobuf",
+ "serde_json",
  "tokio",
  "tracing",
  "tracing-subscriber",
- "up-rust",
+ "up-rust 0.3.0",
  "zenoh",
 ]
 
@@ -4266,7 +4287,7 @@ dependencies = [
  "log",
  "serde_json",
  "subscription-cache",
- "up-rust",
+ "up-rust 0.3.0",
 ]
 
 [[package]]
@@ -4363,7 +4384,7 @@ checksum = "5c3082ca00d5a5ef149bb8b555a72ae84c9c59f7250f013ac822ac2e49b19c64"
 [[package]]
 name = "vsomeip-proc-macro"
 version = "0.1.0"
-source = "git+https://github.com/eclipse-uprotocol/up-transport-vsomeip-rust.git?tag=v0.3.0#d659287126120d4feb75cbcc35a5334def421f50"
+source = "git+https://github.com/PLeVasseur/up-client-vsomeip-rust?branch=add-build-script_update-up-rust-version#ed295aba9e979ff7cf59b3d085586677e43c75f5"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4373,8 +4394,8 @@ dependencies = [
 
 [[package]]
 name = "vsomeip-sys"
-version = "0.2.0"
-source = "git+https://github.com/eclipse-uprotocol/up-transport-vsomeip-rust.git?tag=v0.3.0#d659287126120d4feb75cbcc35a5334def421f50"
+version = "0.3.0"
+source = "git+https://github.com/PLeVasseur/up-client-vsomeip-rust?branch=add-build-script_update-up-rust-version#ed295aba9e979ff7cf59b3d085586677e43c75f5"
 dependencies = [
  "autocxx",
  "autocxx-build",
