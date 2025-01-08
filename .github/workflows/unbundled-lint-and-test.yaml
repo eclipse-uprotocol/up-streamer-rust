@@ -35,6 +35,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+
   set-env:
     name: Set environment variables
     runs-on: ubuntu-22.04
@@ -150,6 +151,8 @@ jobs:
       - set-env
       - obtain_and_build_vsomeip
     env:
+      ARCH_SPECIFIC_CPP_STDLIB_PATH: ${{ needs.set-env.outputs.arch_specific_cpp_stdlib_path }}
+      GENERIC_CPP_STDLIB_PATH: ${{ needs.set-env.outputs.generic_cpp_stdlib_path }}
       CACHE_KEY: ${{ needs.obtain_and_build_vsomeip.outputs.cache_key }}
 
     steps:
@@ -210,7 +213,10 @@ jobs:
       - set-env
       - obtain_and_build_vsomeip
     runs-on: ubuntu-22.04
+
     env:
+      ARCH_SPECIFIC_CPP_STDLIB_PATH: ${{ needs.set-env.outputs.arch_specific_cpp_stdlib_path }}
+      GENERIC_CPP_STDLIB_PATH: ${{ needs.set-env.outputs.generic_cpp_stdlib_path }}
       CACHE_KEY: ${{ needs.obtain_and_build_vsomeip.outputs.cache_key }}
 
     steps:
@@ -291,6 +297,8 @@ jobs:
       - obtain_and_build_vsomeip
       - set-env
     env:
+      ARCH_SPECIFIC_CPP_STDLIB_PATH: ${{ needs.set-env.outputs.arch_specific_cpp_stdlib_path }}
+      GENERIC_CPP_STDLIB_PATH: ${{ needs.set-env.outputs.generic_cpp_stdlib_path }}
       CACHE_KEY: ${{ needs.obtain_and_build_vsomeip.outputs.cache_key }}
 
     steps:

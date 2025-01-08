@@ -59,6 +59,10 @@ jobs:
     runs-on: ubuntu-22.04
     needs: set-env
 
+    env:
+       ARCH_SPECIFIC_CPP_STDLIB_PATH: ${{ needs.set-env.outputs.arch_specific_cpp_stdlib_path }}
+       GENERIC_CPP_STDLIB_PATH: ${{ needs.set-env.outputs.generic_cpp_stdlib_path }}
+
     steps:
       - uses: actions/checkout@v4
 
@@ -68,10 +72,14 @@ jobs:
       - name: Set environment variables
         run: |
           echo "VSOMEIP_INSTALL_PATH=${{ github.workspace }}/${{ env.VSOMEIP_INSTALL_PATH }}" >> $GITHUB_ENV
+          env
 
       - name: Print environment variables for debugging
         run: |
           echo "VSOMEIP_INSTALL_PATH: ${{ env.VSOMEIP_INSTALL_PATH }}"
+          echo "GENERIC_CPP_STDLIB_PATH: ${{ env.GENERIC_CPP_STDLIB_PATH }}"
+          echo "ARCH_SPECIFIC_CPP_STDLIB_PATH: ${{ env.ARCH_SPECIFIC_CPP_STDLIB_PATH }}"
+          env
 
       - name: Ensure vsomeip install path exists
         run: |
@@ -103,6 +111,10 @@ jobs:
     name: Test
     runs-on: ubuntu-22.04
     needs: set-env
+
+    env:
+       ARCH_SPECIFIC_CPP_STDLIB_PATH: ${{ needs.set-env.outputs.arch_specific_cpp_stdlib_path }}
+       GENERIC_CPP_STDLIB_PATH: ${{ needs.set-env.outputs.generic_cpp_stdlib_path }}
 
     steps:
       - uses: actions/checkout@v4
@@ -169,6 +181,10 @@ jobs:
     name: Build documentation
     runs-on: ubuntu-22.04
     needs: set-env
+
+    env:
+       ARCH_SPECIFIC_CPP_STDLIB_PATH: ${{ needs.set-env.outputs.arch_specific_cpp_stdlib_path }}
+       GENERIC_CPP_STDLIB_PATH: ${{ needs.set-env.outputs.generic_cpp_stdlib_path }}
 
     steps:
       - uses: actions/checkout@v4
