@@ -14,6 +14,7 @@
 #![allow(clippy::mutable_key_type)]
 
 use async_trait::async_trait;
+use log::{debug, error, warn};
 use serde_json::Value;
 use std::collections::HashSet;
 use std::fs::{self, canonicalize};
@@ -52,7 +53,7 @@ impl USubscription for USubscriptionStaticFile {
         // Reads in a file and builds it into a subscription_cache data type
         // This is a static file, so we will just return the same set of subscribers
         // for all URIs
-        println!(
+        debug!(
             "fetch_subscriptions for topic: {}",
             fetch_subscriptions_request.subscriber()
         );
@@ -61,13 +62,11 @@ impl USubscription for USubscriptionStaticFile {
 
         let mut subscriptions_vec = Vec::new();
 
-        println!("subscription_json_file: {:?}", subscription_json_file);
-        println!(
-            "canonicalize: {:?}",
-            canonicalize("./utils/usubscription-static-file/static-configs/testdata.json")
-        );
+        debug!("subscription_json_file: {subscription_json_file:?}");
+        let canonicalized_result = canonicalize(subscription_json_file);
+        debug!("canonicalize: {canonicalized_result:?}",);
 
-        let subscription_json_file = match canonicalize(subscription_json_file) {
+        let subscription_json_file = match canonicalized_result {
             Ok(path) => path,
             Err(e) => {
                 return Err(UStatus::fail_with_code(
@@ -93,38 +92,39 @@ impl USubscription for USubscriptionStaticFile {
 
         if let Some(obj) = res.as_object() {
             for (key, value) in obj {
-                println!("key: {}, value: {}", key, value);
+                debug!("key: {key}, value: {value}");
                 let mut subscriber_set: HashSet<UUri> = HashSet::new();
 
                 if let Some(array) = value.as_array() {
                     for subscriber in array {
-                        println!("subscriber: {}", subscriber);
+                        debug!("Reading subscriber as URI: {subscriber}");
 
                         if let Some(subscriber_str) = subscriber.as_str() {
                             match UUri::from_str(subscriber_str) {
                                 Ok(uri) => {
-                                    println!("All good for subscriber");
+                                    debug!("All good for subscriber: {uri}");
                                     subscriber_set.insert(uri);
                                 }
                                 Err(error) => {
-                                    println!("Error with Deserializing Subscriber: {}", error);
+                                    error!("Error with Deserializing Subscriber '{subscriber_str}': {error}");
                                 }
                             }
                         } else {
-                            println!("Unable to parse subscriber");
+                            warn!("Unable to parse subscriber '{subscriber}");
                         }
                     }
                 }
 
-                println!("key: {}", key);
+                debug!("key: {key}");
                 let topic = match UUri::from_str(&key.to_string()) {
                     Ok(mut uri) => {
-                        println!("All good for key");
+                        debug!("All good for key '{key}'");
+                        warn!("Setting fixed resourceid 0x8001 for uri '{uri}'");
                         uri.resource_id = 0x8001;
                         uri
                     }
                     Err(error) => {
-                        println!("Error with Deserializing Key: {}", error);
+                        error!("Error with Deserializing Key: {error}");
                         continue;
                     }
                 };
@@ -143,9 +143,7 @@ impl USubscription for USubscriptionStaticFile {
                 }
             }
         }
-
-        println!("{}", res);
-        dbg!(&subscriptions_vec);
+        debug!("Finished reading Subscriptions\n{subscriptions_vec:#?}");
         let fetch_response = FetchSubscriptionsResponse {
             subscriptions: subscriptions_vec,
             ..Default::default()
