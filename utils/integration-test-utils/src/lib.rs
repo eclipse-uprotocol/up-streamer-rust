@@ -42,7 +42,7 @@ pub use integration_test_messages::{
 
 /// Helper method for integration tests to initialise
 /// [env_logger].
-/// 
+///
 /// `RUST_LOG` env is read. Defaults to `DEBUG`
 pub fn init_logging() {
     let log_filter = std::env::var("RUST_LOG").unwrap_or_else(|_| "debug".to_string());
