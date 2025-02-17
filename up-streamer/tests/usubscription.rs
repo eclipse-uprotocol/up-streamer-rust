@@ -20,7 +20,7 @@ use usubscription_static_file::USubscriptionStaticFile;
 #[tokio::test(flavor = "multi_thread")]
 async fn usubscription_bad_data() {
     integration_test_utils::init_logging();
-    
+
     let utransport_foo: Arc<dyn UTransport> =
         Arc::new(UPClientFailingRegister::new("upclient_foo").await);
     let utransport_bar: Arc<dyn UTransport> =
