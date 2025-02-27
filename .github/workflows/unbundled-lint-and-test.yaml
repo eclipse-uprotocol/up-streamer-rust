@@ -39,7 +39,7 @@ concurrency:
 
 jobs:
   obtain_and_build_vsomeip:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     outputs:
       cache_key: ${{ steps.generate_cache_key.outputs.CACHE_KEY }}
     steps:
@@ -120,7 +120,7 @@ jobs:
   lint:
     name: Lint
     needs: obtain_and_build_vsomeip
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     env:
       CACHE_KEY: ${{ needs.obtain_and_build_vsomeip.outputs.cache_key }}
 
@@ -179,7 +179,7 @@ jobs:
   test:
     name: Test
     needs: obtain_and_build_vsomeip
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     env:
       CACHE_KEY: ${{ needs.obtain_and_build_vsomeip.outputs.cache_key }}
 
@@ -258,7 +258,7 @@ jobs:
   build-docs:
     name: Build documentation
     needs: obtain_and_build_vsomeip
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     env:
       CACHE_KEY: ${{ needs.obtain_and_build_vsomeip.outputs.cache_key }}
 

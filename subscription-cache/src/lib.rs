@@ -11,6 +11,7 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
+use log::warn;
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 use std::sync::Mutex;
@@ -98,19 +99,19 @@ impl SubscriptionCache {
             let status = if let Some(status) = subscription.status.into_option() {
                 status
             } else {
-                println!("Unable to parse status from subscription, setting as default");
+                warn!("Unable to parse status from subscription, setting as default");
                 SubscriptionStatus::default()
             };
             let attributes = if let Some(attributes) = subscription.attributes.into_option() {
                 attributes
             } else {
-                println!("Unable to parse attributes from subscription, setting as default");
+                warn!("Unable to parse attributes from subscription, setting as default");
                 SubscribeAttributes::default()
             };
             let config = if let Some(config) = subscription.config.into_option() {
                 config
             } else {
-                println!("Unable to parse config from subscription, setting as default");
+                warn!("Unable to parse config from subscription, setting as default");
                 EventDeliveryConfig::default()
             };
             // Create new hashset if the key does not exist and insert the subscription

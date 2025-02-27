@@ -38,6 +38,8 @@ const SENT_MESSAGE_VEC_CAPACITY: usize = 10_000;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn single_local_single_remote() {
+    integration_test_utils::init_logging();
+
     // using async_broadcast to simulate communication protocol
     let (tx_1, rx_1) = broadcast(10000);
     let (tx_2, rx_2) = broadcast(10000);

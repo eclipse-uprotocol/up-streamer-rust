@@ -39,3 +39,16 @@ pub use integration_test_messages::{
     request_from_remote_client_for_local_client, response_from_local_client_for_remote_client,
     response_from_remote_client_for_local_client,
 };
+
+/// Helper method for integration tests to initialise
+/// [env_logger].
+///
+/// `RUST_LOG` env is read. Defaults to `DEBUG`
+pub fn init_logging() {
+    let log_filter = std::env::var("RUST_LOG").unwrap_or_else(|_| "debug".to_string());
+    env_logger::builder()
+        .parse_filters(&log_filter)
+        .format_timestamp(None)
+        .is_test(true)
+        .init();
+}

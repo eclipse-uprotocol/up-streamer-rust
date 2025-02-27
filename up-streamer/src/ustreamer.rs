@@ -575,11 +575,6 @@ impl UStreamer {
         usubscription: Arc<dyn USubscription>,
     ) -> Result<Self, UStatus> {
         let name = format!("{USTREAMER_TAG}:{name}:");
-        // Try to initiate logging.
-        // Required in case of dynamic lib, otherwise no logs.
-        // But cannot be done twice in case of static link.
-        std::env::set_var("RUST_LOG", "debug");
-        let _ = env_logger::try_init();
         debug!(
             "{}:{}:{} UStreamer created",
             &name, USTREAMER_TAG, USTREAMER_FN_NEW_TAG

@@ -4263,6 +4263,7 @@ version = "0.1.0"
 dependencies = [
  "async-std",
  "async-trait",
+ "log",
  "serde_json",
  "subscription-cache",
  "up-rust",
