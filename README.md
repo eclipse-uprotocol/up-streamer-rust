@@ -33,7 +33,11 @@ cargo build
 
 You'll need to use the feature flags `vsomeip-transport`, `zenoh-transport` or `mqtt-transport` depending on which implementation you want to build. You then also have the option of including your own vsomeip or using one bundled in `up-transport-vsomeip`.
 
-For the bundled option, set the following environment variables (for example in your .cargo/config.toml file):
+For the bundled option, you have two options to set environment variables needed.
+
+#### Using `config.toml`
+
+Set the following environment variables (for example in your .cargo/config.toml file):
 
 ```toml
 [env]
@@ -44,6 +48,16 @@ ARCH_SPECIFIC_CPP_STDLIB_PATH=<path to your c++ stdlib (for example /usr/include
 ```bash
 cargo build --features vsomeip-transport,bundled-vsomeip,zenoh-transport
 ```
+
+#### Using `build/envsetup.sh`
+
+Alternatively, you may run:
+
+```shell
+build/envsetup.sh
+```
+
+to set the environment variables.
 
 The environment variables are necessary because of a workaround done in `up-transport-vsomeip` due to not being able to figure out another way to compile vsomeip without them. (If you can figure out how to avoid this, I'm all ears!)
 
