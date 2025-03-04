@@ -4130,9 +4130,9 @@ dependencies = [
 
 [[package]]
 name = "up-rust"
-version = "0.2.0"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "af7f283ab2b74869f69bcd5a87950b87db5110e46764af2ddae3248109f0e374"
+checksum = "30118ab07c7ca420e2196bbc0f6f380b3100928d03ec1cd960f9220472f48f1a"
 dependencies = [
  "async-trait",
  "bytes",
@@ -4172,9 +4172,9 @@ dependencies = [
 
 [[package]]
 name = "up-transport-mqtt5"
-version = "0.1.0"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0063dbc750c320501e17ce9d0834a616b26ec49ef6c41887f30bc2788ec25405"
+checksum = "43adade571c38ed57b35440a5e524f642f440be19b3f3a5dd79924e0419ce01b"
 dependencies = [
  "async-channel 1.9.0",
  "async-trait",
@@ -4197,8 +4197,8 @@ dependencies = [
 
 [[package]]
 name = "up-transport-vsomeip"
-version = "0.2.0"
-source = "git+https://github.com/eclipse-uprotocol/up-transport-vsomeip-rust.git?tag=v0.3.0#d659287126120d4feb75cbcc35a5334def421f50"
+version = "0.3.0"
+source = "git+https://github.com/PLeVasseur/up-client-vsomeip-rust?branch=add-build-script_update-up-rust-version#ed295aba9e979ff7cf59b3d085586677e43c75f5"
 dependencies = [
  "async-trait",
  "bimap",
@@ -4220,15 +4220,16 @@ dependencies = [
 
 [[package]]
 name = "up-transport-zenoh"
-version = "0.3.0"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "739441e501be7ea887024bcb2df2b452a362ee39d8efb0f2663fae0dc35e564c"
+checksum = "1dba40062ff410f59a9a34a51a9288c8ad92454e4199725264f4f9eaeb604fd9"
 dependencies = [
  "anyhow",
  "async-trait",
  "bytes",
  "lazy_static",
  "protobuf",
+ "serde_json",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -4363,7 +4364,7 @@ checksum = "5c3082ca00d5a5ef149bb8b555a72ae84c9c59f7250f013ac822ac2e49b19c64"
 [[package]]
 name = "vsomeip-proc-macro"
 version = "0.1.0"
-source = "git+https://github.com/eclipse-uprotocol/up-transport-vsomeip-rust.git?tag=v0.3.0#d659287126120d4feb75cbcc35a5334def421f50"
+source = "git+https://github.com/PLeVasseur/up-client-vsomeip-rust?branch=add-build-script_update-up-rust-version#ed295aba9e979ff7cf59b3d085586677e43c75f5"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4373,8 +4374,8 @@ dependencies = [
 
 [[package]]
 name = "vsomeip-sys"
-version = "0.2.0"
-source = "git+https://github.com/eclipse-uprotocol/up-transport-vsomeip-rust.git?tag=v0.3.0#d659287126120d4feb75cbcc35a5334def421f50"
+version = "0.3.0"
+source = "git+https://github.com/PLeVasseur/up-client-vsomeip-rust?branch=add-build-script_update-up-rust-version#ed295aba9e979ff7cf59b3d085586677e43c75f5"
 dependencies = [
  "autocxx",
  "autocxx-build",
