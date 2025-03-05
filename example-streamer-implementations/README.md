@@ -5,6 +5,17 @@ We implement the Streamers so that they forward between two components, either b
 A component running with Zenoh could be a component running in an ECU, one running with MQTT could be a component running in some sort of cloud and one running SOME/IP could be a mechatronics component.
 The Streamer by itself does not do much, but its designed to be run together with two of the transport examples in the example-streamer-uses folder.
 
+## Quickstart for how to run a uStreamer binary from docker
+
+The zenoh-to-mqtt uStreamer is available as a docker image from the github container registry of the uStreamer repository.
+If you want to run this streamer you just need to pull the image and run it, or add it to your docker-compose.yaml!
+
+Check the included "docker" directory for a reference to how to run a streamer instance.
+You will find a reference docker-compose.yaml that starts a Mosquitto MQTT broker and an instance of the uStreamer in the same container network.
+You can also see examples for the configuration files that you need for the uStreamer.
+The entire config directory must be mounted on the container, as you can see in the docker-compose.yaml.
+
+
 ## Supported Setups
 
 Here are the setups that can be built with these streamers and different entities with the Zenoh, SOME/IP and MQTT transports.

@@ -15,8 +15,12 @@ members = [
     "example-streamer-uses",
     "utils/hello-world-protos",
     "utils/integration-test-utils",
-    "example-streamer-implementations", "up-linux-streamer-plugin",
-    "up-streamer", "subscription-cache", "utils/usubscription-static-file"]
+    "example-streamer-implementations",
+    "up-linux-streamer-plugin",
+    "up-streamer",
+    "subscription-cache",
+    "utils/usubscription-static-file",
+]
 
 [workspace.package]
 rust-version = "1.76.0"
@@ -35,11 +39,16 @@ env_logger = { version = "0.10.1" }
 futures = { version = "0.3.30" }
 lazy_static = { version = "1.5.0" }
 log = { version = "0.4.20" }
-json5 = { version =  "0.4.1" }
+json5 = { version = "0.4.1" }
 serde = { version = "1.0.154", features = ["derive"] }
 serde_json = { version = "1.0.94" }
 uuid = { version = "1.7.0" }
-tokio = { version = "1.35.1", default-features = false, features = ["rt", "rt-multi-thread", "sync", "time"] }
+tokio = { version = "1.35.1", default-features = false, features = [
+    "rt",
+    "rt-multi-thread",
+    "sync",
+    "time",
+] }
 protobuf = { version = "3.3", features = ["with-bytes"] }
 up-rust = { version = "0.3.0", default-features = false }
 up-transport-zenoh = { version = "0.4.0" }

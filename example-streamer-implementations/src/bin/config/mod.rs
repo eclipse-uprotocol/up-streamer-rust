@@ -69,6 +69,7 @@ pub struct SomeipConfig {
 #[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct MqttConfig {
+    pub(crate) authority: String,
     pub(crate) hostname: String,
     pub(crate) port: u16,
     pub(crate) max_buffered_messages: i32,

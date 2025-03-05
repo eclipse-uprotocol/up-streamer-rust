@@ -1,0 +1,10 @@
+services:
+  ustreamer:
+    image: benediktillich/streamertest:latest
+    ports:
+      - 3883:1883
+      - 7447:7447
+    volumes:
+      - type: bind
+        source: ./config
+        target: /app/config

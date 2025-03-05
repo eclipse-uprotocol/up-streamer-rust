@@ -1,0 +1,53 @@
+# Copyright (c) 2024 Contributors to the Eclipse Foundation
+#
+# See the NOTICE file(s) distributed with this work for additional
+# information regarding copyright ownership.
+#
+# This program and the accompanying materials are made available under the
+# terms of the Apache License Version 2.0 which is available at
+# https://www.apache.org/licenses/LICENSE-2.0
+#
+# SPDX-License-Identifier: Apache-2.0
+
+services:
+  # the streamer needs an mqtt broker to connect to before it can start
+  mosquitto:
+    image: eclipse-mosquitto:latest
+    ports:
+      - "1883:1883" # the port used by MQTT must be open to the outside
+    volumes:
+      # read-only prevents the container changing file owners on the host
+      - ./mosquitto.config:/mosquitto/config/mosquitto.conf:ro
+    # if the streamer is on the same network then the broker URL is its service name (ie. "mosquitto")
+    networks:
+      - streamer-net
+    healthcheck:
+      # this check will only pass if the broker finished its setup and is running
+      test: ["CMD-SHELL", "mosquitto_sub -t 'test/#' -C 1 -E -W 3 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  ustreamer:
+    # docker should automatically find the uStreamer container for the host architecture
+    image: ghcr.io/valtechmobility/up-streamer-rust/zenoh-mqtt-streamer:pr-1
+    ports:
+      - "7447:7447" # the port used by Zenoh must be open to the outside
+    networks:
+      # same network as the broker
+      - streamer-net
+    volumes:
+      # the config folder must be mounted to the container of the uStreamer
+      - type: bind
+        source: ./config
+        target: /app/config
+    environment:
+      # verbosity of the rust code
+      - RUST_LOG=debug,zenoh=debug
+    depends_on:
+      mosquitto:
+        condition: service_healthy # wait for the broker health check before start-up
+
+networks:
+  streamer-net:
+    driver: bridge
