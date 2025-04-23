@@ -10,7 +10,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 [package]
-name = "up-linux-streamer"
+name = "configurable-streamer"
 rust-version.workspace = true
 version.workspace = true
 repository.workspace = true
@@ -19,21 +19,10 @@ edition.workspace = true
 keywords.workspace = true
 license.workspace = true
 
-[[bin]]
-name = "zenoh_someip"
-required-features = ["zenoh-transport", "vsomeip-transport"]
-
-[features]
-default = []
-zenoh-transport = ["up-transport-zenoh", "zenoh"]
-vsomeip-transport = ["up-transport-vsomeip"]
-bundled-vsomeip = ["up-transport-vsomeip/bundled"]
-
 [dependencies]
 async-trait = { workspace = true }
-chrono = { version = "0.4" }
-clap = { version = "4.5.9", features = ["derive"] }
-env_logger = { version = "0.10.2" }
+clap = { workspace = true }
+env_logger = { workspace = true }
 log = { workspace = true }
 json5 = { workspace = true }
 protobuf = { workspace = true }
@@ -41,9 +30,9 @@ serde = { workspace = true }
 tokio = { workspace = true }
 up-rust = { workspace = true }
 up-streamer = { path = "../up-streamer" }
-up-transport-zenoh = { workspace = true, optional = true }
-up-transport-vsomeip = { workspace = true, optional = true }
-zenoh = { workspace = true, optional = true }
+up-transport-zenoh = { workspace = true }
+up-transport-mqtt5 = { workspace = true }
+zenoh = { workspace = true }
 usubscription-static-file = { path = "../utils/usubscription-static-file" }
 
 [dev-dependencies]

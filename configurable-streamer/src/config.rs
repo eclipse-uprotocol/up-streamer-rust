@@ -1,5 +1,5 @@
 /********************************************************************************
- * Copyright (c) 2024 Contributors to the Eclipse Foundation
+ * Copyright (c) 2025 Contributors to the Eclipse Foundation
  *
  * See the NOTICE file(s) distributed with this work for additional
  * information regarding copyright ownership.
@@ -12,7 +12,6 @@
  ********************************************************************************/
 
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(deny_unknown_fields)]
@@ -20,10 +19,7 @@ pub struct Config {
     pub(crate) up_streamer_config: UpStreamerConfig,
     pub(crate) streamer_uuri: StreamerUuri,
     pub(crate) usubscription_config: USubscriptionConfig,
-    pub(crate) zenoh_transport_config: ZenohTransportConfig,
-    pub(crate) host_config: HostConfig,
-    pub(crate) someip_config: SomeipConfig,
-    pub(crate) mqtt_config: MqttConfig,
+    pub(crate) transports: Transports,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
@@ -48,28 +44,38 @@ pub struct USubscriptionConfig {
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(deny_unknown_fields)]
-pub struct HostConfig {
-    pub(crate) transport: HostTransport,
+pub struct Transports {
+    pub(crate) zenoh: ZenohTransport,
+    pub(crate) mqtt: MqttTransport,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(deny_unknown_fields)]
-pub struct ZenohTransportConfig {
+pub struct ZenohTransport {
     pub(crate) config_file: String,
+    pub(crate) endpoints: Vec<EndpointConfig>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(deny_unknown_fields)]
-pub struct SomeipConfig {
-    pub(crate) authority: String,
-    pub(crate) config_file: PathBuf,
-    pub(crate) default_someip_application_id_for_someip_subscriptions: u16,
+pub struct MqttTransport {
+    pub(crate) config_file: String,
+    pub(crate) endpoints: Vec<EndpointConfig>,
+    #[serde(skip)]
+    pub(crate) mqtt_details: Option<MqttConfigDetails>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(deny_unknown_fields)]
-pub struct MqttConfig {
+pub struct EndpointConfig {
     pub(crate) authority: String,
+    pub(crate) endpoint: String,
+    pub(crate) forwarding: Vec<String>,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct MqttConfigDetails {
     pub(crate) hostname: String,
     pub(crate) port: u16,
     pub(crate) max_buffered_messages: i32,
@@ -78,8 +84,10 @@ pub struct MqttConfig {
     pub(crate) username: String,
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone)]
-pub enum HostTransport {
-    Zenoh,
-    Mqtt,
+impl MqttTransport {
+    pub fn load_mqtt_details(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        let config_contents = std::fs::read_to_string(&self.config_file)?;
+        self.mqtt_details = Some(json5::from_str(&config_contents)?);
+        Ok(())
+    }
 }

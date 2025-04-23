@@ -46,7 +46,7 @@ fn get_and_build_protos(
     let mut proto_files = Vec::new();
 
     for url in urls {
-        let file_name = url.split('/').last().unwrap();
+        let file_name = url.split('/').next_back().unwrap();
         let mut file_path_buf = PathBuf::from(&proto_folder);
 
         // Check if the URL is from googleapis to determine the correct path

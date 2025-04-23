@@ -33,6 +33,7 @@
       transport: "Zenoh",
     },
     mqtt_config: {
+      authority: "authority_A",
       // The URL of the MQTT broker (the provided mosquitto broker runs on locahost but docker networks might complicate that)
       hostname: "localhost",
       // The port of the broker (unencrypted MQTT like the provided mosquitto broker typically uses 1883, encrypted uses 8883)

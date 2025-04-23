@@ -243,65 +243,28 @@ impl UTransport for UPClientFoo {
             self.name, source_filter, sink_filter
         );
 
-        let sink_for_specific = {
-            if let Some(sink) = sink_filter {
-                sink.authority_name != "*"
-            } else {
-                false
-            }
-        };
+        let sink_authority = sink_filter.unwrap().clone().authority_name;
+        let mut authority_listeners = self.authority_listeners.lock().await;
+        let authority = sink_authority;
+        debug!(
+            "{}: registering authority listener on authority: {}",
+            &self.name, authority
+        );
+        let authority_listeners = authority_listeners.entry(authority.clone()).or_default();
+        let comparable_listener = ComparableListener::new(listener);
+        let inserted = authority_listeners.insert(comparable_listener);
 
-        return if source_filter.authority_name == "*" && sink_for_specific {
-            let sink_authority = sink_filter.unwrap().clone().authority_name;
-            let mut authority_listeners = self.authority_listeners.lock().await;
-            let authority = sink_authority;
-            debug!(
-                "{}: registering authority listener on authority: {}",
-                &self.name, authority
-            );
-            let authority_listeners = authority_listeners.entry(authority.clone()).or_default();
-            let comparable_listener = ComparableListener::new(listener);
-            let inserted = authority_listeners.insert(comparable_listener);
+        match inserted {
+            true => {
+                debug!("{}: successfully registered authority listener for: authority: {}", &self.name, authority);
 
-            match inserted {
-                true => {
-                    debug!("{}: successfully registered authority listener for: authority: {}", &self.name, authority);
-
-                    Ok(())
-                },
-                false => Err(UStatus::fail_with_code(
-                    UCode::ALREADY_EXISTS,
-                    format!("{}: UUri and listener already registered! failed to register authority listener for: authority: {}", &self.name, authority)
-                )),
-            }
-        } else {
-            debug!(
-                "{}: registering regular listener for: source: {:?} sink: {:?}",
-                &self.name, source_filter, sink_filter
-            );
-
-            let mut listeners = self.listeners.lock().await;
-            let topic_listeners = listeners
-                .entry((source_filter.clone(), sink_filter.cloned()))
-                .or_default();
-            let comparable_listener = ComparableListener::new(listener);
-            let inserted = topic_listeners.insert(comparable_listener);
-
-            match inserted {
-                true => {
-                    debug!(
-                        "{}: successfully registered regular listener for: source: {:?} sink: {:?}",
-                        &self.name, source_filter, sink_filter
-                    );
-
-                    Ok(())
-                }
-                false => Err(UStatus::fail_with_code(
-                    UCode::ALREADY_EXISTS,
-                    "UUri and listener already registered!",
-                )),
-            }
-        };
+                Ok(())
+            },
+            false => Err(UStatus::fail_with_code(
+                UCode::ALREADY_EXISTS,
+                format!("{}: UUri and listener already registered! failed to register authority listener for: authority: {}", &self.name, authority)
+            )),
+        }
     }
 
     async fn unregister_listener(

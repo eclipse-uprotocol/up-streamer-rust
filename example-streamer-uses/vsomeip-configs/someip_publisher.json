@@ -1,9 +1,8 @@
 {
-  "applications" :
-  [
-    {
-      "name" : "0x1237",
-      "id" : "0x1237"
-    }
-  ]
+    "applications": [
+        {
+            "name": "0x1237",
+            "id": "0x1237"
+        }
+    ]
 }

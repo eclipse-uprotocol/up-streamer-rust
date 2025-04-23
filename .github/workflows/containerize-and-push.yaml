@@ -1,0 +1,160 @@
+# ********************************************************************************
+#  Copyright (c) 2025 Contributors to the Eclipse Foundation
+#
+#  See the NOTICE file(s) distributed with this work for additional
+#  information regarding copyright ownership.
+#
+#  This program and the accompanying materials are made available under the
+#  terms of the Apache License Version 2.0 which is available at
+#  https://www.apache.org/licenses/LICENSE-2.0
+#
+#  SPDX-License-Identifier: Apache-2.0
+# *******************************************************************************/
+
+name: Containerize uStreamer and Push to Container Registry
+
+on:
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}/configurable-streamer
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      tags: ${{ steps.meta.outputs.tags }}
+      labels: ${{ steps.meta.outputs.labels }}
+    steps:
+      - name: Extract metadata and create tag
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=tag
+            type=ref,event=pr
+
+  build-arm64:
+    needs: setup
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      digest: ${{ steps.build_and_push.outputs.digest }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install Rust and Cross
+        uses: ./.github/actions/setup-rust-cross
+
+      - name: Cross Build for arm64
+        working-directory: configurable-streamer
+        run: |
+          cross build --target aarch64-unknown-linux-musl --release
+
+      - name: Fix Registry and Repository names
+        shell: bash
+        run: |
+          echo "REGISTRY=$(echo $REGISTRY | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+          echo "IMAGE_NAME=$(echo $IMAGE_NAME | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+
+      - name: Build and push Docker image for arm64
+        id: build_and_push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: "configurable-streamer/Dockerfile.arm"
+          push: true
+          platforms: linux/arm64
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:arm64-${{ github.sha }}
+          labels: ${{ needs.setup.outputs.labels }}
+
+  build-amd64:
+    needs: setup
+    runs-on: ubuntu-latest
+    outputs:
+      digest: ${{ steps.build_and_push.outputs.digest }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install Rust and Cross
+        uses: ./.github/actions/setup-rust-cross
+
+      - name: Cross Build for amd64
+        working-directory: configurable-streamer
+        run: |
+          cross build --target x86_64-unknown-linux-musl --release
+
+      - name: Fix Registry and Repository names
+        shell: bash
+        run: |
+          echo "REGISTRY=$(echo $REGISTRY | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+          echo "IMAGE_NAME=$(echo $IMAGE_NAME | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+
+      - name: Build and push Docker image for amd64
+        id: build_and_push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: "configurable-streamer/Dockerfile.amd"
+          push: true
+          platforms: linux/amd64
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:amd64-${{ github.sha }}
+          labels: ${{ needs.setup.outputs.labels }}
+
+  create-manifest:
+    needs: [setup, build-arm64, build-amd64]
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    steps:
+      - name: Login to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Fix Registry and Repository names
+        shell: bash
+        run: |
+          echo "REGISTRY=$(echo $REGISTRY | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+          echo "IMAGE_NAME=$(echo $IMAGE_NAME | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+
+      - name: Create and push manifest
+        shell: bash
+        run: |
+          for tag in ${{ needs.setup.outputs.tags }}; do
+            docker buildx imagetools create -t $tag \
+              ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:amd64-${{ github.sha }} \
+              ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:arm64-${{ github.sha }}
+          done

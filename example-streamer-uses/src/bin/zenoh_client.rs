@@ -50,7 +50,7 @@ fn client_uuri() -> UUri {
 #[command(version, about, long_about = None)]
 struct Args {
     /// The endpoint for Zenoh client to connect to
-    #[arg(short, long, default_value = "tcp/0.0.0.0:7445")]
+    #[arg(short, long, default_value = "tcp/127.0.0.1:7447")]
     endpoint: String,
 }
 
@@ -71,7 +71,7 @@ async fn main() -> Result<(), UStatus> {
 
         // Add the IPv4 endpoint to the Zenoh configuration
         zenoh_config
-            .listen
+            .connect
             .endpoints
             .set(vec![ipv4_endpoint])
             .expect("Unable to set Zenoh Config");
