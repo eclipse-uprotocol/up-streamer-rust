@@ -17,8 +17,8 @@ use common::ServiceRequestResponder;
 use log::info;
 use std::sync::Arc;
 use std::thread;
-use up_rust::{UListener, UStatus, UTransport, UUri, UUID};
-use up_transport_mqtt5::{MqttConfig, UPClientMqtt, UPClientMqttType};
+use up_rust::{UListener, UStatus, UTransport, UUri};
+use up_transport_mqtt5::{Mqtt5Transport, Mqtt5TransportOptions, MqttClientOptions};
 
 const SERVICE_AUTHORITY: &str = "authority_A";
 const SERVICE_UE_ID: u32 = 0x4321;
@@ -42,29 +42,19 @@ async fn main() -> Result<(), UStatus> {
     )
     .unwrap();
 
-    let ssl_options = None;
-
-    let mqtt_config = MqttConfig {
-        mqtt_protocol: up_transport_mqtt5::MqttProtocol::Mqtt,
-        mqtt_port: 1883,
-        mqtt_hostname: "localhost".to_string(),
-        max_buffered_messages: 100,
-        max_subscriptions: 100,
-        session_expiry_interval: 3600,
-        ssl_options,
-        username: "user".to_string(),
+    let mqtt_client_options = MqttClientOptions {
+        broker_uri: "localhost:1883".to_string(),
+        ..Default::default()
     };
+    let mqtt_transport_options = Mqtt5TransportOptions {
+        mqtt_client_options,
+        ..Default::default()
+    };
+    let mqtt5_transport =
+        Mqtt5Transport::new(mqtt_transport_options, SERVICE_AUTHORITY.to_string()).await?;
+    mqtt5_transport.connect().await?;
 
-    let service: Arc<dyn UTransport> = Arc::new(
-        UPClientMqtt::new(
-            mqtt_config,
-            UUID::build(),
-            SERVICE_AUTHORITY.to_string(),
-            UPClientMqttType::Device, // Todo: make sure that UPClientMqttType::Cloud also works
-        )
-        .await
-        .expect("Could not create mqtt transport."),
-    );
+    let service: Arc<dyn UTransport> = Arc::new(mqtt5_transport);
 
     let service_request_responder: Arc<dyn UListener> =
         Arc::new(ServiceRequestResponder::new(service.clone()));

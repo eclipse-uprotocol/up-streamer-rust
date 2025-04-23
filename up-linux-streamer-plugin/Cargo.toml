@@ -21,8 +21,14 @@ license.workspace = true
 
 [features]
 default = ["dynamic_plugin"]
-zenoh-transport = ["up-transport-zenoh", "zenoh", "zenoh-core", "zenoh-plugin-trait",
-                          "zenoh-result", "zenoh-util", "zenoh_backend_traits"]
+zenoh-transport = [
+    "up-transport-zenoh",
+    "zenoh",
+    "zenoh-core",
+    "zenoh-plugin-trait",
+    "zenoh-result",
+    "zenoh-util",
+]
 vsomeip-transport = ["up-transport-vsomeip"]
 bundled-vsomeip = ["up-transport-vsomeip/bundled"]
 dynamic_plugin = []
@@ -47,13 +53,14 @@ serde = { version = "1.0.154" }
 serde_json = { version = "1.0.94" }
 tokio = { version = "1.35.1", default-features = false }
 up-rust = { workspace = true }
-up-transport-zenoh = { workspace = true, optional = true, features = ["zenoh-unstable"] }
+up-transport-zenoh = { workspace = true, optional = true, features = [
+    "zenoh-unstable",
+] }
 up-transport-vsomeip = { workspace = true, optional = true }
 up-streamer = { path = "../up-streamer" }
-usubscription-static-file = {path = "../utils/usubscription-static-file"}
+usubscription-static-file = { path = "../utils/usubscription-static-file" }
 zenoh = { workspace = true, optional = true }
 zenoh-core = { workspace = true, optional = true }
 zenoh-plugin-trait = { workspace = true, optional = true }
 zenoh-result = { workspace = true, optional = true }
 zenoh-util = { workspace = true, optional = true }
-zenoh_backend_traits = { workspace = true, optional = true }

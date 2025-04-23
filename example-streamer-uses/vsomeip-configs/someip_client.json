@@ -1,9 +1,8 @@
 {
-  "applications" :
-  [
-    {
-      "name" : "0x5678",
-      "id" : "0x5678"
-    }
-  ]
+    "applications": [
+        {
+            "name": "0x5678",
+            "id": "0x5678"
+        }
+    ]
 }

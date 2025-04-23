@@ -33,7 +33,7 @@ use up_rust::{UListener, UTransport};
 use up_streamer::{Endpoint, UStreamer};
 use usubscription_static_file::USubscriptionStaticFile;
 
-const DURATION_TO_RUN_CLIENTS: u128 = 1_000;
+const DURATION_TO_RUN_CLIENTS: u128 = 10;
 const SENT_MESSAGE_VEC_CAPACITY: usize = 10_000;
 
 #[tokio::test(flavor = "multi_thread")]

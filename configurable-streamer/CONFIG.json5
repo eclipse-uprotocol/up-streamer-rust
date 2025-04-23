@@ -1,0 +1,64 @@
+{
+    up_streamer_config: {
+      // The message queue size of each route between endpoints within the UStreamer
+      // Lower numbers mean that some messages will be dropped
+      message_queue_size: 10000
+    },
+    streamer_uuri: {
+      // Determines the authority_name of the host device
+      // Used when initializing host transport
+      authority: "authority_B",
+      // Determines the ue_id of the streamer
+      // Used when initializing host transport
+      ue_id: 78,
+      // Determines the ue_version_major of the streamer
+      // Used when initializing host transport
+      ue_version_major: 1
+    },
+    usubscription_config: {
+      // Lists the path to the subscription file when using static file
+      file_path: "subscription_data.json"
+    },
+    transports: {
+        zenoh: {
+            // Path to the zenoh config file
+            config_file: "ZENOH_CONFIG.json5",
+            // List of endpoints that use the zenoh transport
+            endpoints: [
+                {
+                    // Authority of the entity that the endpoint represents
+                    authority: "authority_B",
+                    // Identifier of the endpoint
+                    endpoint: "endpoint_zenoh_1",
+                    // List of identifiers of all other endpoints that messages should be forwarded to
+                    forwarding: [
+                        "endpoint_mqtt_1",
+                        "endpoint_zenoh_2"
+                    ]
+                },
+                {
+                    authority: "authority_C",
+                    // Make sure that each endpoint has a unique identifier or the streamer will not start
+                    endpoint: "endpoint_zenoh_2",
+                    // All endpoint identifiers listed here must also be defined in this config
+                    forwarding: [
+                        "endpoint_zenoh_1",
+                    ]
+                }
+            ]
+        },
+        mqtt: {
+            // Same as for the zenoh section but for all MQTT5 based endpoints
+            config_file: "MQTT_CONFIG.json5",
+            endpoints: [
+                {
+                    authority: "authority_A",
+                    endpoint: "endpoint_mqtt_1",
+                    forwarding: [
+                        "endpoint_zenoh_1",
+                    ]
+                },
+            ]
+        },
+    }
+}

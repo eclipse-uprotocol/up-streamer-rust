@@ -50,9 +50,13 @@ lazy_static! {
 }
 
 fn uauthority_to_uuri(authority_name: &str) -> UUri {
+    // let mut uuri = UUri::any();
+    // uuri.authority_name = authority_name.to_string();
+    // uuri
+
     UUri {
         authority_name: authority_name.to_string(),
-        ue_id: 0x0000_FFFF,     // any instance, any service
+        ue_id: 0xFFFF_FFFF,     // any instance, any service
         ue_version_major: 0xFF, // any
         resource_id: 0xFFFF,    // any
         ..Default::default()
@@ -190,6 +194,7 @@ impl ForwardingListeners {
     pub async fn insert(
         &self,
         in_transport: Arc<dyn UTransport>,
+        in_authority: &str,
         out_authority: &str,
         forwarding_id: &str,
         out_sender: Sender<Arc<UMessage>>,
@@ -219,9 +224,10 @@ impl ForwardingListeners {
         // Perform async registration and fetching
 
         uuris_to_backpedal.insert((UUri::any(), Some(uauthority_to_uuri(out_authority))));
+
         if let Err(err) = in_transport
             .register_listener(
-                &UUri::any(),
+                &uauthority_to_uuri(in_authority),
                 Some(&uauthority_to_uuri(out_authority)),
                 forwarding_listener.clone(),
             )
@@ -271,9 +277,20 @@ impl ForwardingListeners {
         };
 
         for subscriber in subscribers {
+            let source_uri = UUri::try_from_parts(
+                in_authority,
+                subscriber.topic.ue_id,
+                subscriber.topic.uentity_major_version(),
+                subscriber.topic.resource_id(),
+            )
+            .unwrap();
+            info!(
+                "in authority: {}, out authority: {}, source URI filter: {:?}",
+                in_authority, out_authority, source_uri
+            );
             uuris_to_backpedal.insert((subscriber.topic.clone(), None));
             if let Err(err) = in_transport
-                .register_listener(&subscriber.topic, None, forwarding_listener.clone())
+                .register_listener(&source_uri, None, forwarding_listener.clone())
                 .await
             {
                 warn!(
@@ -567,7 +584,7 @@ impl UStreamer {
     ///
     /// * name - Used to uniquely identify this UStreamer in logs
     /// * message_queue_size - Determines size of channel used to communicate between `ForwardingListener`
-    ///                        and the worker tasks for each currently endpointd `UTransport`
+    ///   and the worker tasks for each currently endpointd `UTransport`
     /// * usubscription - Subscription service which will be used to store subscription info for topics.
     pub fn new(
         name: &str,
@@ -722,6 +739,7 @@ impl UStreamer {
                         .forwarding_listeners
                         .insert(
                             r#in.transport.clone(),
+                            &r#in.authority,
                             &out.authority,
                             &Self::forwarding_id(&r#in, &out),
                             out_sender,

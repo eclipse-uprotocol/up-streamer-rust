@@ -1,0 +1,14 @@
+{
+      // The URL of the MQTT broker (the provided mosquitto broker runs on locahost but docker networks might complicate that)
+      hostname: "localhost",
+      // The port of the broker (unencrypted MQTT like the provided mosquitto broker typically uses 1883, encrypted uses 8883)
+      port: 1883,
+      // How many messages the broker should buffer for this connections
+      max_buffered_messages: 100,
+      // How many individual topic subscriptions are supported through this connection
+      max_subscriptions: 100,
+      // How long the connection should stay open for
+      session_expiry_interval: 3600,
+      // The username that the mqtt client gives the broker when connecting (usually not important)
+      username: "user"
+}
