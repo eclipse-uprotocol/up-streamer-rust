@@ -30,7 +30,7 @@ fn main() -> std::io::Result<()> {
     "helloworld",
     ) {
         let error_message = format!("Failed to fetch and build protobuf file: {err:?}");
-        return Err(std::io::Error::new(std::io::ErrorKind::Other, error_message));
+        return Err(std::io::Error::other(error_message));
     }
 
     Ok(())
