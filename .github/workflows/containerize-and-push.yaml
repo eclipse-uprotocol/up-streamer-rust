@@ -87,6 +87,9 @@ jobs:
   build-amd64:
     needs: setup
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     outputs:
       digest: ${{ steps.build_and_push.outputs.digest }}
     steps:
