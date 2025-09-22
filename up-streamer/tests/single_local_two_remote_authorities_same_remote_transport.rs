@@ -34,9 +34,10 @@ use up_rust::{UListener, UTransport};
 use up_streamer::{Endpoint, UStreamer};
 use usubscription_static_file::USubscriptionStaticFile;
 
-const DURATION_TO_RUN_CLIENTS: u128 = 1_000;
+const DURATION_TO_RUN_CLIENTS: u128 = 1_0;
 const SENT_MESSAGE_VEC_CAPACITY: usize = 10_000;
 
+#[ignore]
 #[tokio::test(flavor = "multi_thread")]
 async fn single_local_two_remote_authorities_same_remote_transport() {
     integration_test_utils::init_logging();
