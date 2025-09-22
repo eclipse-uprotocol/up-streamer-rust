@@ -177,7 +177,7 @@ const FORWARDING_LISTENERS_FN_INSERT_TAG: &str = "insert:";
 const FORWARDING_LISTENERS_FN_REMOVE_TAG: &str = "remove:";
 
 type ForwardingListenersContainer =
-    Mutex<HashMap<(ComparableTransport, String), (usize, Arc<ForwardingListener>)>>;
+    Mutex<HashMap<(ComparableTransport, String, String), (usize, Arc<ForwardingListener>)>>;
 
 // we must have only a single listener per in UTransport and out UAuthority
 struct ForwardingListeners {
@@ -203,9 +203,11 @@ impl ForwardingListeners {
         let in_comparable_transport = ComparableTransport::new(in_transport.clone());
         let mut forwarding_listeners = self.listeners.lock().await;
 
-        if let Some((active, forwarding_listener)) = forwarding_listeners
-            .get_mut(&(in_comparable_transport.clone(), out_authority.to_string()))
-        {
+        if let Some((active, forwarding_listener)) = forwarding_listeners.get_mut(&(
+            in_comparable_transport.clone(),
+            in_authority.to_string(),
+            out_authority.to_string(),
+        )) {
             *active += 1;
             if *active > 1 {
                 return Ok(None);
@@ -323,21 +325,32 @@ impl ForwardingListeners {
 
         // Insert the new listener and update the active count
         forwarding_listeners.insert(
-            (in_comparable_transport, out_authority.to_string()),
+            (
+                in_comparable_transport,
+                in_authority.to_string(),
+                out_authority.to_string(),
+            ),
             (1, forwarding_listener.clone()),
         );
         Ok(Some(forwarding_listener))
     }
 
-    pub async fn remove(&self, in_transport: Arc<dyn UTransport>, out_authority: &str) {
+    pub async fn remove(
+        &self,
+        in_transport: Arc<dyn UTransport>,
+        in_authority: &str,
+        out_authority: &str,
+    ) {
         let in_comparable_transport = ComparableTransport::new(in_transport.clone());
 
         let mut forwarding_listeners = self.listeners.lock().await;
 
         let active_num = {
-            let Some((active, _)) = forwarding_listeners
-                .get_mut(&(in_comparable_transport.clone(), out_authority.to_string()))
-            else {
+            let Some((active, _)) = forwarding_listeners.get_mut(&(
+                in_comparable_transport.clone(),
+                in_authority.to_string(),
+                out_authority.to_string(),
+            )) else {
                 warn!("{FORWARDING_LISTENERS_TAG}:{FORWARDING_LISTENERS_FN_REMOVE_TAG} no such out_comparable_transport, out_authority: {out_authority:?}");
                 return;
             };
@@ -346,8 +359,11 @@ impl ForwardingListeners {
         };
 
         if active_num == 0 {
-            let removed =
-                forwarding_listeners.remove(&(in_comparable_transport, out_authority.to_string()));
+            let removed = forwarding_listeners.remove(&(
+                in_comparable_transport,
+                in_authority.to_string(),
+                out_authority.to_string(),
+            ));
             warn!("{FORWARDING_LISTENERS_TAG}:{FORWARDING_LISTENERS_FN_REMOVE_TAG} removing ForwardingListener, out_authority: {out_authority:?}");
             if let Some((_, forwarding_listener)) = removed {
                 warn!("ForwardingListeners::remove: ForwardingListener found we can remove, out_authority: {out_authority:?}");
@@ -824,7 +840,7 @@ impl UStreamer {
                     .remove(out.transport.clone())
                     .await;
                 self.forwarding_listeners
-                    .remove(r#in.transport.clone(), &out.authority)
+                    .remove(r#in.transport.clone(), &r#in.authority, &out.authority)
                     .await;
                 Ok(())
             }
