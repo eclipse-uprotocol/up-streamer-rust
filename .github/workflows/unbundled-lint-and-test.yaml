@@ -21,7 +21,7 @@ env:
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
     paths:
       - ".github/**"
@@ -35,7 +35,6 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-
   set-env:
     name: Set environment variables
     runs-on: ubuntu-22.04
@@ -64,8 +63,8 @@ jobs:
       cache_key: ${{ steps.generate_cache_key.outputs.CACHE_KEY }}
 
     env:
-       ARCH_SPECIFIC_CPP_STDLIB_PATH: ${{ needs.set-env.outputs.arch_specific_cpp_stdlib_path }}
-       GENERIC_CPP_STDLIB_PATH: ${{ needs.set-env.outputs.generic_cpp_stdlib_path }}
+      ARCH_SPECIFIC_CPP_STDLIB_PATH: ${{ needs.set-env.outputs.arch_specific_cpp_stdlib_path }}
+      GENERIC_CPP_STDLIB_PATH: ${{ needs.set-env.outputs.generic_cpp_stdlib_path }}
 
     steps:
       - name: Checkout repository
@@ -88,7 +87,7 @@ jobs:
           echo "GENERIC_CPP_STDLIB_PATH: ${{ env.GENERIC_CPP_STDLIB_PATH }}"
           echo "ARCH_SPECIFIC_CPP_STDLIB_PATH: ${{ env.ARCH_SPECIFIC_CPP_STDLIB_PATH }}"
           env
-          
+
       - name: Download tarball
         run: |
           wget -O vsomeip-source.tar.gz $VSOMEIP_SOURCE_TARBALL
@@ -130,7 +129,7 @@ jobs:
 
       - name: Install dependencies
         if: steps.cache-vsomeip.outputs.cache-hit != 'true'
-        run: sudo apt-get install -y build-essential cmake libboost-all-dev doxygen asciidoc 
+        run: sudo apt-get update && sudo apt-get install -y build-essential cmake libboost-all-dev doxygen asciidoc
 
       - name: Build vsomeip
         if: steps.cache-vsomeip.outputs.cache-hit != 'true'
@@ -148,7 +147,7 @@ jobs:
 
   lint:
     name: Lint
-    needs: 
+    needs:
       - set-env
       - obtain_and_build_vsomeip
     runs-on: ubuntu-22.04
@@ -211,7 +210,7 @@ jobs:
 
   test:
     name: Test
-    needs: 
+    needs:
       - set-env
       - obtain_and_build_vsomeip
     runs-on: ubuntu-22.04
@@ -267,7 +266,7 @@ jobs:
       - name: Run tests and report code coverage
         run: |
           # enable nightly features so that we can also include Doctests
-          LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${VSOMEIP_INSTALL_PATH}/lib RUSTC_BOOTSTRAP=1 cargo tarpaulin --no-default-features -o xml -o lcov -o html --doc --tests -- --test-threads 1 
+          LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${VSOMEIP_INSTALL_PATH}/lib RUSTC_BOOTSTRAP=1 cargo tarpaulin --no-default-features -o xml -o lcov -o html --doc --tests -- --test-threads 1
 
       - name: Upload coverage report (xml)
         uses: actions/upload-artifact@v4
@@ -295,7 +294,7 @@ jobs:
 
   build-docs:
     name: Build documentation
-    needs: 
+    needs:
       - obtain_and_build_vsomeip
       - set-env
     runs-on: ubuntu-22.04
@@ -342,4 +341,3 @@ jobs:
       - name: Create Documentation for up-linux-streamer
         working-directory: ${{github.workspace}}
         run: RUSTDOCFLAGS=-Dwarnings cargo doc -p up-linux-streamer --no-deps --no-default-features
-
