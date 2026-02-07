@@ -140,42 +140,14 @@ jobs:
         run: |
           echo "cache_key: ${{ env.CACHE_KEY }}"
 
-      - name: Install dependencies
-        run: |
-          cargo install cargo-tarpaulin
       - name: Show toolchain information
         working-directory: ${{github.workspace}}
         run: |
           rustup toolchain list
           cargo --version
-      - name: Run tests and report code coverage
+      - name: Run tests
         run: |
-          # enable nightly features so that we can also include Doctests
-          LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${VSOMEIP_INSTALL_PATH}/lib RUSTC_BOOTSTRAP=1 cargo tarpaulin -o xml -o lcov -o html --doc --tests -- --test-threads 1
-
-      - name: Upload coverage report (xml)
-        uses: actions/upload-artifact@v4
-        with:
-          name: Test Coverage Results (xml)
-          path: cobertura.xml
-
-      - name: Upload coverage report (lcov)
-        uses: actions/upload-artifact@v4
-        with:
-          name: Test Coverage Results (lcov)
-          path: lcov.info
-
-      - name: Upload coverage report (html)
-        uses: actions/upload-artifact@v4
-        with:
-          name: Test Coverage Results (html)
-          path: tarpaulin-report.html
-
-      # - name: Upload coverage report
-      #   uses: actions/upload-artifact@v4
-      #   with:
-      #     name: Code coverage report
-      #     path: cobertura.xml
+          LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${VSOMEIP_INSTALL_PATH}/lib cargo test --doc --tests -- --test-threads 1
 
   build-docs:
     name: Build documentation
@@ -212,4 +184,3 @@ jobs:
       - name: Create Documentation for up-linux-streamer
         working-directory: ${{github.workspace}}
         run: RUSTDOCFLAGS=-Dwarnings cargo doc -p up-linux-streamer --no-deps
-
