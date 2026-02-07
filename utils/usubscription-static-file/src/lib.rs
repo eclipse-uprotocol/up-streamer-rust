@@ -22,8 +22,9 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use up_rust::core::usubscription::{
     FetchSubscribersRequest, FetchSubscribersResponse, FetchSubscriptionsRequest,
-    FetchSubscriptionsResponse, NotificationsRequest, SubscriberInfo, Subscription,
-    SubscriptionRequest, SubscriptionResponse, USubscription, UnsubscribeRequest,
+    FetchSubscriptionsResponse, NotificationsRequest, ResetRequest, ResetResponse,
+    SubscriberInfo, Subscription, SubscriptionRequest, SubscriptionResponse, USubscription,
+    UnsubscribeRequest,
 };
 use up_rust::{UCode, UStatus, UUri};
 
@@ -175,5 +176,9 @@ impl USubscription for USubscriptionStaticFile {
         _fetch_subscribers_request: FetchSubscribersRequest,
     ) -> Result<FetchSubscribersResponse, UStatus> {
         todo!();
+    }
+
+    async fn reset(&self, _reset_request: ResetRequest) -> Result<ResetResponse, UStatus> {
+        Ok(ResetResponse::default())
     }
 }
