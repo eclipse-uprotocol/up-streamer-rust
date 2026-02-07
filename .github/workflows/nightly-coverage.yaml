@@ -1,0 +1,105 @@
+# ********************************************************************************
+#  Copyright (c) 2024 Contributors to the Eclipse Foundation
+#
+#  See the NOTICE file(s) distributed with this work for additional
+#  information regarding copyright ownership.
+#
+#  This program and the accompanying materials are made available under the
+#  terms of the Apache License Version 2.0 which is available at
+#  https://www.apache.org/licenses/LICENSE-2.0
+#
+#  SPDX-License-Identifier: Apache-2.0
+# *******************************************************************************/
+
+name: Nightly Coverage
+
+env:
+  VSOMEIP_INSTALL_PATH: vsomeip-install
+
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+concurrency:
+      group: ${{ github.ref }}-${{ github.workflow }}
+      cancel-in-progress: true
+
+jobs:
+  set-env:
+    name: Set environment variables
+    runs-on: ubuntu-22.04
+
+    outputs:
+      arch_specific_cpp_stdlib_path: ${{ steps.set_env.outputs.arch_specific_cpp_stdlib_path }}
+      generic_cpp_stdlib_path: ${{ steps.set_env.outputs.generic_cpp_stdlib_path }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Add execute permissions for envsetup
+        run: chmod +x build/envsetup.sh
+
+      - name: Set stdlib paths dynamically
+        id: set_env
+        run: |
+          source ./build/envsetup.sh highest
+          echo "arch_specific_cpp_stdlib_path=$ARCH_SPECIFIC_CPP_STDLIB_PATH" >> $GITHUB_OUTPUT
+          echo "generic_cpp_stdlib_path=$GENERIC_CPP_STDLIB_PATH" >> $GITHUB_OUTPUT
+
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-22.04
+    needs: set-env
+
+    env:
+       ARCH_SPECIFIC_CPP_STDLIB_PATH: ${{ needs.set-env.outputs.arch_specific_cpp_stdlib_path }}
+       GENERIC_CPP_STDLIB_PATH: ${{ needs.set-env.outputs.generic_cpp_stdlib_path }}
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install C++ dependencies
+        run: sudo apt-get install -y build-essential cmake libboost-all-dev libclang-dev
+
+      - name: Set environment variables
+        run: |
+          echo "VSOMEIP_INSTALL_PATH=${{ github.workspace }}/${{ env.VSOMEIP_INSTALL_PATH }}" >> $GITHUB_ENV
+
+      - name: Ensure vsomeip install path exists
+        run: |
+          mkdir -p ${{ env.VSOMEIP_INSTALL_PATH }}
+
+      - name: Install dependencies
+        run: cargo install cargo-tarpaulin
+
+      - name: Show toolchain information
+        working-directory: ${{github.workspace}}
+        run: |
+          rustup toolchain list
+          cargo --version
+
+      - name: Run tests and report code coverage
+        run: |
+          LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${VSOMEIP_INSTALL_PATH}/lib RUSTC_BOOTSTRAP=1 cargo tarpaulin -o xml -o lcov -o html --doc --tests -- --test-threads 1
+
+      - name: Upload coverage report (xml)
+        uses: actions/upload-artifact@v4
+        with:
+          name: Test Coverage Results (xml)
+          path: cobertura.xml
+
+      - name: Upload coverage report (lcov)
+        uses: actions/upload-artifact@v4
+        with:
+          name: Test Coverage Results (lcov)
+          path: lcov.info
+
+      - name: Upload coverage report (html)
+        uses: actions/upload-artifact@v4
+        with:
+          name: Test Coverage Results (html)
+          path: tarpaulin-report.html
