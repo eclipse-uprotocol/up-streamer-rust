@@ -1,0 +1,214 @@
+# ********************************************************************************
+#  Copyright (c) 2026 Contributors to the Eclipse Foundation
+#
+#  See the NOTICE file(s) distributed with this work for additional
+#  information regarding copyright ownership.
+#
+#  This program and the accompanying materials are made available under the
+#  terms of the Apache License Version 2.0 which is available at
+#  https://www.apache.org/licenses/LICENSE-2.0
+#
+#  SPDX-License-Identifier: Apache-2.0
+# *******************************************************************************/
+
+name: Cargo Timings Profile
+
+env:
+  VSOMEIP_RELEASE_URL: https://github.com/COVESA/vsomeip/archive/refs/tags/
+  VSOMEIP_RELEASE_TAG: 3.4.10.tar.gz
+  VSOMEIP_SOURCE_PATH: vsomeip-src
+  VSOMEIP_INSTALL_PATH: vsomeip-install
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.ref }}-${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  set-env:
+    name: Set environment variables
+    runs-on: ubuntu-22.04
+
+    outputs:
+      arch_specific_cpp_stdlib_path: ${{ steps.set_env.outputs.arch_specific_cpp_stdlib_path }}
+      generic_cpp_stdlib_path: ${{ steps.set_env.outputs.generic_cpp_stdlib_path }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Add execute permissions for envsetup
+        run: chmod +x build/envsetup.sh
+
+      - name: Set stdlib paths dynamically
+        id: set_env
+        run: |
+          source ./build/envsetup.sh highest
+          echo "arch_specific_cpp_stdlib_path=$ARCH_SPECIFIC_CPP_STDLIB_PATH" >> $GITHUB_OUTPUT
+          echo "generic_cpp_stdlib_path=$GENERIC_CPP_STDLIB_PATH" >> $GITHUB_OUTPUT
+
+  obtain_and_build_vsomeip:
+    name: obtain_and_build_vsomeip
+    needs: set-env
+    runs-on: ubuntu-22.04
+
+    outputs:
+      cache_key: ${{ steps.generate_cache_key.outputs.CACHE_KEY }}
+
+    env:
+      ARCH_SPECIFIC_CPP_STDLIB_PATH: ${{ needs.set-env.outputs.arch_specific_cpp_stdlib_path }}
+      GENERIC_CPP_STDLIB_PATH: ${{ needs.set-env.outputs.generic_cpp_stdlib_path }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set environment variables
+        run: |
+          echo "VSOMEIP_SOURCE_TARBALL=${{ env.VSOMEIP_RELEASE_URL }}${{ env.VSOMEIP_RELEASE_TAG }}" >> $GITHUB_ENV
+          echo "VSOMEIP_SOURCE_PATH=${{ github.workspace }}/${{ env.VSOMEIP_SOURCE_PATH }}" >> $GITHUB_ENV
+          echo "VSOMEIP_INSTALL_PATH=${{ github.workspace }}/${{ env.VSOMEIP_INSTALL_PATH }}" >> $GITHUB_ENV
+          echo "VSOMEIP_SOURCE_PATH_WITH_WILDCARD=${{ github.workspace }}/${{ env.VSOMEIP_SOURCE_PATH }}/*" >> $GITHUB_ENV
+
+      - name: Download tarball
+        run: wget -O vsomeip-source.tar.gz "$VSOMEIP_SOURCE_TARBALL"
+
+      - name: Create destination directory
+        run: mkdir -p "$VSOMEIP_SOURCE_PATH"
+
+      - name: Decompress tarball
+        run: tar --strip-components=1 -xzf vsomeip-source.tar.gz -C "$VSOMEIP_SOURCE_PATH"
+
+      - name: Generate cache key
+        run: echo "CACHE_KEY=${{ runner.os }}-vsomeip-${{ hashFiles(env.VSOMEIP_SOURCE_PATH_WITH_WILDCARD) }}" >> $GITHUB_ENV
+
+      - name: Set cache key output
+        id: generate_cache_key
+        run: echo "CACHE_KEY=${{ env.CACHE_KEY }}" >> $GITHUB_OUTPUT
+
+      - name: Cache vsomeip build
+        id: cache-vsomeip
+        uses: actions/cache@v3
+        with:
+          path: ${{ env.VSOMEIP_INSTALL_PATH }}
+          key: ${{ runner.os }}-vsomeip-${{ hashFiles(env.VSOMEIP_SOURCE_PATH_WITH_WILDCARD) }}
+          restore-keys: |
+            ${{ runner.os }}-vsomeip-
+
+      - name: Install dependencies
+        if: steps.cache-vsomeip.outputs.cache-hit != 'true'
+        run: sudo apt-get update && sudo apt-get install -y build-essential cmake libboost-all-dev doxygen asciidoc
+
+      - name: Build vsomeip
+        if: steps.cache-vsomeip.outputs.cache-hit != 'true'
+        run: |
+          cmake -B"$VSOMEIP_SOURCE_PATH/build" -DCMAKE_INSTALL_PREFIX="$VSOMEIP_INSTALL_PATH" -DENABLE_SIGNAL_HANDLING=1 "$VSOMEIP_SOURCE_PATH"
+          cmake --build "$VSOMEIP_SOURCE_PATH/build" --target install
+
+      - name: Save vsomeip build to cache
+        if: steps.cache-vsomeip.outputs.cache-hit != 'true'
+        uses: actions/cache@v3
+        with:
+          path: ${{ env.VSOMEIP_INSTALL_PATH }}
+          key: ${{ runner.os }}-vsomeip-${{ hashFiles(env.VSOMEIP_SOURCE_PATH_WITH_WILDCARD) }}
+
+  bundled-timings:
+    name: Bundled cargo timings
+    runs-on: ubuntu-22.04
+    needs: set-env
+
+    env:
+      ARCH_SPECIFIC_CPP_STDLIB_PATH: ${{ needs.set-env.outputs.arch_specific_cpp_stdlib_path }}
+      GENERIC_CPP_STDLIB_PATH: ${{ needs.set-env.outputs.generic_cpp_stdlib_path }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install C++ dependencies
+        run: sudo apt-get install -y build-essential cmake libboost-all-dev libclang-dev pkg-config libssl-dev
+
+      - name: Set environment variables
+        run: echo "VSOMEIP_INSTALL_PATH=${{ github.workspace }}/${{ env.VSOMEIP_INSTALL_PATH }}" >> $GITHUB_ENV
+
+      - name: Ensure vsomeip install path exists
+        run: mkdir -p "${{ github.workspace }}/${{ env.VSOMEIP_INSTALL_PATH }}"
+
+      - name: Install stable toolchain
+        run: rustup show
+
+      - name: Build bundled base profile with cargo timings
+        working-directory: ${{ github.workspace }}
+        run: |
+          cargo build --timings
+          mkdir -p timings-artifacts/bundled-base
+          cp -r target/cargo-timings/. timings-artifacts/bundled-base/
+
+      - name: Build bundled feature profile with cargo timings
+        working-directory: ${{ github.workspace }}
+        run: |
+          cargo build --features vsomeip-transport,bundled-vsomeip,zenoh-transport,mqtt-transport --timings
+          mkdir -p timings-artifacts/bundled-feature
+          cp -r target/cargo-timings/. timings-artifacts/bundled-feature/
+
+      - name: Upload bundled base timings artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cargo-timings-bundled-base
+          path: timings-artifacts/bundled-base
+          if-no-files-found: error
+
+      - name: Upload bundled feature timings artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cargo-timings-bundled-feature
+          path: timings-artifacts/bundled-feature
+          if-no-files-found: error
+
+  unbundled-timings:
+    name: Unbundled cargo timings
+    runs-on: ubuntu-22.04
+    needs:
+      - set-env
+      - obtain_and_build_vsomeip
+
+    env:
+      ARCH_SPECIFIC_CPP_STDLIB_PATH: ${{ needs.set-env.outputs.arch_specific_cpp_stdlib_path }}
+      GENERIC_CPP_STDLIB_PATH: ${{ needs.set-env.outputs.generic_cpp_stdlib_path }}
+      CACHE_KEY: ${{ needs.obtain_and_build_vsomeip.outputs.cache_key }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install C++ dependencies
+        run: sudo apt-get install -y build-essential cmake libboost-all-dev libclang-dev pkg-config libssl-dev
+
+      - name: Set environment variables
+        run: |
+          echo "VSOMEIP_INSTALL_PATH=${{ github.workspace }}/${{ env.VSOMEIP_INSTALL_PATH }}" >> $GITHUB_ENV
+          echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH:${{ github.workspace }}/${{ env.VSOMEIP_INSTALL_PATH }}/lib" >> $GITHUB_ENV
+
+      - name: Ensure vsomeip install path exists
+        run: mkdir -p "${{ github.workspace }}/${{ env.VSOMEIP_INSTALL_PATH }}"
+
+      - name: Restore vsomeip build cache
+        uses: actions/cache@v3
+        with:
+          path: ${{ env.VSOMEIP_INSTALL_PATH }}
+          key: ${{ env.CACHE_KEY }}
+          restore-keys: |
+            ${{ runner.os }}-vsomeip-
+
+      - name: Build unbundled feature profile with cargo timings
+        working-directory: ${{ github.workspace }}
+        run: |
+          LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${VSOMEIP_INSTALL_PATH}/lib cargo build --features vsomeip-transport,zenoh-transport,mqtt-transport --timings
+          mkdir -p timings-artifacts/unbundled-feature
+          cp -r target/cargo-timings/. timings-artifacts/unbundled-feature/
+
+      - name: Upload unbundled feature timings artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cargo-timings-unbundled-feature
+          path: timings-artifacts/unbundled-feature
+          if-no-files-found: error
