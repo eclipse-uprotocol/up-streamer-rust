@@ -18,6 +18,7 @@ env:
   VSOMEIP_RELEASE_TAG: 3.4.10.tar.gz
   VSOMEIP_SOURCE_PATH: vsomeip-src
   VSOMEIP_INSTALL_PATH: vsomeip-install
+  OPENSSL_NO_VENDOR: "1"
 
 on:
   pull_request:
