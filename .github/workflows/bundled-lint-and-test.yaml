@@ -93,6 +93,9 @@ jobs:
 
       - name: Cache Rust dependencies and build outputs
         uses: swatinem/rust-cache@v2
+        with:
+          shared-key: ${{ github.workflow }}-${{ github.ref }}
+          save-if: ${{ github.job == 'lint' }}
 
       - name: Build the project without Zenoh & vsomeip transports
         working-directory: ${{github.workspace}}
@@ -125,6 +128,9 @@ jobs:
 
       - name: Cache Rust dependencies and build outputs
         uses: swatinem/rust-cache@v2
+        with:
+          shared-key: ${{ github.workflow }}-${{ github.ref }}
+          save-if: ${{ github.job == 'lint' }}
 
       - name: Install C++ dependencies
         run: sudo apt-get install -y build-essential cmake libboost-all-dev libclang-dev
@@ -170,6 +176,9 @@ jobs:
 
       - name: Cache Rust dependencies and build outputs
         uses: swatinem/rust-cache@v2
+        with:
+          shared-key: ${{ github.workflow }}-${{ github.ref }}
+          save-if: ${{ github.job == 'lint' }}
 
       - name: Install C++ dependencies
         run: sudo apt-get install -y build-essential cmake libboost-all-dev libclang-dev
