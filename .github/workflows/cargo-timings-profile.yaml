@@ -20,6 +20,9 @@ env:
   VSOMEIP_INSTALL_PATH: vsomeip-install
 
 on:
+  pull_request:
+    paths:
+      - ".github/workflows/cargo-timings-profile.yaml"
   workflow_dispatch:
 
 concurrency:
