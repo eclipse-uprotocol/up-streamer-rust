@@ -130,6 +130,7 @@ jobs:
       - name: Force rebuild bundled vsomeip artifacts
         run: |
           rm -rf "${VSOMEIP_INSTALL_PATH}"
+          rm -rf target/debug/build/vsomeip-sys-* target/debug/build/up-transport-vsomeip-*
           cargo clean -p vsomeip-sys -p up-transport-vsomeip
 
       - name: cargo clippy with Zenoh & vsomeip transports (and thus streamer references)
