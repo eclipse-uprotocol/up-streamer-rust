@@ -39,10 +39,11 @@ pub mod plugin {
     use up_transport_zenoh::UPTransportZenoh;
     use usubscription_static_file::USubscriptionStaticFile;
     use zenoh::internal::plugins::{RunningPluginTrait, ZenohPlugin};
-    use zenoh::internal::runtime::Runtime;
+    use zenoh::internal::runtime::DynamicRuntime;
     use zenoh_core::zlock;
     use zenoh_plugin_trait::{plugin_long_version, plugin_version, Plugin, PluginControl};
     use zenoh_result::{zerror, ZResult};
+    use zenoh_util::ffi::JsonKeyValueMap;
 
     // The struct implementing the ZenohPlugin and ZenohPlugin traits
     pub struct UpLinuxStreamerPlugin {}
@@ -53,7 +54,7 @@ pub mod plugin {
 
     impl ZenohPlugin for UpLinuxStreamerPlugin {}
     impl Plugin for UpLinuxStreamerPlugin {
-        type StartArgs = Runtime;
+        type StartArgs = DynamicRuntime;
         type Instance = zenoh::internal::plugins::RunningPlugin;
 
         // A mandatory const to define, in case of the plugin is built as a standalone executable
@@ -66,11 +67,11 @@ pub mod plugin {
             zenoh_util::try_init_log_from_env();
             trace!("up-linux-streamer-plugin: start");
 
-            let runtime_conf = runtime.config().lock();
-            let plugin_conf = runtime_conf
-                .plugin(name)
-                .ok_or_else(|| zerror!("Plugin `{}`: missing config", name))?;
-            let config: Config = serde_json::from_value(plugin_conf.clone())
+            let plugin_conf = runtime
+                .get_config()
+                .get_plugin_config(name)
+                .map_err(|e| zerror!("Plugin `{}` configuration access error: {}", name, e))?;
+            let config: Config = serde_json::from_value(plugin_conf)
                 .map_err(|e| zerror!("Plugin `{}` configuration error: {}", name, e))?;
             trace!("loaded config: {config:?}");
             trace!("succeeded in reading plugin config");
@@ -106,7 +107,7 @@ pub mod plugin {
         #[allow(dead_code)] // Allowing this to be able to configure streamer at runtime later
         name: String,
         #[allow(dead_code)] // Allowing this to be able to configure streamer at runtime later
-        runtime: Runtime,
+        runtime: DynamicRuntime,
     }
     // The RunningPlugin struct implementing the RunningPluginTrait trait
     #[derive(Clone)]
@@ -118,9 +119,9 @@ pub mod plugin {
         fn config_checker(
             &self,
             _path: &str,
-            _old: &serde_json::Map<String, serde_json::Value>,
-            _new: &serde_json::Map<String, serde_json::Value>,
-        ) -> ZResult<Option<serde_json::Map<String, serde_json::Value>>> {
+            _old: &JsonKeyValueMap,
+            _new: &JsonKeyValueMap,
+        ) -> ZResult<Option<JsonKeyValueMap>> {
             // TODO: Learn more about how the config_checker is used
             Ok(None)
         }
@@ -133,7 +134,7 @@ pub mod plugin {
         }
     }
 
-    async fn run(runtime: Runtime, config: Config, flag: Arc<AtomicBool>) {
+    async fn run(runtime: DynamicRuntime, config: Config, flag: Arc<AtomicBool>) {
         trace!("up-linux-streamer-plugin: inside of run");
         zenoh_util::try_init_log_from_env();
         trace!("up-linux-streamer-plugin: after try_init_log_from_env()");
@@ -167,7 +168,7 @@ pub mod plugin {
         trace!("streamer_uuri: {streamer_uuri:#?}");
         let host_transport: Arc<dyn UTransport> = Arc::new(match config.host_config.transport {
             HostTransport::Zenoh => {
-                let zenoh_session = zenoh::session::init(runtime.clone().into())
+                let zenoh_session = zenoh::session::init(runtime.clone())
                     .await
                     .expect("Unable to initialize Zenoh session from runtime");
                 UPTransportZenoh::builder(config.streamer_uuri.authority.clone())

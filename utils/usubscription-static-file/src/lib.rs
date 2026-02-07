@@ -22,9 +22,8 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use up_rust::core::usubscription::{
     FetchSubscribersRequest, FetchSubscribersResponse, FetchSubscriptionsRequest,
-    FetchSubscriptionsResponse, NotificationsRequest, ResetRequest, ResetResponse,
-    SubscriberInfo, Subscription, SubscriptionRequest, SubscriptionResponse, USubscription,
-    UnsubscribeRequest,
+    FetchSubscriptionsResponse, NotificationsRequest, ResetRequest, ResetResponse, SubscriberInfo,
+    Subscription, SubscriptionRequest, SubscriptionResponse, USubscription, UnsubscribeRequest,
 };
 use up_rust::{UCode, UStatus, UUri};
 
