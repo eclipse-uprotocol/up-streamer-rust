@@ -192,6 +192,9 @@ jobs:
           rustup show
           rustup component add rustfmt clippy
 
+      - name: Cache Rust dependencies and build outputs
+        uses: swatinem/rust-cache@v2
+
       - name: Build the project with Zenoh & vsomeip transports (and thus streamer references)
         working-directory: ${{github.workspace}}
         run: cargo build --features vsomeip-transport,zenoh-transport,mqtt-transport
@@ -246,6 +249,9 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-vsomeip-
 
+      - name: Cache Rust dependencies and build outputs
+        uses: swatinem/rust-cache@v2
+
       - name: Show toolchain information
         working-directory: ${{github.workspace}}
         run: |
@@ -296,6 +302,9 @@ jobs:
           key: ${{ env.CACHE_KEY }}
           restore-keys: |
             ${{ runner.os }}-vsomeip-
+
+      - name: Cache Rust dependencies and build outputs
+        uses: swatinem/rust-cache@v2
 
       - name: Create Documentation for up-streamer
         working-directory: ${{github.workspace}}

@@ -91,6 +91,9 @@ jobs:
           rustup show
           rustup component add rustfmt clippy
 
+      - name: Cache Rust dependencies and build outputs
+        uses: swatinem/rust-cache@v2
+
       - name: Build the project without Zenoh & vsomeip transports
         working-directory: ${{github.workspace}}
         run: cargo build
@@ -119,6 +122,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust dependencies and build outputs
+        uses: swatinem/rust-cache@v2
 
       - name: Install C++ dependencies
         run: sudo apt-get install -y build-essential cmake libboost-all-dev libclang-dev
@@ -160,6 +166,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Cache Rust dependencies and build outputs
+        uses: swatinem/rust-cache@v2
 
       - name: Install C++ dependencies
         run: sudo apt-get install -y build-essential cmake libboost-all-dev libclang-dev
