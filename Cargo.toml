@@ -24,7 +24,7 @@ members = [
 ]
 
 [workspace.package]
-rust-version = "1.82.0"
+rust-version = "1.88"
 version = "0.1.0"
 repository = "https://github.com/eclipse-uprotocol/up-streamer-rust"
 homepage = "https://github.com/eclipse-uprotocol"

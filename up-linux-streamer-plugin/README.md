@@ -70,7 +70,7 @@ cp -r up-linux-streamer-plugin/vsomeip-configs my/new/standalone/zenohd/path/
 
 ### A note on compatability
 
-Because up-transport-zenoh-rust uses minimum supported Rust version (**MSRV**) of 1.74.0 and up-rust uses MSRV of 1.72.1, we need to build Zenoh from source in order to get a compatible zenohd (Zenoh Router). The following steps describe how to do so.
+The workspace currently targets minimum supported Rust version (**MSRV**) `1.88`. If you build Zenoh from source to obtain a compatible `zenohd` (Zenoh Router), use the same Rust toolchain.
 
 Note: We have an open issue [here](https://github.com/eclipse-uprotocol/up-streamer-rust/issues/43) which is for creating a compatible Zenoh Router (zenohd) which will avoid the next section.
 
@@ -100,18 +100,18 @@ You can `git checkout -b <my_relevant_tag>` here if you wish to save these chang
 
 ### Modify MSRV of Zenoh
 
-In zenoh/rust-toolchain.toml, modify to version `1.74.0`:
+In zenoh/rust-toolchain.toml, modify to version `1.88`:
 
 ```toml
 [toolchain]
-channel = "1.74.0"
+channel = "1.88"
 ```
 
 In zenoh/Cargo.toml, modify rust-version:
 
 ```toml
 [workspace.package]
-rust-version = "1.74.0"
+rust-version = "1.88"
 ```
 
 ### Make a build of Zenoh and copy to standalone folder
