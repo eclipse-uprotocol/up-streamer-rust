@@ -16,6 +16,7 @@
 // TODO: Consider if we're ever likely to want to use this _not_ as a Zenoh plugin, in which
 //  case the config module should be made pub and we should add validation on top of setting
 //  its members
+#[cfg(all(feature = "zenoh-transport", feature = "vsomeip-transport"))]
 mod config;
 
 #[cfg(all(feature = "zenoh-transport", feature = "vsomeip-transport"))]
