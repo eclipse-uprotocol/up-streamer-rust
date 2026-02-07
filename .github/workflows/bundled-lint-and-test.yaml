@@ -153,7 +153,8 @@ jobs:
           cargo --version
       - name: Run tests
         run: |
-          LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${VSOMEIP_INSTALL_PATH}/lib cargo test --doc --tests -- --test-threads 1
+          LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${VSOMEIP_INSTALL_PATH}/lib cargo test --doc
+          LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${VSOMEIP_INSTALL_PATH}/lib cargo test --tests -- --test-threads 1
 
   build-docs:
     name: Build documentation
