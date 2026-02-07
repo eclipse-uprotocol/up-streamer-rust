@@ -20,12 +20,11 @@ use std::io::Read;
 use std::sync::Arc;
 use std::thread;
 use std::{collections::HashMap, fs::File};
-use up_rust::{UCode, UStatus, UTransport, UUri};
+use up_rust::{UCode, UStatus, UTransport};
 use up_streamer::{Endpoint, UStreamer};
 use up_transport_mqtt5::{Mqtt5Transport, Mqtt5TransportOptions, MqttClientOptions};
-use up_transport_zenoh::UPTransportZenoh;
+use up_transport_zenoh::{zenoh_config::Config as ZenohConfig, UPTransportZenoh};
 use usubscription_static_file::USubscriptionStaticFile;
-use zenoh::config::Config as ZenohConfig;
 
 #[derive(Parser)]
 #[command()]
@@ -75,15 +74,11 @@ async fn main() -> Result<(), UStatus> {
 
     // build the zenoh transport
     let zenoh_config = ZenohConfig::from_file(config.transports.zenoh.config_file).unwrap();
-    let uri = UUri::try_from_parts(
-        &config.streamer_uuri.authority,
-        config.streamer_uuri.ue_id,
-        config.streamer_uuri.ue_version_major,
-        0,
-    )
-    .unwrap();
     let zenoh_transport: Arc<dyn UTransport> = Arc::new(
-        UPTransportZenoh::new(zenoh_config, uri)
+        UPTransportZenoh::builder(config.streamer_uuri.authority.clone())
+            .expect("Unable to create Zenoh transport builder")
+            .with_config(zenoh_config)
+            .build()
             .await
             .expect("Unable to initialize Zenoh UTransport"),
     );

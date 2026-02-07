@@ -26,7 +26,6 @@ pub mod plugin {
     use crate::config::Config;
     use crate::config::HostTransport;
     use std::env;
-    use std::str::FromStr;
     use std::sync::{
         atomic::{AtomicBool, Ordering::Relaxed},
         Arc, Mutex,
@@ -165,18 +164,15 @@ pub mod plugin {
         .expect("Unable to form streamer_uuri");
 
         trace!("streamer_uuri: {streamer_uuri:#?}");
-        let streamer_uri: String = (&streamer_uuri).into();
-        // TODO: Remove this once the error reporting from UPTransportZenoh no longer "hides"
-        // the underlying reason for the failure on converting uri -> UUri
-        trace!("streamer_uri: {streamer_uri}");
-        let _zenoh_internal_uuri = UUri::from_str(&streamer_uri).map_err(|e| {
-            let msg = format!("Unable to transform the uri to UUri, e: {e:?}");
-            panic!("{msg}");
-        });
         let host_transport: Arc<dyn UTransport> = Arc::new(match config.host_config.transport {
             HostTransport::Zenoh => {
-                UPTransportZenoh::new_with_runtime(runtime.clone(), streamer_uri)
+                let zenoh_session = zenoh::session::init(runtime.clone().into())
                     .await
+                    .expect("Unable to initialize Zenoh session from runtime");
+                UPTransportZenoh::builder(config.streamer_uuri.authority.clone())
+                    .expect("Unable to create Zenoh transport builder")
+                    .with_session(zenoh_session)
+                    .build()
                     .expect("Unable to initialize Zenoh UTransport")
             } // other host transports can be added here as they become available
         });

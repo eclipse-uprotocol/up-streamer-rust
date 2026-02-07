@@ -20,8 +20,10 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::thread;
 use up_rust::{UListener, UStatus, UTransport, UUri};
-use up_transport_zenoh::UPTransportZenoh;
-use zenoh::config::{Config, EndPoint};
+use up_transport_zenoh::{
+    zenoh_config::{Config, EndPoint},
+    UPTransportZenoh,
+};
 
 const SERVICE_AUTHORITY: &str = "authority_B";
 const SERVICE_UE_ID: u32 = 0x1236;
@@ -69,9 +71,12 @@ async fn main() -> Result<(), UStatus> {
             .expect("Unable to set Zenoh Config");
     }
 
-    let service_uri: String = (&service_uuri()).into();
+    let service_uuri = service_uuri();
     let service: Arc<dyn UTransport> = Arc::new(
-        UPTransportZenoh::new(zenoh_config, service_uri)
+        UPTransportZenoh::builder(service_uuri.authority_name())
+            .expect("Unable to create Zenoh transport builder")
+            .with_config(zenoh_config)
+            .build()
             .await
             .unwrap(),
     );
