@@ -164,14 +164,15 @@ jobs:
       - lint_fmt
 
     steps:
-      - name: Aggregate lint job results
+      - name: Report lint job results
         run: |
           echo "lint_base=${{ needs.lint_base.result }}"
           echo "lint_feature=${{ needs.lint_feature.result }}"
           echo "lint_fmt=${{ needs.lint_fmt.result }}"
-          if [ "${{ needs.lint_base.result }}" != "success" ] || [ "${{ needs.lint_feature.result }}" != "success" ] || [ "${{ needs.lint_fmt.result }}" != "success" ]; then
-            exit 1
-          fi
+
+      - name: Fail when any lint job failed
+        if: ${{ needs.lint_base.result != 'success' || needs.lint_feature.result != 'success' || needs.lint_fmt.result != 'success' }}
+        run: exit 1
 
   test:
     name: Test
