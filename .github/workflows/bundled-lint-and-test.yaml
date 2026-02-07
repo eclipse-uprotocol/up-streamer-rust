@@ -115,6 +115,9 @@ jobs:
       - name: Ensure vsomeip install path exists
         run: mkdir -p "${{ env.VSOMEIP_INSTALL_PATH }}"
 
+      - name: Clear cached vsomeip-sys artifacts
+        run: cargo clean -p vsomeip-sys
+
       - name: Install stable toolchain
         run: |
           rustup show
@@ -128,11 +131,11 @@ jobs:
 
       - name: Build the project with Zenoh & vsomeip transports (and thus streamer references)
         working-directory: ${{ github.workspace }}
-        run: cargo build --features vsomeip-transport,bundled-vsomeip,zenoh-transport,mqtt-transport
+        run: env -u VSOMEIP_INSTALL_PATH cargo build --features vsomeip-transport,bundled-vsomeip,zenoh-transport,mqtt-transport
 
       - name: cargo clippy with Zenoh & vsomeip transports (and thus streamer references)
         working-directory: ${{ github.workspace }}
-        run: cargo clippy --features vsomeip-transport,bundled-vsomeip,zenoh-transport,mqtt-transport --all-targets -- -W warnings -D warnings
+        run: env -u VSOMEIP_INSTALL_PATH cargo clippy --features vsomeip-transport,bundled-vsomeip,zenoh-transport,mqtt-transport --all-targets -- -W warnings -D warnings
 
   lint_fmt:
     name: Lint (fmt)
@@ -154,6 +157,7 @@ jobs:
   lint:
     name: Lint
     runs-on: ubuntu-22.04
+    if: ${{ always() }}
     needs:
       - lint_base
       - lint_feature
@@ -161,7 +165,13 @@ jobs:
 
     steps:
       - name: Aggregate lint job results
-        run: echo "Bundled lint checks completed successfully"
+        run: |
+          echo "lint_base=${{ needs.lint_base.result }}"
+          echo "lint_feature=${{ needs.lint_feature.result }}"
+          echo "lint_fmt=${{ needs.lint_fmt.result }}"
+          if [ "${{ needs.lint_base.result }}" != "success" ] || [ "${{ needs.lint_feature.result }}" != "success" ] || [ "${{ needs.lint_fmt.result }}" != "success" ]; then
+            exit 1
+          fi
 
   test:
     name: Test
