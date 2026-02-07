@@ -25,12 +25,12 @@ use up_transport_zenoh::{
     UPTransportZenoh,
 };
 
-const PUB_TOPIC_AUTHORITY: &str = "authority_A";
+const PUB_TOPIC_AUTHORITY: &str = "authority-a";
 const PUB_TOPIC_UE_ID: u32 = 0x5BA0;
 const PUB_TOPIC_UE_VERSION_MAJOR: u8 = 1;
 const PUB_TOPIC_RESOURCE_ID: u16 = 0x8001;
 
-const SUB_TOPIC_AUTHORITY: &str = "authority_B";
+const SUB_TOPIC_AUTHORITY: &str = "authority-b";
 const SUB_TOPIC_UE_ID: u32 = 0x5BB0;
 const SUB_TOPIC_UE_VERSION_MAJOR: u8 = 1;
 

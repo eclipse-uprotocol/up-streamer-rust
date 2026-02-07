@@ -25,7 +25,7 @@ use up_transport_zenoh::{
     UPTransportZenoh,
 };
 
-const SERVICE_AUTHORITY: &str = "authority_B";
+const SERVICE_AUTHORITY: &str = "authority-b";
 const SERVICE_UE_ID: u32 = 0x1236;
 const SERVICE_UE_VERSION_MAJOR: u8 = 1;
 const SERVICE_RESOURCE_ID: u16 = 0x0421;

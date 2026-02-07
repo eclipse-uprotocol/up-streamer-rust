@@ -26,12 +26,12 @@ use up_transport_zenoh::{
     UPTransportZenoh,
 };
 
-const SERVICE_AUTHORITY: &str = "authority_A";
+const SERVICE_AUTHORITY: &str = "authority-a";
 const SERVICE_UE_ID: u32 = 0x4321;
 const SERVICE_UE_VERSION_MAJOR: u8 = 1;
 const SERVICE_RESOURCE_ID: u16 = 0x0421;
 
-const CLIENT_AUTHORITY: &str = "authority_B";
+const CLIENT_AUTHORITY: &str = "authority-b";
 const CLIENT_UE_ID: u32 = 0x1236;
 const CLIENT_UE_VERSION_MAJOR: u8 = 1;
 const CLIENT_RESOURCE_ID: u16 = 0;
