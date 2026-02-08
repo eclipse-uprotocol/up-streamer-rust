@@ -1471,7 +1471,7 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn issue_74_publish_filter_respects_topic_authority() {
+    async fn publish_filter_respects_topic_authority() {
         let recording_transport = Arc::new(RecordingTransport::default());
         let in_transport: Arc<dyn UTransport> = recording_transport.clone();
         let forwarding_listeners = ForwardingListeners::new();
@@ -1484,7 +1484,7 @@ mod tests {
                 in_transport,
                 "authority-a",
                 "authority-b",
-                "issue-74",
+                "test-forwarding",
                 out_sender,
                 subscription_cache,
             )
@@ -1513,7 +1513,7 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn issue_74_publish_filter_allows_left_wildcard() {
+    async fn publish_filter_allows_left_wildcard() {
         let recording_transport = Arc::new(RecordingTransport::default());
         let in_transport: Arc<dyn UTransport> = recording_transport.clone();
         let forwarding_listeners = ForwardingListeners::new();
@@ -1526,7 +1526,7 @@ mod tests {
                 in_transport,
                 "authority-c",
                 "authority-b",
-                "issue-74",
+                "test-forwarding",
                 out_sender,
                 subscription_cache,
             )
@@ -1548,7 +1548,7 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn issue_74_publish_filter_blocks_unmapped_authority() {
+    async fn publish_filter_blocks_unmapped_authority() {
         let recording_transport = Arc::new(RecordingTransport::default());
         let in_transport: Arc<dyn UTransport> = recording_transport.clone();
         let forwarding_listeners = ForwardingListeners::new();
@@ -1561,7 +1561,7 @@ mod tests {
                 in_transport,
                 "authority-c",
                 "authority-b",
-                "issue-74",
+                "test-forwarding",
                 out_sender,
                 subscription_cache,
             )
@@ -1595,7 +1595,7 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn issue_74_unregistration_removes_publish_filters() {
+    async fn unregistration_removes_publish_filters() {
         let recording_transport = Arc::new(RecordingTransport::default());
         let in_transport: Arc<dyn UTransport> = recording_transport.clone();
         let forwarding_listeners = ForwardingListeners::new();
@@ -1608,7 +1608,7 @@ mod tests {
                 in_transport.clone(),
                 "authority-a",
                 "authority-b",
-                "issue-74",
+                "test-forwarding",
                 out_sender,
                 subscription_cache.clone(),
             )
