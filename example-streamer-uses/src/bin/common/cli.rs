@@ -1,4 +1,6 @@
+#[cfg(feature = "vsomeip-transport")]
 use std::fs::canonicalize;
+#[cfg(feature = "vsomeip-transport")]
 use std::path::PathBuf;
 use up_rust::{UCode, UStatus, UUri};
 
@@ -73,6 +75,7 @@ pub(crate) fn build_uuri(
     })
 }
 
+#[cfg(feature = "vsomeip-transport")]
 pub(crate) fn canonicalize_cli_path(flag: &str, raw: &str) -> Result<PathBuf, UStatus> {
     canonicalize(PathBuf::from(raw)).map_err(|error| {
         invalid_argument_status(format!(
