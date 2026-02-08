@@ -76,6 +76,7 @@ pub(crate) fn build_uuri(
 }
 
 #[cfg(feature = "vsomeip-transport")]
+#[allow(dead_code)]
 pub(crate) fn canonicalize_cli_path(flag: &str, raw: &str) -> Result<PathBuf, UStatus> {
     canonicalize(PathBuf::from(raw)).map_err(|error| {
         invalid_argument_status(format!(
