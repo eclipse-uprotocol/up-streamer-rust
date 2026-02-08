@@ -1106,9 +1106,10 @@ impl UListener for ForwardingListener {
 
 #[cfg(test)]
 mod tests {
-    use crate::ustreamer::{uauthority_to_uuri, ForwardingListeners};
+    use crate::ustreamer::{uauthority_to_uuri, ForwardingListeners, TransportForwarders};
     use crate::{Endpoint, UStreamer};
     use async_trait::async_trait;
+    use std::collections::{HashMap, HashSet};
     use std::str::FromStr;
     use std::sync::{Arc, Mutex as StdMutex};
     use subscription_cache::SubscriptionCache;
@@ -1117,16 +1118,30 @@ mod tests {
     use up_rust::{UCode, UListener, UMessage, UStatus, UTransport, UUri};
     use usubscription_static_file::USubscriptionStaticFile;
 
-    #[derive(Clone, Debug, PartialEq, Eq)]
+    #[derive(Clone, Debug, PartialEq, Eq, Hash)]
     struct ListenerRegistration {
         source_filter: UUri,
         sink_filter: Option<UUri>,
+    }
+
+    fn listener_registration(
+        source_filter: &UUri,
+        sink_filter: Option<&UUri>,
+    ) -> ListenerRegistration {
+        ListenerRegistration {
+            source_filter: source_filter.clone(),
+            sink_filter: sink_filter.cloned(),
+        }
     }
 
     #[derive(Default)]
     struct RecordingTransport {
         register_calls: StdMutex<Vec<ListenerRegistration>>,
         unregister_calls: StdMutex<Vec<ListenerRegistration>>,
+        register_call_counts: StdMutex<HashMap<ListenerRegistration, usize>>,
+        unregister_call_counts: StdMutex<HashMap<ListenerRegistration, usize>>,
+        forced_register_failures: StdMutex<HashMap<ListenerRegistration, UStatus>>,
+        duplicate_register_failure: StdMutex<Option<UStatus>>,
     }
 
     impl RecordingTransport {
@@ -1136,6 +1151,47 @@ mod tests {
 
         fn unregister_calls(&self) -> Vec<ListenerRegistration> {
             self.unregister_calls.lock().unwrap().clone()
+        }
+
+        fn register_call_count(&self, source_filter: &UUri, sink_filter: Option<&UUri>) -> usize {
+            self.register_call_counts
+                .lock()
+                .unwrap()
+                .get(&listener_registration(source_filter, sink_filter))
+                .copied()
+                .unwrap_or(0)
+        }
+
+        fn unregister_call_count(&self, source_filter: &UUri, sink_filter: Option<&UUri>) -> usize {
+            self.unregister_call_counts
+                .lock()
+                .unwrap()
+                .get(&listener_registration(source_filter, sink_filter))
+                .copied()
+                .unwrap_or(0)
+        }
+
+        fn set_register_failure(
+            &self,
+            source_filter: &UUri,
+            sink_filter: Option<&UUri>,
+            status: UStatus,
+        ) {
+            self.forced_register_failures
+                .lock()
+                .unwrap()
+                .insert(listener_registration(source_filter, sink_filter), status);
+        }
+
+        fn clear_register_failure(&self, source_filter: &UUri, sink_filter: Option<&UUri>) {
+            self.forced_register_failures
+                .lock()
+                .unwrap()
+                .remove(&listener_registration(source_filter, sink_filter));
+        }
+
+        fn fail_duplicate_registers_with(&self, status: UStatus) {
+            *self.duplicate_register_failure.lock().unwrap() = Some(status);
         }
     }
 
@@ -1162,13 +1218,36 @@ mod tests {
             sink_filter: Option<&UUri>,
             _listener: Arc<dyn UListener>,
         ) -> Result<(), UStatus> {
+            let registration = listener_registration(source_filter, sink_filter);
+
             self.register_calls
                 .lock()
                 .unwrap()
-                .push(ListenerRegistration {
-                    source_filter: source_filter.clone(),
-                    sink_filter: sink_filter.cloned(),
-                });
+                .push(registration.clone());
+
+            let register_count = {
+                let mut counts = self.register_call_counts.lock().unwrap();
+                let entry = counts.entry(registration.clone()).or_insert(0);
+                *entry += 1;
+                *entry
+            };
+
+            if let Some(status) = self
+                .forced_register_failures
+                .lock()
+                .unwrap()
+                .get(&registration)
+                .cloned()
+            {
+                return Err(status);
+            }
+
+            if register_count > 1 {
+                if let Some(status) = self.duplicate_register_failure.lock().unwrap().clone() {
+                    return Err(status);
+                }
+            }
+
             Ok(())
         }
 
@@ -1178,14 +1257,28 @@ mod tests {
             sink_filter: Option<&UUri>,
             _listener: Arc<dyn UListener>,
         ) -> Result<(), UStatus> {
+            let registration = listener_registration(source_filter, sink_filter);
+
             self.unregister_calls
                 .lock()
                 .unwrap()
-                .push(ListenerRegistration {
-                    source_filter: source_filter.clone(),
-                    sink_filter: sink_filter.cloned(),
-                });
+                .push(registration.clone());
+
+            let mut counts = self.unregister_call_counts.lock().unwrap();
+            let entry = counts.entry(registration).or_insert(0);
+            *entry += 1;
+
             Ok(())
+        }
+    }
+
+    fn make_test_streamer(entries: &[(&str, &str)]) -> UStreamer {
+        UStreamer {
+            name: "test-streamer".to_string(),
+            registered_forwarding_rules: TokioMutex::new(HashSet::new()),
+            transport_forwarders: TransportForwarders::new(16),
+            forwarding_listeners: ForwardingListeners::new(),
+            subscription_cache: make_subscription_cache(entries),
         }
     }
 
@@ -1623,6 +1716,300 @@ mod tests {
                 .iter()
                 .filter(|call| call.sink_filter.is_none())
                 .count(),
+            0
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn right_side_wildcard_forwards_to_registered_authorities() {
+        let recording_transport = Arc::new(RecordingTransport::default());
+        let in_transport: Arc<dyn UTransport> = recording_transport.clone();
+        let forwarding_listeners = ForwardingListeners::new();
+        let (out_sender, _) = tokio::sync::broadcast::channel(16);
+        let subscription_cache =
+            make_subscription_cache(&[("//authority-a/5BA0/1/8001", "//*/5678/1/1234")]);
+
+        assert!(forwarding_listeners
+            .insert(
+                in_transport.clone(),
+                "authority-a",
+                "authority-b",
+                "test-forwarding-b",
+                out_sender.clone(),
+                subscription_cache.clone(),
+            )
+            .await
+            .is_ok());
+        assert!(forwarding_listeners
+            .insert(
+                in_transport,
+                "authority-a",
+                "authority-d",
+                "test-forwarding-d",
+                out_sender,
+                subscription_cache,
+            )
+            .await
+            .is_ok());
+
+        let publish_source = UUri::try_from_parts("authority-a", 0x5BA0, 0x1, 0x8001).unwrap();
+        let request_source = uauthority_to_uuri("authority-a");
+        let authority_b = uauthority_to_uuri("authority-b");
+        let authority_d = uauthority_to_uuri("authority-d");
+
+        assert_eq!(
+            recording_transport.register_call_count(&publish_source, None),
+            2
+        );
+        assert_eq!(
+            recording_transport.register_call_count(&request_source, Some(&authority_b)),
+            1
+        );
+        assert_eq!(
+            recording_transport.register_call_count(&request_source, Some(&authority_d)),
+            1
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn right_side_wildcard_does_not_forward_without_rule() {
+        let recording_transport = Arc::new(RecordingTransport::default());
+        let in_transport: Arc<dyn UTransport> = recording_transport.clone();
+        let forwarding_listeners = ForwardingListeners::new();
+        let (out_sender, _) = tokio::sync::broadcast::channel(16);
+        let subscription_cache =
+            make_subscription_cache(&[("//authority-a/5BA0/1/8001", "//*/5678/1/1234")]);
+
+        assert!(forwarding_listeners
+            .insert(
+                in_transport.clone(),
+                "authority-a",
+                "authority-b",
+                "test-forwarding-b",
+                out_sender.clone(),
+                subscription_cache.clone(),
+            )
+            .await
+            .is_ok());
+        assert!(forwarding_listeners
+            .insert(
+                in_transport,
+                "authority-a",
+                "authority-d",
+                "test-forwarding-d",
+                out_sender,
+                subscription_cache,
+            )
+            .await
+            .is_ok());
+
+        let publish_source = UUri::try_from_parts("authority-a", 0x5BA0, 0x1, 0x8001).unwrap();
+        let request_source = uauthority_to_uuri("authority-a");
+        let authority_e = uauthority_to_uuri("authority-e");
+
+        assert_eq!(
+            recording_transport.register_call_count(&publish_source, None),
+            2
+        );
+        assert_eq!(
+            recording_transport.register_call_count(&request_source, Some(&authority_e)),
+            0
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn publish_filter_blocks_mismatched_tuple() {
+        let recording_transport = Arc::new(RecordingTransport::default());
+        let in_transport: Arc<dyn UTransport> = recording_transport.clone();
+        let forwarding_listeners = ForwardingListeners::new();
+        let (out_sender, _) = tokio::sync::broadcast::channel(16);
+        let subscription_cache =
+            make_subscription_cache(&[("//authority-a/5BA0/1/8001", "//authority-b/5678/1/1234")]);
+
+        assert!(forwarding_listeners
+            .insert(
+                in_transport,
+                "authority-a",
+                "authority-b",
+                "test-forwarding",
+                out_sender,
+                subscription_cache,
+            )
+            .await
+            .is_ok());
+
+        let exact = UUri::try_from_parts("authority-a", 0x5BA0, 0x1, 0x8001).unwrap();
+        let mismatched_ue_id = UUri::try_from_parts("authority-a", 0x5BA1, 0x1, 0x8001).unwrap();
+        let mismatched_version = UUri::try_from_parts("authority-a", 0x5BA0, 0x2, 0x8001).unwrap();
+        let mismatched_resource = UUri::try_from_parts("authority-a", 0x5BA0, 0x1, 0x8002).unwrap();
+
+        assert_eq!(recording_transport.register_call_count(&exact, None), 1);
+        assert_eq!(
+            recording_transport.register_call_count(&mismatched_ue_id, None),
+            0
+        );
+        assert_eq!(
+            recording_transport.register_call_count(&mismatched_version, None),
+            0
+        );
+        assert_eq!(
+            recording_transport.register_call_count(&mismatched_resource, None),
+            0
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn multi_map_allows_both_sources() {
+        let recording_transport = Arc::new(RecordingTransport::default());
+        let in_transport: Arc<dyn UTransport> = recording_transport.clone();
+        let forwarding_listeners = ForwardingListeners::new();
+        let (out_sender, _) = tokio::sync::broadcast::channel(16);
+        let subscription_cache = make_subscription_cache(&[
+            ("//authority-a/5BA0/1/8001", "//authority-b/5678/1/1234"),
+            ("//authority-c/5BA0/1/8001", "//authority-b/5679/1/1234"),
+        ]);
+
+        assert!(forwarding_listeners
+            .insert(
+                in_transport.clone(),
+                "authority-a",
+                "authority-b",
+                "test-forwarding-a",
+                out_sender.clone(),
+                subscription_cache.clone(),
+            )
+            .await
+            .is_ok());
+        assert!(forwarding_listeners
+            .insert(
+                in_transport,
+                "authority-c",
+                "authority-b",
+                "test-forwarding-c",
+                out_sender,
+                subscription_cache,
+            )
+            .await
+            .is_ok());
+
+        let source_a = UUri::try_from_parts("authority-a", 0x5BA0, 0x1, 0x8001).unwrap();
+        let source_c = UUri::try_from_parts("authority-c", 0x5BA0, 0x1, 0x8001).unwrap();
+
+        assert_eq!(recording_transport.register_call_count(&source_a, None), 1);
+        assert_eq!(recording_transport.register_call_count(&source_c, None), 1);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn publish_filter_dedupes_overlapping_rows() {
+        let recording_transport = Arc::new(RecordingTransport::default());
+        recording_transport.fail_duplicate_registers_with(UStatus::fail_with_code(
+            UCode::ALREADY_EXISTS,
+            "duplicate publish listener registration",
+        ));
+
+        let in_transport: Arc<dyn UTransport> = recording_transport.clone();
+        let forwarding_listeners = ForwardingListeners::new();
+        let (out_sender, _) = tokio::sync::broadcast::channel(16);
+        let subscription_cache = make_subscription_cache(&[
+            ("//authority-a/5BA0/1/8001", "//authority-b/5678/1/1234"),
+            ("//authority-a/5BA0/1/8001", "//authority-b/5679/1/1234"),
+        ]);
+
+        assert!(forwarding_listeners
+            .insert(
+                in_transport.clone(),
+                "authority-a",
+                "authority-b",
+                "test-forwarding",
+                out_sender,
+                subscription_cache.clone(),
+            )
+            .await
+            .is_ok());
+
+        forwarding_listeners
+            .remove(
+                in_transport,
+                "authority-a",
+                "authority-b",
+                subscription_cache,
+            )
+            .await;
+
+        let request_source = uauthority_to_uuri("authority-a");
+        let request_sink = uauthority_to_uuri("authority-b");
+        let publish_source = UUri::try_from_parts("authority-a", 0x5BA0, 0x1, 0x8001).unwrap();
+
+        assert_eq!(
+            recording_transport.register_call_count(&request_source, Some(&request_sink)),
+            1
+        );
+        assert_eq!(
+            recording_transport.unregister_call_count(&request_source, Some(&request_sink)),
+            1
+        );
+        assert_eq!(
+            recording_transport.register_call_count(&publish_source, None),
+            1
+        );
+        assert_eq!(
+            recording_transport.unregister_call_count(&publish_source, None),
+            1
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn add_forwarding_rule_rolls_back_on_listener_insert_failure() {
+        let in_recording_transport = Arc::new(RecordingTransport::default());
+        let out_recording_transport = Arc::new(RecordingTransport::default());
+
+        let in_transport: Arc<dyn UTransport> = in_recording_transport.clone();
+        let out_transport: Arc<dyn UTransport> = out_recording_transport;
+
+        let in_endpoint = Endpoint::new("in-endpoint", "authority-a", in_transport.clone());
+        let out_endpoint = Endpoint::new("out-endpoint", "authority-b", out_transport.clone());
+
+        let mut streamer =
+            make_test_streamer(&[("//authority-a/5BA0/1/8001", "//authority-b/5678/1/1234")]);
+
+        let request_source = uauthority_to_uuri("authority-a");
+        let request_sink = uauthority_to_uuri("authority-b");
+
+        in_recording_transport.set_register_failure(
+            &request_source,
+            Some(&request_sink),
+            UStatus::fail_with_code(UCode::INTERNAL, "forced listener insertion failure"),
+        );
+
+        assert!(streamer
+            .add_forwarding_rule(in_endpoint.clone(), out_endpoint.clone())
+            .await
+            .is_err());
+        assert_eq!(streamer.registered_forwarding_rules.lock().await.len(), 0);
+        assert_eq!(
+            streamer.transport_forwarders.forwarders.lock().await.len(),
+            0
+        );
+
+        in_recording_transport.clear_register_failure(&request_source, Some(&request_sink));
+
+        assert!(streamer
+            .add_forwarding_rule(in_endpoint.clone(), out_endpoint.clone())
+            .await
+            .is_ok());
+        assert_eq!(streamer.registered_forwarding_rules.lock().await.len(), 1);
+        assert_eq!(
+            streamer.transport_forwarders.forwarders.lock().await.len(),
+            1
+        );
+
+        assert!(streamer
+            .delete_forwarding_rule(in_endpoint, out_endpoint)
+            .await
+            .is_ok());
+        assert_eq!(streamer.registered_forwarding_rules.lock().await.len(), 0);
+        assert_eq!(
+            streamer.transport_forwarders.forwarders.lock().await.len(),
             0
         );
     }
