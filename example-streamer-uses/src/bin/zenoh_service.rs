@@ -14,6 +14,7 @@
 mod common;
 
 use clap::Parser;
+use common::cli;
 use common::ServiceRequestResponder;
 use log::info;
 use std::str::FromStr;
@@ -25,27 +26,30 @@ use up_transport_zenoh::{
     UPTransportZenoh,
 };
 
-const SERVICE_AUTHORITY: &str = "authority-b";
-const SERVICE_UE_ID: u32 = 0x1236;
-const SERVICE_UE_VERSION_MAJOR: u8 = 1;
-const SERVICE_RESOURCE_ID: u16 = 0x0421;
-
-fn service_uuri() -> UUri {
-    UUri::try_from_parts(
-        SERVICE_AUTHORITY,
-        SERVICE_UE_ID,
-        SERVICE_UE_VERSION_MAJOR,
-        0,
-    )
-    .unwrap()
-}
+const DEFAULT_ENDPOINT: &str = "tcp/localhost:7447";
+const DEFAULT_UAUTHORITY: &str = "authority-b";
+const DEFAULT_UENTITY: &str = "0x1236";
+const DEFAULT_UVERSION: &str = "0x1";
+const DEFAULT_RESOURCE: &str = "0x0421";
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
     /// The endpoint for Zenoh client to connect to
-    #[arg(short, long, default_value = "tcp/localhost:7447")]
+    #[arg(short, long, default_value = DEFAULT_ENDPOINT)]
     endpoint: String,
+    /// Authority for the local service identity
+    #[arg(long, default_value = DEFAULT_UAUTHORITY)]
+    uauthority: String,
+    /// UEntity ID for local service identity (decimal or 0x-prefixed hex)
+    #[arg(long, default_value = DEFAULT_UENTITY)]
+    uentity: String,
+    /// UEntity major version for local service identity (decimal or 0x-prefixed hex)
+    #[arg(long, default_value = DEFAULT_UVERSION)]
+    uversion: String,
+    /// Resource ID for local service identity (decimal or 0x-prefixed hex)
+    #[arg(long, default_value = DEFAULT_RESOURCE)]
+    resource: String,
 }
 
 #[tokio::main]
@@ -53,6 +57,10 @@ async fn main() -> Result<(), UStatus> {
     env_logger::init();
 
     let args = Args::parse();
+
+    let uentity = cli::parse_u32_status("--uentity", &args.uentity)?;
+    let uversion = cli::parse_u8_status("--uversion", &args.uversion)?;
+    let resource = cli::parse_u16_status("--resource", &args.resource)?;
 
     info!("Started zenoh_service");
 
@@ -71,7 +79,7 @@ async fn main() -> Result<(), UStatus> {
             .expect("Unable to set Zenoh Config");
     }
 
-    let service_uuri = service_uuri();
+    let service_uuri = cli::build_uuri(&args.uauthority, uentity, uversion, 0)?;
     let service: Arc<dyn UTransport> = Arc::new(
         UPTransportZenoh::builder(service_uuri.authority_name())
             .expect("Unable to create Zenoh transport builder")
@@ -82,13 +90,7 @@ async fn main() -> Result<(), UStatus> {
     );
 
     let source_filter = UUri::any();
-    let sink_filter = UUri::try_from_parts(
-        SERVICE_AUTHORITY,
-        SERVICE_UE_ID,
-        SERVICE_UE_VERSION_MAJOR,
-        SERVICE_RESOURCE_ID,
-    )
-    .unwrap();
+    let sink_filter = cli::build_uuri(&args.uauthority, uentity, uversion, resource)?;
 
     let service_request_responder: Arc<dyn UListener> =
         Arc::new(ServiceRequestResponder::new(service.clone()));

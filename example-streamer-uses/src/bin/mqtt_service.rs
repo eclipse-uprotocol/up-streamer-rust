@@ -13,6 +13,8 @@
 
 mod common;
 
+use clap::Parser;
+use common::cli;
 use common::ServiceRequestResponder;
 use log::info;
 use std::sync::Arc;
@@ -20,30 +22,51 @@ use std::thread;
 use up_rust::{UListener, UStatus, UTransport, UUri};
 use up_transport_mqtt5::{Mqtt5Transport, Mqtt5TransportOptions, MqttClientOptions};
 
-const SERVICE_AUTHORITY: &str = "authority-a";
-const SERVICE_UE_ID: u32 = 0x4321;
-const SERVICE_UE_VERSION_MAJOR: u8 = 1;
-const SERVICE_RESOURCE_ID: u16 = 0x0421;
+const DEFAULT_UAUTHORITY: &str = "authority-a";
+const DEFAULT_UENTITY: &str = "0x4321";
+const DEFAULT_UVERSION: &str = "0x1";
+const DEFAULT_RESOURCE: &str = "0x0421";
+const DEFAULT_BROKER_URI: &str = "localhost:1883";
+
+#[derive(Debug, Parser)]
+#[command(version, about, long_about = None)]
+struct Args {
+    /// Authority for the local service identity
+    #[arg(long, default_value = DEFAULT_UAUTHORITY)]
+    uauthority: String,
+    /// UEntity ID for local service identity (decimal or 0x-prefixed hex)
+    #[arg(long, default_value = DEFAULT_UENTITY)]
+    uentity: String,
+    /// UEntity major version for local service identity (decimal or 0x-prefixed hex)
+    #[arg(long, default_value = DEFAULT_UVERSION)]
+    uversion: String,
+    /// Resource ID for local service identity (decimal or 0x-prefixed hex)
+    #[arg(long, default_value = DEFAULT_RESOURCE)]
+    resource: String,
+    /// MQTT broker URI in host:port format
+    #[arg(long, default_value = DEFAULT_BROKER_URI)]
+    broker_uri: String,
+}
 
 #[tokio::main]
 async fn main() -> Result<(), UStatus> {
     env_logger::init();
 
+    let args = Args::parse();
+
     info!("Started mqtt_service.");
+
+    let uentity = cli::parse_u32_status("--uentity", &args.uentity)?;
+    let uversion = cli::parse_u8_status("--uversion", &args.uversion)?;
+    let resource = cli::parse_u16_status("--resource", &args.resource)?;
 
     // We set the source filter to "any" so that we process messages from all device that send some.
     let source_filter = UUri::any();
     // The sink filter gets specified so that we only process messages directed at this entity.
-    let sink_filter = UUri::try_from_parts(
-        SERVICE_AUTHORITY,
-        SERVICE_UE_ID,
-        SERVICE_UE_VERSION_MAJOR,
-        SERVICE_RESOURCE_ID,
-    )
-    .unwrap();
+    let sink_filter = cli::build_uuri(&args.uauthority, uentity, uversion, resource)?;
 
     let mqtt_client_options = MqttClientOptions {
-        broker_uri: "localhost:1883".to_string(),
+        broker_uri: args.broker_uri,
         ..Default::default()
     };
     let mqtt_transport_options = Mqtt5TransportOptions {
@@ -51,7 +74,7 @@ async fn main() -> Result<(), UStatus> {
         ..Default::default()
     };
     let mqtt5_transport =
-        Mqtt5Transport::new(mqtt_transport_options, SERVICE_AUTHORITY.to_string()).await?;
+        Mqtt5Transport::new(mqtt_transport_options, args.uauthority.to_string()).await?;
     mqtt5_transport.connect().await?;
 
     let service: Arc<dyn UTransport> = Arc::new(mqtt5_transport);

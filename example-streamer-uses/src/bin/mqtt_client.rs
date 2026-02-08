@@ -13,51 +13,89 @@
 
 mod common;
 
+use clap::Parser;
+use common::cli;
 use common::ServiceResponseListener;
 use hello_world_protos::hello_world_service::HelloRequest;
 use log::info;
 use std::sync::Arc;
 use std::time::Duration;
-use up_rust::{UListener, UMessageBuilder, UStatus, UTransport, UUri};
+use up_rust::{UListener, UMessageBuilder, UStatus, UTransport};
 use up_transport_mqtt5::{Mqtt5Transport, Mqtt5TransportOptions, MqttClientOptions};
 
-const SERVICE_AUTHORITY: &str = "authority-b";
-const SERVICE_UE_ID: u32 = 0x1236;
-const SERVICE_UE_VERSION_MAJOR: u8 = 1;
-const SERVICE_RESOURCE_ID: u16 = 0x0421;
+const DEFAULT_UAUTHORITY: &str = "authority-a";
+const DEFAULT_UENTITY: &str = "0x4321";
+const DEFAULT_UVERSION: &str = "0x1";
+const DEFAULT_RESOURCE: &str = "0x0";
 
-const CLIENT_AUTHORITY: &str = "authority-a";
-const CLIENT_UE_ID: u32 = 0x4321;
-const CLIENT_UE_VERSION_MAJOR: u8 = 1;
-const CLIENT_RESOURCE_ID: u16 = 0;
+const DEFAULT_TARGET_AUTHORITY: &str = "authority-b";
+const DEFAULT_TARGET_UENTITY: &str = "0x1236";
+const DEFAULT_TARGET_UVERSION: &str = "0x1";
+const DEFAULT_TARGET_RESOURCE: &str = "0x0421";
+
+const DEFAULT_BROKER_URI: &str = "localhost:1883";
 
 const REQUEST_TTL: u32 = 1000;
+
+#[derive(Debug, Parser)]
+#[command(version, about, long_about = None)]
+struct Args {
+    /// Authority for the local client identity
+    #[arg(long, default_value = DEFAULT_UAUTHORITY)]
+    uauthority: String,
+    /// UEntity ID for local client identity (decimal or 0x-prefixed hex)
+    #[arg(long, default_value = DEFAULT_UENTITY)]
+    uentity: String,
+    /// UEntity major version for local client identity (decimal or 0x-prefixed hex)
+    #[arg(long, default_value = DEFAULT_UVERSION)]
+    uversion: String,
+    /// Resource ID for local client identity (decimal or 0x-prefixed hex)
+    #[arg(long, default_value = DEFAULT_RESOURCE)]
+    resource: String,
+    /// Authority for the target service URI
+    #[arg(long, default_value = DEFAULT_TARGET_AUTHORITY)]
+    target_authority: String,
+    /// UEntity ID for target service URI (decimal or 0x-prefixed hex)
+    #[arg(long, default_value = DEFAULT_TARGET_UENTITY)]
+    target_uentity: String,
+    /// UEntity major version for target service URI (decimal or 0x-prefixed hex)
+    #[arg(long, default_value = DEFAULT_TARGET_UVERSION)]
+    target_uversion: String,
+    /// Resource ID for target service URI (decimal or 0x-prefixed hex)
+    #[arg(long, default_value = DEFAULT_TARGET_RESOURCE)]
+    target_resource: String,
+    /// MQTT broker URI in host:port format
+    #[arg(long, default_value = DEFAULT_BROKER_URI)]
+    broker_uri: String,
+}
 
 #[tokio::main]
 async fn main() -> Result<(), UStatus> {
     env_logger::init();
 
+    let args = Args::parse();
+
     info!("Started mqtt_client.");
 
+    let uentity = cli::parse_u32_status("--uentity", &args.uentity)?;
+    let uversion = cli::parse_u8_status("--uversion", &args.uversion)?;
+    let resource = cli::parse_u16_status("--resource", &args.resource)?;
+    let target_uentity = cli::parse_u32_status("--target-uentity", &args.target_uentity)?;
+    let target_uversion = cli::parse_u8_status("--target-uversion", &args.target_uversion)?;
+    let target_resource = cli::parse_u16_status("--target-resource", &args.target_resource)?;
+
     // Source represents the client (specifically the topic that the client sends to)
-    let source = UUri::try_from_parts(
-        CLIENT_AUTHORITY,
-        CLIENT_UE_ID,
-        CLIENT_UE_VERSION_MAJOR,
-        CLIENT_RESOURCE_ID,
-    )
-    .unwrap();
+    let source = cli::build_uuri(&args.uauthority, uentity, uversion, resource)?;
     // Sink is the destination entity which the streamer should rout our messages to.
-    let sink = UUri::try_from_parts(
-        SERVICE_AUTHORITY,
-        SERVICE_UE_ID,
-        SERVICE_UE_VERSION_MAJOR,
-        SERVICE_RESOURCE_ID,
-    )
-    .unwrap();
+    let sink = cli::build_uuri(
+        &args.target_authority,
+        target_uentity,
+        target_uversion,
+        target_resource,
+    )?;
 
     let mqtt_client_options = MqttClientOptions {
-        broker_uri: "localhost:1883".to_string(),
+        broker_uri: args.broker_uri,
         ..Default::default()
     };
     let mqtt_transport_options = Mqtt5TransportOptions {
@@ -65,7 +103,7 @@ async fn main() -> Result<(), UStatus> {
         ..Default::default()
     };
     let mqtt5_transport =
-        Mqtt5Transport::new(mqtt_transport_options, CLIENT_AUTHORITY.to_string()).await?;
+        Mqtt5Transport::new(mqtt_transport_options, args.uauthority.to_string()).await?;
     mqtt5_transport.connect().await?;
 
     let client: Arc<dyn UTransport> = Arc::new(mqtt5_transport);
