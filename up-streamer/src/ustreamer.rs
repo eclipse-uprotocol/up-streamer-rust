@@ -24,7 +24,7 @@ use std::ops::Deref;
 use std::str;
 use std::sync::Arc;
 use std::thread;
-use subscription_cache::SubscriptionCache;
+use subscription_cache::{SubscriptionCache, SubscriptionInformation};
 use tokio::runtime::Builder;
 use tokio::runtime::Runtime;
 use tokio::sync::broadcast::{Receiver, Sender};
@@ -221,6 +221,29 @@ impl ForwardingListeners {
         }
     }
 
+    #[allow(clippy::mutable_key_type)]
+    fn effective_publish_source_filters(
+        in_authority: &str,
+        out_authority: &str,
+        subscribers: &HashSet<SubscriptionInformation>,
+        action: &str,
+    ) -> HashSet<UUri> {
+        let mut source_filters = HashSet::new();
+
+        for subscriber in subscribers {
+            if let Some(source_uri) = Self::publish_source_uri_for_rule(
+                in_authority,
+                out_authority,
+                &subscriber.topic,
+                action,
+            ) {
+                source_filters.insert(source_uri);
+            }
+        }
+
+        source_filters
+    }
+
     pub async fn insert(
         &self,
         in_transport: Arc<dyn UTransport>,
@@ -301,7 +324,7 @@ impl ForwardingListeners {
         let subscribers = match subscription_cache
             .lock()
             .await
-            .fetch_cache_entry(out_authority.into())
+            .fetch_cache_entry_with_wildcard(out_authority)
         {
             Some(subscribers) => subscribers,
             None => {
@@ -313,16 +336,15 @@ impl ForwardingListeners {
             }
         };
 
-        for subscriber in subscribers {
-            let Some(source_uri) = Self::publish_source_uri_for_rule(
-                in_authority,
-                out_authority,
-                &subscriber.topic,
-                FORWARDING_LISTENERS_FN_INSERT_TAG,
-            ) else {
-                continue;
-            };
+        #[allow(clippy::mutable_key_type)]
+        let publish_source_filters = Self::effective_publish_source_filters(
+            in_authority,
+            out_authority,
+            &subscribers,
+            FORWARDING_LISTENERS_FN_INSERT_TAG,
+        );
 
+        for source_uri in publish_source_filters {
             info!(
                 "in authority: {}, out authority: {}, source URI filter: {:?}",
                 in_authority, out_authority, source_uri
@@ -353,7 +375,7 @@ impl ForwardingListeners {
                     };
                 }
                 return Err(ForwardingListenerError::FailToRegisterPublishListener(
-                    subscriber.topic,
+                    source_uri,
                 ));
             } else {
                 uuris_to_backpedal.insert((source_uri, None));
@@ -425,7 +447,7 @@ impl ForwardingListeners {
                 let subscribers = match subscription_cache
                     .lock()
                     .await
-                    .fetch_cache_entry(out_authority.into())
+                    .fetch_cache_entry_with_wildcard(out_authority)
                 {
                     Some(subscribers) => subscribers,
                     None => {
@@ -439,16 +461,15 @@ impl ForwardingListeners {
                     }
                 };
 
-                for subscriber in subscribers {
-                    let Some(source_uri) = Self::publish_source_uri_for_rule(
-                        in_authority,
-                        out_authority,
-                        &subscriber.topic,
-                        FORWARDING_LISTENERS_FN_REMOVE_TAG,
-                    ) else {
-                        continue;
-                    };
+                #[allow(clippy::mutable_key_type)]
+                let publish_source_filters = Self::effective_publish_source_filters(
+                    in_authority,
+                    out_authority,
+                    &subscribers,
+                    FORWARDING_LISTENERS_FN_REMOVE_TAG,
+                );
 
+                for source_uri in publish_source_filters {
                     if let Err(err) = in_transport
                         .unregister_listener(&source_uri, None, forwarding_listener.clone())
                         .await

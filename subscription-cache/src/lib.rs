@@ -39,12 +39,13 @@ impl Eq for SubscriptionInformation {}
 
 impl PartialEq for SubscriptionInformation {
     fn eq(&self, other: &Self) -> bool {
-        self.subscriber == other.subscriber
+        self.topic == other.topic && self.subscriber == other.subscriber
     }
 }
 
 impl Hash for SubscriptionInformation {
     fn hash<H: Hasher>(&self, state: &mut H) {
+        self.topic.hash(state);
         self.subscriber.hash(state);
     }
 }
@@ -147,5 +148,34 @@ impl SubscriptionCache {
             Err(_) => return None,
         };
         map.get(&entry).cloned()
+    }
+
+    pub fn fetch_cache_entry_with_wildcard(
+        &self,
+        entry: &str,
+    ) -> Option<HashSet<SubscriptionInformation>> {
+        let map = match self.subscription_cache_map.lock() {
+            Ok(map) => map,
+            Err(_) => return None,
+        };
+
+        #[allow(clippy::mutable_key_type)]
+        let mut merged = HashSet::new();
+
+        if let Some(exact_subscribers) = map.get(entry) {
+            merged.extend(exact_subscribers.iter().cloned());
+        }
+
+        if entry != "*" {
+            if let Some(wildcard_subscribers) = map.get("*") {
+                merged.extend(wildcard_subscribers.iter().cloned());
+            }
+        }
+
+        if merged.is_empty() {
+            None
+        } else {
+            Some(merged)
+        }
     }
 }
