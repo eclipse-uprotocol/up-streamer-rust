@@ -836,47 +836,59 @@ impl UStreamer {
         let in_comparable_transport = ComparableTransport::new(r#in.transport.clone());
         let out_comparable_transport = ComparableTransport::new(out.transport.clone());
 
-        {
+        let forwarding_rule = (
+            r#in.authority.clone(),
+            out.authority.clone(),
+            in_comparable_transport,
+            out_comparable_transport,
+        );
+
+        let inserted = {
             let mut registered_forwarding_rules = self.registered_forwarding_rules.lock().await;
-            match registered_forwarding_rules.insert((
-                r#in.authority.clone(),
-                out.authority.clone(),
-                in_comparable_transport,
-                out_comparable_transport,
-            )) {
-                true => {
-                    let out_sender = self
-                        .transport_forwarders
-                        .insert(out.transport.clone())
-                        .await;
-                    if let Err(err) = self
-                        .forwarding_listeners
-                        .insert(
-                            r#in.transport.clone(),
-                            &r#in.authority,
-                            &out.authority,
-                            &Self::forwarding_id(&r#in, &out),
-                            out_sender,
-                            self.subscription_cache.clone(),
-                        )
-                        .await
-                    {
-                        return Err(UStatus::fail_with_code(
-                            UCode::INVALID_ARGUMENT,
-                            err.to_string(),
-                        ));
-                    };
-                    Ok(())
-                }
-                false => {
-                    // TODO: Add logging on inability to register
-                    Err(UStatus::fail_with_code(
-                        UCode::ALREADY_EXISTS,
-                        "already exists",
-                    ))
-                }
-            }
+            registered_forwarding_rules.insert(forwarding_rule.clone())
+        };
+
+        if !inserted {
+            // TODO: Add logging on inability to register
+            return Err(UStatus::fail_with_code(
+                UCode::ALREADY_EXISTS,
+                "already exists",
+            ));
         }
+
+        let out_sender = self
+            .transport_forwarders
+            .insert(out.transport.clone())
+            .await;
+
+        if let Err(err) = self
+            .forwarding_listeners
+            .insert(
+                r#in.transport.clone(),
+                &r#in.authority,
+                &out.authority,
+                &Self::forwarding_id(&r#in, &out),
+                out_sender,
+                self.subscription_cache.clone(),
+            )
+            .await
+        {
+            {
+                let mut registered_forwarding_rules = self.registered_forwarding_rules.lock().await;
+                registered_forwarding_rules.remove(&forwarding_rule);
+            }
+
+            self.transport_forwarders
+                .remove(out.transport.clone())
+                .await;
+
+            return Err(UStatus::fail_with_code(
+                UCode::INVALID_ARGUMENT,
+                err.to_string(),
+            ));
+        }
+
+        Ok(())
     }
 
     /// Deletes a forwarding rule from the [`UStreamer`] based on an in [`Endpoint`][crate::Endpoint] and an
