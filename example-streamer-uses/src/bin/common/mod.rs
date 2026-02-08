@@ -1,3 +1,5 @@
+pub(crate) mod cli;
+
 use async_trait::async_trait;
 use hello_world_protos::{
     hello_world_service::{HelloRequest, HelloResponse},
