@@ -22,12 +22,12 @@ license.workspace = true
 [dependencies]
 async-trait = { workspace = true }
 clap = { workspace = true }
-env_logger = { workspace = true }
-log = { workspace = true }
 json5 = { workspace = true }
 protobuf = { workspace = true }
 serde = { workspace = true }
 tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
 up-rust = { workspace = true }
 up-streamer = { path = "../up-streamer" }
 up-transport-zenoh = { workspace = true }

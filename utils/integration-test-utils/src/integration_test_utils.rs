@@ -13,7 +13,6 @@
 
 use crate::UPClientFoo;
 use async_broadcast::{Receiver, Sender};
-use log::{debug, error};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
@@ -22,6 +21,7 @@ use std::time::{Duration, Instant};
 use tokio::runtime::Builder;
 use tokio::sync::Mutex;
 use tokio_condvar::Condvar;
+use tracing::{debug, error};
 use up_rust::{UListener, UMessage, UStatus, UTransport, UUri, UUID};
 
 pub type Signal = Arc<(Mutex<bool>, Condvar)>;

@@ -24,12 +24,12 @@ use integration_test_utils::{
     ClientConfiguration, ClientControl, ClientHistory, ClientMessages, LocalClientListener,
     RemoteClientListener, UPClientFoo,
 };
-use log::debug;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Mutex;
 use tokio_condvar::Condvar;
+use tracing::debug;
 use up_rust::{UListener, UTransport};
 use up_streamer::{Endpoint, UStreamer};
 use usubscription_static_file::USubscriptionStaticFile;
@@ -40,6 +40,10 @@ const SENT_MESSAGE_VEC_CAPACITY: usize = 10_000;
 #[ignore]
 #[tokio::test(flavor = "multi_thread")]
 async fn single_local_two_remote_authorities_same_remote_transport() {
+    run_single_local_two_remote_authorities_same_remote_transport().await;
+}
+
+async fn run_single_local_two_remote_authorities_same_remote_transport() {
     integration_test_utils::init_logging();
 
     // using async_broadcast to simulate communication protocol

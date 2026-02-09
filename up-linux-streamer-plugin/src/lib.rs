@@ -143,7 +143,7 @@ pub mod plugin {
         let timestamp_res = runtime.new_timestamp();
         trace!("called function on runtime: {timestamp_res:?}");
 
-        env_logger::init();
+        let _ = tracing_subscriber::fmt::try_init();
 
         let subscription_path = config.usubscription_config.file_path;
         let usubscription = Arc::new(USubscriptionStaticFile::new(subscription_path));

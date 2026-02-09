@@ -14,12 +14,12 @@
 #![allow(clippy::mutable_key_type)]
 
 use async_trait::async_trait;
-use log::{debug, error, warn};
 use serde_json::Value;
 use std::collections::HashSet;
 use std::fs::{self, canonicalize};
 use std::path::PathBuf;
 use std::str::FromStr;
+use tracing::{debug, error, warn};
 use up_rust::core::usubscription::{
     FetchSubscribersRequest, FetchSubscribersResponse, FetchSubscriptionsRequest,
     FetchSubscriptionsResponse, NotificationsRequest, ResetRequest, ResetResponse, SubscriberInfo,

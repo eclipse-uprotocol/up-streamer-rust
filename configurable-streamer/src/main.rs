@@ -15,11 +15,11 @@ mod config;
 
 use crate::config::Config;
 use clap::Parser;
-use log::info;
 use std::io::Read;
 use std::sync::Arc;
 use std::thread;
 use std::{collections::HashMap, fs::File};
+use tracing::info;
 use up_rust::{UCode, UStatus, UTransport};
 use up_streamer::{Endpoint, UStreamer};
 use up_transport_mqtt5::{Mqtt5Transport, Mqtt5TransportOptions, MqttClientOptions};
@@ -35,7 +35,7 @@ struct StreamerArgs {
 
 #[tokio::main]
 async fn main() -> Result<(), UStatus> {
-    env_logger::init();
+    let _ = tracing_subscriber::fmt::try_init();
 
     info!("Started up-linux-streamer-configurable");
 

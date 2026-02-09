@@ -15,11 +15,11 @@ mod config;
 
 use crate::config::Config;
 use clap::Parser;
-use log::trace;
 use std::fs::File;
 use std::io::Read;
 use std::sync::Arc;
 use std::{env, thread};
+use tracing::trace;
 use up_rust::{UCode, UStatus, UTransport, UUri};
 use up_streamer::{Endpoint, UStreamer};
 use up_transport_vsomeip::UPTransportVsomeip;
@@ -35,7 +35,7 @@ struct StreamerArgs {
 
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> Result<(), UStatus> {
-    env_logger::init();
+    let _ = tracing_subscriber::fmt::try_init();
 
     let args = StreamerArgs::parse();
 

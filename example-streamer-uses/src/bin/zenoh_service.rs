@@ -16,10 +16,10 @@ mod common;
 use clap::Parser;
 use common::cli;
 use common::ServiceRequestResponder;
-use log::info;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::thread;
+use tracing::info;
 use up_rust::{UListener, UStatus, UTransport, UUri};
 use up_transport_zenoh::{
     zenoh_config::{Config, EndPoint},
@@ -54,7 +54,7 @@ struct Args {
 
 #[tokio::main]
 async fn main() -> Result<(), UStatus> {
-    env_logger::init();
+    let _ = tracing_subscriber::fmt::try_init();
 
     let args = Args::parse();
 

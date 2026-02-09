@@ -40,15 +40,13 @@ pub use integration_test_messages::{
     response_from_remote_client_for_local_client,
 };
 
-/// Helper method for integration tests to initialise
-/// [env_logger].
-///
-/// `RUST_LOG` env is read. Defaults to `DEBUG`
+/// Helper method for integration tests to initialise tracing.
+/// `RUST_LOG` env is read. Defaults to `debug`.
 pub fn init_logging() {
     let log_filter = std::env::var("RUST_LOG").unwrap_or_else(|_| "debug".to_string());
-    env_logger::builder()
-        .parse_filters(&log_filter)
-        .format_timestamp(None)
-        .is_test(true)
-        .init();
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter(log_filter)
+        .without_time()
+        .with_test_writer()
+        .try_init();
 }
