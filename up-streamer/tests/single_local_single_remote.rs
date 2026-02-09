@@ -49,7 +49,7 @@ async fn run_single_local_single_remote() {
     let utransport_bar: Arc<dyn UTransport> =
         Arc::new(UPClientFoo::new("upclient_bar", rx_2.clone(), tx_2.clone()).await);
 
-    let mut ustreamer = support::make_streamer("foo_bar_streamer", 3000);
+    let mut ustreamer = support::make_streamer("foo_bar_streamer", 3000).await;
 
     // setting up endpoints between authorities and protocols
     let local_endpoint = Endpoint::new("local_endpoint", &local_authority(), utransport_foo);

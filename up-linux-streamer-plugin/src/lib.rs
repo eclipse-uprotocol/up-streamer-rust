@@ -24,8 +24,7 @@ pub mod plugin {
 
     const THREAD_NUM: usize = 10;
 
-    use crate::config::Config;
-    use crate::config::HostTransport;
+    use crate::config::{Config, HostTransport, SubscriptionProviderMode};
     use std::env;
     use std::sync::{
         atomic::{AtomicBool, Ordering::Relaxed},
@@ -33,6 +32,7 @@ pub mod plugin {
     };
     use std::time::Duration;
     use tracing::trace;
+    use up_rust::core::usubscription::USubscription;
     use up_rust::{UTransport, UUri};
     use up_streamer::{Endpoint, UStreamer};
     use up_transport_vsomeip::UPTransportVsomeip;
@@ -44,6 +44,10 @@ pub mod plugin {
     use zenoh_plugin_trait::{plugin_long_version, plugin_version, Plugin, PluginControl};
     use zenoh_result::{zerror, ZResult};
     use zenoh_util::ffi::JsonKeyValueMap;
+
+    fn try_init_tracing_from_env() {
+        let _ = tracing_subscriber::fmt::try_init();
+    }
 
     // The struct implementing the ZenohPlugin and ZenohPlugin traits
     pub struct UpLinuxStreamerPlugin {}
@@ -64,7 +68,7 @@ pub mod plugin {
 
         // The first operation called by zenohd on the plugin
         fn start(name: &str, runtime: &Self::StartArgs) -> ZResult<Self::Instance> {
-            zenoh_util::try_init_log_from_env();
+            try_init_tracing_from_env();
             trace!("up-linux-streamer-plugin: start");
 
             let plugin_conf = runtime
@@ -92,8 +96,6 @@ pub mod plugin {
             trace!("up-linux-streamer-plugin: before creating RunningPlugin");
             let ret = Box::new(RunningPlugin(Arc::new(Mutex::new(RunningPluginInner {
                 flag,
-                name: name.into(),
-                runtime: runtime.clone(),
             }))));
             trace!("up-linux-streamer-plugin: after creating RunningPlugin");
 
@@ -104,10 +106,6 @@ pub mod plugin {
     // An inner-state for the RunningPlugin
     struct RunningPluginInner {
         flag: Arc<AtomicBool>,
-        #[allow(dead_code)] // Allowing this to be able to configure streamer at runtime later
-        name: String,
-        #[allow(dead_code)] // Allowing this to be able to configure streamer at runtime later
-        runtime: DynamicRuntime,
     }
     // The RunningPlugin struct implementing the RunningPluginTrait trait
     #[derive(Clone)]
@@ -136,23 +134,28 @@ pub mod plugin {
 
     async fn run(runtime: DynamicRuntime, config: Config, flag: Arc<AtomicBool>) {
         trace!("up-linux-streamer-plugin: inside of run");
-        zenoh_util::try_init_log_from_env();
-        trace!("up-linux-streamer-plugin: after try_init_log_from_env()");
 
         trace!("attempt to call something on the runtime");
         let timestamp_res = runtime.new_timestamp();
         trace!("called function on runtime: {timestamp_res:?}");
 
-        let _ = tracing_subscriber::fmt::try_init();
-
-        let subscription_path = config.usubscription_config.file_path;
-        let usubscription = Arc::new(USubscriptionStaticFile::new(subscription_path));
+        let usubscription: Arc<dyn USubscription> =
+            match config.usubscription_config.mode {
+                SubscriptionProviderMode::StaticFile => Arc::new(USubscriptionStaticFile::new(
+                    config.usubscription_config.file_path.clone(),
+                )),
+                SubscriptionProviderMode::LiveUsubscription => panic!(
+                    "live_usubscription mode is reserved in this phase; live runtime integration is deferred (see reports/usubscription-decoupled-pubsub-migration/05-live-integration-deferred.md)"
+                ),
+            };
 
         let mut streamer = match UStreamer::new(
             "up-linux-streamer",
             config.up_streamer_config.message_queue_size,
             usubscription,
-        ) {
+        )
+        .await
+        {
             Ok(streamer) => streamer,
             Err(error) => panic!("Failed to create uStreamer: {}", error),
         };
@@ -193,7 +196,7 @@ pub mod plugin {
             } else {
                 config.someip_config.config_file
             };
-            tracing::log::trace!("someip_config_file_abs_path: {someip_config_file_abs_path:?}");
+            trace!("someip_config_file_abs_path: {someip_config_file_abs_path:?}");
             if !someip_config_file_abs_path.exists() {
                 panic!(
                 "The specified someip config_file doesn't exist: {someip_config_file_abs_path:?}"
@@ -227,7 +230,7 @@ pub mod plugin {
                 someip_transport.clone(),
             );
             let forwarding_res = streamer
-                .add_forwarding_rule(mechatronics_endpoint.clone(), host_endpoint.clone())
+                .add_route(mechatronics_endpoint.clone(), host_endpoint.clone())
                 .await;
 
             if let Err(err) = forwarding_res {
@@ -235,7 +238,7 @@ pub mod plugin {
             }
 
             let forwarding_res = streamer
-                .add_forwarding_rule(host_endpoint.clone(), mechatronics_endpoint.clone())
+                .add_route(host_endpoint.clone(), mechatronics_endpoint.clone())
                 .await;
 
             if let Err(err) = forwarding_res {

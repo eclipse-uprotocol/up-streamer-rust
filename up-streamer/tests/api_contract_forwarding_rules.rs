@@ -55,16 +55,17 @@ impl UTransport for NoopTransport {
     }
 }
 
-fn make_streamer() -> UStreamer {
+async fn make_streamer() -> UStreamer {
     let subscription_path =
         "../utils/usubscription-static-file/static-configs/testdata.json".to_string();
     let usubscription = Arc::new(USubscriptionStaticFile::new(subscription_path));
     UStreamer::new("api-contract-test", 32, usubscription)
+        .await
         .expect("streamer creation should succeed")
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn add_delete_forwarding_rule_contract_duplicate_and_missing_rules() {
+async fn add_delete_route_contract_duplicate_and_missing_rules() {
     integration_test_utils::init_logging();
 
     let local_transport: Arc<dyn UTransport> = Arc::new(NoopTransport);
@@ -73,17 +74,17 @@ async fn add_delete_forwarding_rule_contract_duplicate_and_missing_rules() {
     let local_endpoint = Endpoint::new("local", "local-authority", local_transport);
     let remote_endpoint = Endpoint::new("remote", "remote-authority", remote_transport);
 
-    let mut streamer = make_streamer();
+    let mut streamer = make_streamer().await;
 
     assert_eq!(
         streamer
-            .add_forwarding_rule(local_endpoint.clone(), remote_endpoint.clone())
+            .add_route(local_endpoint.clone(), remote_endpoint.clone())
             .await,
         Ok(())
     );
     assert_eq!(
         streamer
-            .add_forwarding_rule(local_endpoint.clone(), remote_endpoint.clone())
+            .add_route(local_endpoint.clone(), remote_endpoint.clone())
             .await,
         Err(UStatus::fail_with_code(
             UCode::ALREADY_EXISTS,
@@ -93,29 +94,27 @@ async fn add_delete_forwarding_rule_contract_duplicate_and_missing_rules() {
 
     assert_eq!(
         streamer
-            .delete_forwarding_rule(local_endpoint.clone(), remote_endpoint.clone())
+            .delete_route(local_endpoint.clone(), remote_endpoint.clone())
             .await,
         Ok(())
     );
     assert_eq!(
-        streamer
-            .delete_forwarding_rule(local_endpoint, remote_endpoint)
-            .await,
+        streamer.delete_route(local_endpoint, remote_endpoint).await,
         Err(UStatus::fail_with_code(UCode::NOT_FOUND, "not found"))
     );
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn add_delete_forwarding_rule_contract_rejects_same_authority() {
+async fn add_delete_route_contract_rejects_same_authority() {
     integration_test_utils::init_logging();
 
     let transport: Arc<dyn UTransport> = Arc::new(NoopTransport);
     let endpoint_a = Endpoint::new("a", "shared-authority", transport.clone());
     let endpoint_b = Endpoint::new("b", "shared-authority", transport);
-    let mut streamer = make_streamer();
+    let mut streamer = make_streamer().await;
 
     let add_error = streamer
-        .add_forwarding_rule(endpoint_a.clone(), endpoint_b.clone())
+        .add_route(endpoint_a.clone(), endpoint_b.clone())
         .await
         .expect_err("same-authority add should fail");
     assert_eq!(
@@ -124,7 +123,7 @@ async fn add_delete_forwarding_rule_contract_rejects_same_authority() {
     );
 
     let delete_error = streamer
-        .delete_forwarding_rule(endpoint_a, endpoint_b)
+        .delete_route(endpoint_a, endpoint_b)
         .await
         .expect_err("same-authority delete should fail");
     assert_eq!(

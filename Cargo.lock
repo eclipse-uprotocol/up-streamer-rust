@@ -4076,20 +4076,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "subscription-cache"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "futures",
- "protobuf",
- "serde",
- "serde_json",
- "tracing",
- "up-rust",
- "uuid",
-]
-
-[[package]]
 name = "subtle"
 version = "2.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4878,7 +4864,6 @@ dependencies = [
  "lazy_static",
  "protobuf",
  "serde_json",
- "subscription-cache",
  "tokio",
  "tokio-condvar",
  "tracing",
@@ -5004,7 +4989,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "serde_json",
- "subscription-cache",
+ "tokio",
  "tracing",
  "up-rust",
 ]

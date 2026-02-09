@@ -19,11 +19,12 @@
 //! Typical usage is API-first and remains centered on [`Endpoint`] and [`UStreamer`].
 //! Internal modules are organized by domain layer to keep behavior ownership explicit.
 //!
-//! ## Quick start
+//! ## Static Configuration Mode
 //!
 //! ```
 //! use std::sync::Arc;
 //! use up_streamer::{Endpoint, UStreamer};
+//! use up_rust::core::usubscription::USubscription;
 //! use usubscription_static_file::USubscriptionStaticFile;
 //! use up_rust::UTransport;
 //!
@@ -64,10 +65,10 @@
 //! # }
 //!
 //! # tokio::runtime::Runtime::new().unwrap().block_on(async {
-//! let usubscription = Arc::new(USubscriptionStaticFile::new(
+//! let usubscription: Arc<dyn USubscription> = Arc::new(USubscriptionStaticFile::new(
 //!     "../utils/usubscription-static-file/static-configs/testdata.json".to_string(),
 //! ));
-//! let mut streamer = UStreamer::new("quick-start", 16, usubscription).unwrap();
+//! let mut streamer = UStreamer::new("quick-start", 16, usubscription).await.unwrap();
 //!
 //! let left_transport: Arc<dyn UTransport> = Arc::new(mock_transport::MockTransport);
 //! let right_transport: Arc<dyn UTransport> = Arc::new(mock_transport::MockTransport);
@@ -82,8 +83,35 @@
 //! # });
 //! ```
 //!
-//! Compatibility note: `add_forwarding_rule` / `delete_forwarding_rule` remain
-//! available and delegate to `add_route` / `delete_route`.
+//! ## Live Canonical uSubscription Mode
+//!
+//! `UStreamer` consumes `Arc<dyn USubscription>`. In live mode, pass a trait-object backed by
+//! canonical uSubscription APIs (for example an RPC-backed client).
+//!
+//! ```no_run
+//! use std::sync::Arc;
+//! use up_streamer::UStreamer;
+//! use up_rust::core::usubscription::USubscription;
+//! # use usubscription_static_file::USubscriptionStaticFile;
+//!
+//! // In real live mode, build a canonical client:
+//! // let usubscription: Arc<dyn USubscription> = Arc::new(RpcClientUSubscription::new(...));
+//!
+//! # tokio::runtime::Runtime::new().unwrap().block_on(async {
+//! # let usubscription: Arc<dyn USubscription> = Arc::new(USubscriptionStaticFile::new(
+//! #     "../utils/usubscription-static-file/static-configs/testdata.json".to_string(),
+//! # ));
+//! let _streamer = UStreamer::new("live-canonical", 16, usubscription).await.unwrap();
+//! # });
+//! ```
+//!
+//! `refresh_subscriptions()` returns `SubscriptionSyncHealth` only. Canonical subscription
+//! listings/counts/deltas remain the responsibility of the uSubscription service.
+//!
+//! Note for this migration phase: required streamer binaries expose `live_usubscription` as a
+//! reserved mode and fail fast with an explicit deferred-integration message.
+//!
+//! Route lifecycle APIs are `add_route` / `delete_route`.
 //!
 //! ## Route contract
 //!
@@ -94,6 +122,7 @@
 //! ```
 //! use std::sync::Arc;
 //! use up_streamer::{Endpoint, UStreamer};
+//! use up_rust::core::usubscription::USubscription;
 //! use usubscription_static_file::USubscriptionStaticFile;
 //! use up_rust::UTransport;
 //!
@@ -134,10 +163,10 @@
 //! # }
 //!
 //! # tokio::runtime::Runtime::new().unwrap().block_on(async {
-//! let usubscription = Arc::new(USubscriptionStaticFile::new(
+//! let usubscription: Arc<dyn USubscription> = Arc::new(USubscriptionStaticFile::new(
 //!     "../utils/usubscription-static-file/static-configs/testdata.json".to_string(),
 //! ));
-//! let mut streamer = UStreamer::new("contract", 16, usubscription).unwrap();
+//! let mut streamer = UStreamer::new("contract", 16, usubscription).await.unwrap();
 //!
 //! let left_transport: Arc<dyn UTransport> = Arc::new(mock_transport::MockTransport);
 //! let right_transport: Arc<dyn UTransport> = Arc::new(mock_transport::MockTransport);
@@ -193,6 +222,9 @@ mod control_plane;
 mod data_plane;
 mod endpoint;
 pub use endpoint::Endpoint;
+
+mod subscription_sync_health;
+pub use subscription_sync_health::SubscriptionSyncHealth;
 
 mod routing;
 mod runtime;

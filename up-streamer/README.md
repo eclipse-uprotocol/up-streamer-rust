@@ -28,16 +28,16 @@ sequenceDiagram
   
     main thread->>main thread: let ustreamer = UStreamer::new()
 
-    main thread->>main thread: ustreamer.add_forwarding_rule(local_endpoint, remote_endpoint)
+    main thread->>main thread: ustreamer.add_route(local_endpoint, remote_endpoint)
     main thread->>TransportForwarder - Foo: launch TransportForwarder - Foo
     activate TransportForwarder - Foo
-    main thread->>UPClientFoo owned thread / task: (within ustreamer.add_forwarding_rule()) <br> local_endpoint.transport.lock().await.register_listener <br> (uauthority_to_uuri(remote_endpoint.authority), forwarding_listener).await
+    main thread->>UPClientFoo owned thread / task: (within ustreamer.add_route()) <br> local_endpoint.transport.lock().await.register_listener <br> (uauthority_to_uuri(remote_endpoint.authority), forwarding_listener).await
     activate UPClientFoo owned thread / task
 
-    main thread->>main thread: ustreamer.add_forwarding_rule(remote_endpoint, local_endpoint)
+    main thread->>main thread: ustreamer.add_route(remote_endpoint, local_endpoint)
     main thread->>TransportForwarder - Bar: launch TransportForwarder - Bar
     activate TransportForwarder - Bar
-    main thread->>UPClientBar owned thread / task: (within ustreamer.add_forwarding_rule()) <br> remote_endpoint.transport.lock().await.register_listener <br> (uauthority_to_uuri(local_endpoint.authority), forwarding_listener).await
+    main thread->>UPClientBar owned thread / task: (within ustreamer.add_route()) <br> remote_endpoint.transport.lock().await.register_listener <br> (uauthority_to_uuri(local_endpoint.authority), forwarding_listener).await
     activate UPClientBar owned thread / task
 
     loop Park the main thread, let background tasks run until closing UStreamer app

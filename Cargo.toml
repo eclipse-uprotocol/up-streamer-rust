@@ -19,7 +19,6 @@ members = [
     "configurable-streamer",
     "up-linux-streamer-plugin",
     "up-streamer",
-    "subscription-cache",
     "utils/usubscription-static-file",
 ]
 

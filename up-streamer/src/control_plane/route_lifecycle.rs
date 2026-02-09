@@ -5,8 +5,11 @@ use crate::data_plane::egress_pool::EgressRoutePool;
 use crate::data_plane::ingress_registry::{IngressRouteRegistrationError, IngressRouteRegistry};
 use crate::endpoint::Endpoint;
 use crate::routing::subscription_directory::SubscriptionDirectory;
+use std::error::Error;
+use std::fmt::{Display, Formatter};
 
 /// Failures for route insertion orchestration.
+#[derive(Debug)]
 pub(crate) enum AddRouteError {
     SameAuthority,
     AlreadyExists,
@@ -14,10 +17,47 @@ pub(crate) enum AddRouteError {
 }
 
 /// Failures for route deletion orchestration.
+#[derive(Debug)]
 pub(crate) enum RemoveRouteError {
     SameAuthority,
     NotFound,
 }
+
+impl Display for AddRouteError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AddRouteError::SameAuthority => {
+                write!(f, "ingress and egress authorities must differ")
+            }
+            AddRouteError::AlreadyExists => write!(f, "route already exists"),
+            AddRouteError::FailedToRegisterIngressRoute(err) => {
+                write!(f, "failed to register ingress route listener: {err}")
+            }
+        }
+    }
+}
+
+impl Error for AddRouteError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            AddRouteError::FailedToRegisterIngressRoute(err) => Some(err),
+            _ => None,
+        }
+    }
+}
+
+impl Display for RemoveRouteError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            RemoveRouteError::SameAuthority => {
+                write!(f, "ingress and egress authorities must differ")
+            }
+            RemoveRouteError::NotFound => write!(f, "route not found"),
+        }
+    }
+}
+
+impl Error for RemoveRouteError {}
 
 /// Orchestrates multi-owner route transitions across control, routing, and data planes.
 pub(crate) struct RouteLifecycle<'a> {
@@ -119,5 +159,32 @@ impl<'a> RouteLifecycle<'a> {
             .await;
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{AddRouteError, RemoveRouteError};
+    use crate::data_plane::ingress_registry::IngressRouteRegistrationError;
+    use std::error::Error;
+
+    #[test]
+    fn add_route_error_exposes_display_and_source_for_ingress_failure() {
+        let error = AddRouteError::FailedToRegisterIngressRoute(
+            IngressRouteRegistrationError::FailedToRegisterRequestRouteListener,
+        );
+
+        assert!(error
+            .to_string()
+            .contains("failed to register ingress route listener"));
+        assert!(error.source().is_some());
+    }
+
+    #[test]
+    fn remove_route_error_display_is_stable_for_not_found() {
+        let error = RemoveRouteError::NotFound;
+
+        assert_eq!(error.to_string(), "route not found");
+        assert!(error.source().is_none());
     }
 }

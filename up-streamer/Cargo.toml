@@ -31,11 +31,10 @@ uuid = { workspace = true }
 serde_json = { workspace = true }
 up-rust = { workspace = true, features = ["usubscription"] }
 protobuf = { version = "3.3", features = ["with-bytes"] }
-subscription-cache = {path="../subscription-cache"}
-usubscription-static-file = {path="../utils/usubscription-static-file"}
 
 [dev-dependencies]
 async-broadcast = { version = "0.7.0" }
 chrono = { version = "0.4.31", features = [] }
 integration-test-utils = { path = "../utils/integration-test-utils" }
 tokio-condvar = { version = "0.3.0" }
+usubscription-static-file = { path = "../utils/usubscription-static-file" }

@@ -5,7 +5,7 @@ use crate::data_plane::ingress_listener::IngressRouteListener;
 use crate::routing::authority_filter::authority_to_wildcard_filter;
 use crate::routing::publish_resolution::PublishRouteResolver;
 use crate::routing::subscription_directory::SubscriptionDirectory;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::error::Error;
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
@@ -84,10 +84,9 @@ struct IngressRouteBinding {
 
 type ListenerFilter = (UUri, Option<UUri>);
 
-#[allow(clippy::mutable_key_type)]
 async fn rollback_registered_filters(
     in_transport: &Arc<dyn UTransport>,
-    rollback_filters: &HashSet<ListenerFilter>,
+    rollback_filters: &[ListenerFilter],
     route_listener: Arc<IngressRouteListener>,
 ) {
     for (source_filter, sink_filter) in rollback_filters {
@@ -139,13 +138,12 @@ impl IngressRouteRegistry {
 
         let route_listener = Arc::new(IngressRouteListener::new(route_id, out_sender.clone()));
 
-        #[allow(clippy::mutable_key_type)]
-        let mut rollback_filters: HashSet<ListenerFilter> = HashSet::new();
+        let mut rollback_filters: Vec<ListenerFilter> = Vec::new();
 
         let request_source_filter = authority_to_wildcard_filter(in_authority);
         let request_sink_filter = authority_to_wildcard_filter(out_authority);
 
-        rollback_filters.insert((
+        rollback_filters.push((
             request_source_filter.clone(),
             Some(request_sink_filter.clone()),
         ));
@@ -172,7 +170,6 @@ impl IngressRouteRegistry {
             INGRESS_ROUTE_REGISTRY_TAG, INGRESS_ROUTE_REGISTRY_FN_REGISTER_ROUTE_TAG
         );
 
-        #[allow(clippy::mutable_key_type)]
         let subscribers = subscription_directory
             .lookup_route_subscribers(
                 out_authority,
@@ -187,10 +184,9 @@ impl IngressRouteRegistry {
             INGRESS_ROUTE_REGISTRY_TAG,
             INGRESS_ROUTE_REGISTRY_FN_REGISTER_ROUTE_TAG,
         );
-        #[allow(clippy::mutable_key_type)]
         let publish_source_filters = route_resolver.derive_source_filters(&subscribers);
 
-        for source_uri in publish_source_filters {
+        for source_uri in publish_source_filters.into_values() {
             info!(
                 "in authority: {}, out authority: {}, source URI filter: {:?}",
                 in_authority, out_authority, source_uri
@@ -215,7 +211,7 @@ impl IngressRouteRegistry {
                 );
             }
 
-            rollback_filters.insert((source_uri, None));
+            rollback_filters.push((source_uri, None));
             debug!("{INGRESS_ROUTE_REGISTRY_TAG}:{INGRESS_ROUTE_REGISTRY_FN_REGISTER_ROUTE_TAG} able to register listener");
         }
 
@@ -274,7 +270,6 @@ impl IngressRouteRegistry {
                     debug!("{INGRESS_ROUTE_REGISTRY_TAG}:{INGRESS_ROUTE_REGISTRY_FN_UNREGISTER_ROUTE_TAG} able to unregister request listener");
                 }
 
-                #[allow(clippy::mutable_key_type)]
                 let subscribers = subscription_directory
                     .lookup_route_subscribers(
                         out_authority,
@@ -289,10 +284,9 @@ impl IngressRouteRegistry {
                     INGRESS_ROUTE_REGISTRY_TAG,
                     INGRESS_ROUTE_REGISTRY_FN_UNREGISTER_ROUTE_TAG,
                 );
-                #[allow(clippy::mutable_key_type)]
                 let publish_source_filters = route_resolver.derive_source_filters(&subscribers);
 
-                for source_uri in publish_source_filters {
+                for source_uri in publish_source_filters.into_values() {
                     if let Err(err) = in_transport
                         .unregister_listener(&source_uri, None, route_listener.clone())
                         .await
@@ -313,12 +307,12 @@ impl IngressRouteRegistry {
 mod tests {
     use super::IngressRouteRegistry;
     use crate::routing::authority_filter::authority_to_wildcard_filter;
+    use crate::routing::subscription_cache::SubscriptionCache;
     use crate::routing::subscription_directory::SubscriptionDirectory;
     use async_trait::async_trait;
     use std::collections::HashMap;
     use std::str::FromStr;
     use std::sync::{Arc, Mutex as StdMutex};
-    use subscription_cache::SubscriptionCache;
     use tokio::sync::Mutex;
     use up_rust::core::usubscription::{FetchSubscriptionsResponse, SubscriberInfo, Subscription};
     use up_rust::{UCode, UListener, UMessage, UStatus, UTransport, UUri};

@@ -17,13 +17,13 @@ use crate::data_plane::egress_pool::EgressRoutePool;
 use crate::data_plane::ingress_registry::IngressRouteRegistry;
 use crate::endpoint::Endpoint;
 use crate::routing::subscription_directory::SubscriptionDirectory;
-use crate::runtime::subscription_runtime::fetch_subscriptions;
+use crate::subscription_sync_health::SubscriptionSyncHealth;
 use std::sync::Arc;
-use subscription_cache::SubscriptionCache;
-use tokio::sync::Mutex;
-use tracing::{debug, error};
-use up_rust::core::usubscription::{FetchSubscriptionsRequest, SubscriberInfo, USubscription};
-use up_rust::{UCode, UStatus, UUri};
+use tracing::{debug, error, warn};
+use up_rust::core::usubscription::{
+    FetchSubscriptionsRequest, FetchSubscriptionsResponse, USubscription,
+};
+use up_rust::{UCode, UStatus};
 
 const USTREAMER_TAG: &str = "UStreamer:";
 const USTREAMER_FN_NEW_TAG: &str = "new():";
@@ -36,11 +36,13 @@ pub struct UStreamer {
     egress_route_pool: EgressRoutePool,
     ingress_route_registry: IngressRouteRegistry,
     subscription_directory: SubscriptionDirectory,
+    usubscription: Arc<dyn USubscription>,
+    subscription_sync_health: SubscriptionSyncHealth,
 }
 
 impl UStreamer {
     /// Creates a streamer instance with preloaded subscription directory state.
-    pub fn new(
+    pub async fn new(
         name: &str,
         message_queue_size: u16,
         usubscription: Arc<dyn USubscription>,
@@ -51,46 +53,68 @@ impl UStreamer {
             &name, USTREAMER_TAG, USTREAMER_FN_NEW_TAG
         );
 
-        let uuri: UUri = UUri {
-            authority_name: "*".to_string(),
-            ue_id: 0x0000_FFFF,
-            ue_version_major: 0xFF,
-            resource_id: 0xFFFF,
-            ..Default::default()
-        };
-
-        let subscriber_info = SubscriberInfo {
-            uri: Some(uuri).into(),
-            ..Default::default()
-        };
-
-        let mut fetch_request = FetchSubscriptionsRequest {
-            request: None,
-            ..Default::default()
-        };
-        fetch_request.set_subscriber(subscriber_info);
-
-        let subscriptions = fetch_subscriptions(usubscription, fetch_request);
-        let subscription_directory = match SubscriptionCache::new(subscriptions) {
-            Ok(cache) => SubscriptionDirectory::new(Arc::new(Mutex::new(cache))),
-            Err(e) => {
-                return Err(UStatus::fail_with_code(
-                    UCode::INVALID_ARGUMENT,
-                    format!(
-                        "{}:{}:{} Unable to create SubscriptionCache: {:?}",
-                        name, USTREAMER_TAG, USTREAMER_FN_NEW_TAG, e
-                    ),
-                ))
-            }
-        };
-
-        Ok(Self {
+        let mut streamer = Self {
             name: name.to_string(),
             route_table: RouteTable::new(),
             egress_route_pool: EgressRoutePool::new(message_queue_size as usize),
             ingress_route_registry: IngressRouteRegistry::new(),
-            subscription_directory,
-        })
+            subscription_directory: SubscriptionDirectory::empty(),
+            usubscription,
+            subscription_sync_health: SubscriptionSyncHealth::default(),
+        };
+
+        if let Err(err) = streamer.refresh_subscriptions().await {
+            warn!(
+                "{}:{}:{} startup subscription bootstrap failed; deferred-refresh mode active: {}",
+                streamer.name, USTREAMER_TAG, USTREAMER_FN_NEW_TAG, err,
+            );
+        }
+
+        Ok(streamer)
+    }
+
+    fn update_subscription_sync_health(&mut self, succeeded: bool) -> SubscriptionSyncHealth {
+        let now = std::time::SystemTime::now();
+        self.subscription_sync_health.previous_attempt_succeeded =
+            self.subscription_sync_health.last_attempt_succeeded;
+        self.subscription_sync_health.last_attempt_at = Some(now);
+        self.subscription_sync_health.last_attempt_succeeded = Some(succeeded);
+        if succeeded {
+            self.subscription_sync_health.last_success_at = Some(now);
+        }
+        self.subscription_sync_health.clone()
+    }
+
+    async fn apply_subscription_snapshot(
+        &mut self,
+        snapshot: FetchSubscriptionsResponse,
+    ) -> Result<(), UStatus> {
+        self.subscription_directory.apply_snapshot(snapshot).await
+    }
+
+    pub async fn refresh_subscriptions(&mut self) -> Result<SubscriptionSyncHealth, UStatus> {
+        let snapshot = match self
+            .usubscription
+            .fetch_subscriptions(FetchSubscriptionsRequest::default())
+            .await
+        {
+            Ok(snapshot) => snapshot,
+            Err(err) => {
+                self.update_subscription_sync_health(false);
+                return Err(err);
+            }
+        };
+
+        if let Err(err) = self.apply_subscription_snapshot(snapshot).await {
+            self.update_subscription_sync_health(false);
+            return Err(err);
+        }
+
+        Ok(self.update_subscription_sync_health(true))
+    }
+
+    pub fn subscription_sync_health(&self) -> SubscriptionSyncHealth {
+        self.subscription_sync_health.clone()
     }
 
     #[inline(always)]
@@ -178,22 +202,231 @@ impl UStreamer {
             }
         }
     }
+}
 
-    /// Backward-compatible API alias for [`UStreamer::add_route`].
-    pub async fn add_forwarding_rule(
-        &mut self,
-        r#in: Endpoint,
-        out: Endpoint,
-    ) -> Result<(), UStatus> {
-        self.add_route(r#in, out).await
+#[cfg(test)]
+mod tests {
+    use super::UStreamer;
+    use crate::SubscriptionSyncHealth;
+    use async_trait::async_trait;
+    use std::collections::VecDeque;
+    use std::sync::{Arc, Mutex};
+    use up_rust::core::usubscription::{
+        FetchSubscribersRequest, FetchSubscribersResponse, FetchSubscriptionsRequest,
+        FetchSubscriptionsResponse, NotificationsRequest, ResetRequest, ResetResponse,
+        SubscriberInfo, Subscription, SubscriptionRequest, SubscriptionResponse, USubscription,
+        UnsubscribeRequest,
+    };
+    use up_rust::{UCode, UStatus, UUri};
+
+    struct SequencedUSubscription {
+        responses: Mutex<VecDeque<Result<FetchSubscriptionsResponse, UStatus>>>,
     }
 
-    /// Backward-compatible API alias for [`UStreamer::delete_route`].
-    pub async fn delete_forwarding_rule(
-        &mut self,
-        r#in: Endpoint,
-        out: Endpoint,
-    ) -> Result<(), UStatus> {
-        self.delete_route(r#in, out).await
+    impl SequencedUSubscription {
+        fn new(responses: Vec<Result<FetchSubscriptionsResponse, UStatus>>) -> Self {
+            Self {
+                responses: Mutex::new(VecDeque::from(responses)),
+            }
+        }
+
+        fn unsupported(operation: &str) -> UStatus {
+            UStatus::fail_with_code(
+                UCode::UNIMPLEMENTED,
+                format!("{operation} is not used in this test stub"),
+            )
+        }
+    }
+
+    #[async_trait]
+    impl USubscription for SequencedUSubscription {
+        async fn subscribe(
+            &self,
+            _subscription_request: SubscriptionRequest,
+        ) -> Result<SubscriptionResponse, UStatus> {
+            Err(Self::unsupported("subscribe"))
+        }
+
+        async fn fetch_subscriptions(
+            &self,
+            _fetch_subscriptions_request: FetchSubscriptionsRequest,
+        ) -> Result<FetchSubscriptionsResponse, UStatus> {
+            self.responses
+                .lock()
+                .expect("provider queue lock should succeed")
+                .pop_front()
+                .unwrap_or_else(|| {
+                    Err(UStatus::fail_with_code(
+                        UCode::UNAVAILABLE,
+                        "no queued snapshot response",
+                    ))
+                })
+        }
+
+        async fn unsubscribe(
+            &self,
+            _unsubscribe_request: UnsubscribeRequest,
+        ) -> Result<(), UStatus> {
+            Err(Self::unsupported("unsubscribe"))
+        }
+
+        async fn register_for_notifications(
+            &self,
+            _notifications_register_request: NotificationsRequest,
+        ) -> Result<(), UStatus> {
+            Ok(())
+        }
+
+        async fn unregister_for_notifications(
+            &self,
+            _notifications_unregister_request: NotificationsRequest,
+        ) -> Result<(), UStatus> {
+            Ok(())
+        }
+
+        async fn fetch_subscribers(
+            &self,
+            _fetch_subscribers_request: FetchSubscribersRequest,
+        ) -> Result<FetchSubscribersResponse, UStatus> {
+            Err(Self::unsupported("fetch_subscribers"))
+        }
+
+        async fn reset(&self, _reset_request: ResetRequest) -> Result<ResetResponse, UStatus> {
+            Ok(ResetResponse::default())
+        }
+    }
+
+    fn subscription(topic: &str, subscriber: &str) -> Subscription {
+        Subscription {
+            topic: Some(topic.parse::<UUri>().expect("valid topic URI")).into(),
+            subscriber: Some(SubscriberInfo {
+                uri: Some(subscriber.parse::<UUri>().expect("valid subscriber URI")).into(),
+                ..Default::default()
+            })
+            .into(),
+            ..Default::default()
+        }
+    }
+
+    fn valid_snapshot() -> FetchSubscriptionsResponse {
+        FetchSubscriptionsResponse {
+            subscriptions: vec![subscription(
+                "//authority-a/5BA0/1/8001",
+                "//authority-b/5678/1/1234",
+            )],
+            ..Default::default()
+        }
+    }
+
+    fn invalid_snapshot_missing_topic() -> FetchSubscriptionsResponse {
+        FetchSubscriptionsResponse {
+            subscriptions: vec![Subscription {
+                topic: None.into(),
+                subscriber: Some(SubscriberInfo {
+                    uri: Some("//authority-b/5678/1/1234".parse::<UUri>().unwrap()).into(),
+                    ..Default::default()
+                })
+                .into(),
+                ..Default::default()
+            }],
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn subscription_sync_health_default_is_empty() {
+        let health = SubscriptionSyncHealth::default();
+        assert_eq!(health.last_attempt_at, None);
+        assert_eq!(health.last_success_at, None);
+        assert_eq!(health.last_attempt_succeeded, None);
+        assert_eq!(health.previous_attempt_succeeded, None);
+    }
+
+    #[tokio::test]
+    async fn startup_fetch_failure_is_non_fatal_and_sets_first_failed_attempt() {
+        let usubscription: Arc<dyn USubscription> =
+            Arc::new(SequencedUSubscription::new(vec![Err(
+                UStatus::fail_with_code(UCode::UNAVAILABLE, "simulated bootstrap failure"),
+            )]));
+
+        let streamer = UStreamer::new("startup-failure", 16, usubscription)
+            .await
+            .expect("startup should not fail when snapshot fetch fails");
+
+        let health = streamer.subscription_sync_health();
+        assert!(health.last_attempt_at.is_some());
+        assert_eq!(health.last_success_at, None);
+        assert_eq!(health.last_attempt_succeeded, Some(false));
+        assert_eq!(health.previous_attempt_succeeded, None);
+    }
+
+    #[tokio::test]
+    async fn refresh_success_returns_health_and_rolls_previous_attempt_state() {
+        let usubscription: Arc<dyn USubscription> = Arc::new(SequencedUSubscription::new(vec![
+            Err(UStatus::fail_with_code(
+                UCode::UNAVAILABLE,
+                "first bootstrap failure",
+            )),
+            Ok(valid_snapshot()),
+        ]));
+
+        let mut streamer = UStreamer::new("refresh-success", 16, usubscription)
+            .await
+            .expect("startup should be non-fatal");
+
+        let returned_health = streamer
+            .refresh_subscriptions()
+            .await
+            .expect("refresh should succeed");
+        let accessor_health = streamer.subscription_sync_health();
+
+        assert_eq!(returned_health, accessor_health);
+        assert!(returned_health.last_attempt_at.is_some());
+        assert!(returned_health.last_success_at.is_some());
+        assert_eq!(returned_health.last_attempt_succeeded, Some(true));
+        assert_eq!(returned_health.previous_attempt_succeeded, Some(false));
+    }
+
+    #[tokio::test]
+    async fn failed_refresh_updates_health_visible_via_accessor() {
+        let usubscription: Arc<dyn USubscription> = Arc::new(SequencedUSubscription::new(vec![
+            Ok(valid_snapshot()),
+            Err(UStatus::fail_with_code(
+                UCode::UNAVAILABLE,
+                "refresh failure",
+            )),
+        ]));
+
+        let mut streamer = UStreamer::new("refresh-failure", 16, usubscription)
+            .await
+            .expect("startup should succeed");
+
+        assert!(streamer.refresh_subscriptions().await.is_err());
+
+        let health = streamer.subscription_sync_health();
+        assert!(health.last_attempt_at.is_some());
+        assert!(health.last_success_at.is_some());
+        assert_eq!(health.last_attempt_succeeded, Some(false));
+        assert_eq!(health.previous_attempt_succeeded, Some(true));
+    }
+
+    #[tokio::test]
+    async fn failed_refresh_apply_marks_attempt_failed_after_prior_success() {
+        let usubscription: Arc<dyn USubscription> = Arc::new(SequencedUSubscription::new(vec![
+            Ok(valid_snapshot()),
+            Ok(invalid_snapshot_missing_topic()),
+        ]));
+
+        let mut streamer = UStreamer::new("refresh-apply-failure", 16, usubscription)
+            .await
+            .expect("startup should succeed");
+
+        let refresh_result = streamer.refresh_subscriptions().await;
+        assert!(refresh_result.is_err());
+
+        let health = streamer.subscription_sync_health();
+        assert_eq!(health.last_attempt_succeeded, Some(false));
+        assert_eq!(health.previous_attempt_succeeded, Some(true));
+        assert!(health.last_success_at.is_some());
     }
 }

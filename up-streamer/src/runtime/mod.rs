@@ -6,14 +6,16 @@
 //! ```
 //! use std::sync::Arc;
 //! use up_streamer::UStreamer;
+//! use up_rust::core::usubscription::USubscription;
 //! use usubscription_static_file::USubscriptionStaticFile;
 //!
 //! // Runtime adapters are internal helpers and should not carry route policy.
-//! let usubscription = Arc::new(USubscriptionStaticFile::new(
+//! # tokio::runtime::Runtime::new().unwrap().block_on(async {
+//! let usubscription: Arc<dyn USubscription> = Arc::new(USubscriptionStaticFile::new(
 //!     "../utils/usubscription-static-file/static-configs/testdata.json".to_string(),
 //! ));
-//! let _streamer = UStreamer::new("runtime-doc", 16, usubscription).unwrap();
+//! let _streamer = UStreamer::new("runtime-doc", 16, usubscription).await.unwrap();
+//! # });
 //! ```
 
-pub(crate) mod subscription_runtime;
 pub(crate) mod worker_runtime;

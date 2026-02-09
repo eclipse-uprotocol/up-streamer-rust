@@ -24,6 +24,8 @@ license.workspace = true
 [dependencies]
 async-trait = "0.1.80"
 serde_json = { version = "1.0.111" }
-subscription-cache = {path="../../subscription-cache"}
 up-rust = { workspace = true, features = ["usubscription"] }
 tracing = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true }

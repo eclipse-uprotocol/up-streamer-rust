@@ -7,6 +7,7 @@
 //! ```
 //! use std::sync::Arc;
 //! use async_trait::async_trait;
+//! use up_rust::core::usubscription::USubscription;
 //! use up_rust::{UCode, UListener, UMessage, UStatus, UTransport, UUri};
 //! use up_streamer::{Endpoint, UStreamer};
 //! use usubscription_static_file::USubscriptionStaticFile;
@@ -50,10 +51,10 @@
 //! # }
 //! #
 //! # tokio::runtime::Runtime::new().unwrap().block_on(async {
-//! let usubscription = Arc::new(USubscriptionStaticFile::new(
+//! let usubscription: Arc<dyn USubscription> = Arc::new(USubscriptionStaticFile::new(
 //!     "../utils/usubscription-static-file/static-configs/testdata.json".to_string(),
 //! ));
-//! let mut streamer = UStreamer::new("data-plane-doc", 16, usubscription).unwrap();
+//! let mut streamer = UStreamer::new("data-plane-doc", 16, usubscription).await.unwrap();
 //! let ingress_transport: Arc<dyn UTransport> = Arc::new(MockTransport);
 //! let egress_transport: Arc<dyn UTransport> = Arc::new(MockTransport);
 //! let ingress = Endpoint::new("ingress", "authority-a", ingress_transport);

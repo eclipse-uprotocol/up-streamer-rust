@@ -13,13 +13,14 @@
 
 mod config;
 
-use crate::config::Config;
+use crate::config::{Config, SubscriptionProviderMode};
 use clap::Parser;
 use std::fs::File;
 use std::io::Read;
 use std::sync::Arc;
 use std::{env, thread};
 use tracing::trace;
+use up_rust::core::usubscription::USubscription;
 use up_rust::{UCode, UStatus, UTransport, UUri};
 use up_streamer::{Endpoint, UStreamer};
 use up_transport_vsomeip::UPTransportVsomeip;
@@ -56,8 +57,17 @@ async fn main() -> Result<(), UStatus> {
         )
     })?;
 
-    let subscription_path = config.usubscription_config.file_path;
-    let usubscription = Arc::new(USubscriptionStaticFile::new(subscription_path));
+    let usubscription: Arc<dyn USubscription> = match config.usubscription_config.mode {
+        SubscriptionProviderMode::StaticFile => Arc::new(USubscriptionStaticFile::new(
+            config.usubscription_config.file_path.clone(),
+        )),
+        SubscriptionProviderMode::LiveUsubscription => {
+            return Err(UStatus::fail_with_code(
+                    UCode::UNIMPLEMENTED,
+                    "live_usubscription mode is reserved in this phase; live runtime integration is deferred (see reports/usubscription-decoupled-pubsub-migration/05-live-integration-deferred.md)",
+                ));
+        }
+    };
 
     // Start the streamer instance.
     let mut streamer = UStreamer::new(
@@ -65,6 +75,7 @@ async fn main() -> Result<(), UStatus> {
         config.up_streamer_config.message_queue_size,
         usubscription,
     )
+    .await
     .expect("Failed to create uStreamer");
 
     let streamer_uuri = UUri::try_from_parts(
@@ -139,13 +150,13 @@ async fn main() -> Result<(), UStatus> {
 
     // Here we tell the streamer to forward any zenoh messages to the someip endpoint
     streamer
-        .add_forwarding_rule(zenoh_endpoint.clone(), someip_endpoint.clone())
+        .add_route(zenoh_endpoint.clone(), someip_endpoint.clone())
         .await
         .expect("Could not add zenoh -> someip forwarding rule");
 
     // And here we set up the forwarding in the other direction.
     streamer
-        .add_forwarding_rule(someip_endpoint.clone(), zenoh_endpoint.clone())
+        .add_route(someip_endpoint.clone(), zenoh_endpoint.clone())
         .await
         .expect("Could not add someip -> zenoh forwarding rule");
 

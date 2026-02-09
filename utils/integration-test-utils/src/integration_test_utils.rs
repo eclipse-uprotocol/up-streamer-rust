@@ -250,15 +250,18 @@ async fn poll_for_new_command(
     }
 }
 
-#[allow(clippy::too_many_arguments)]
+struct SendMessageContext<'a> {
+    active_connection_listing: &'a ActiveConnections,
+    sent_messages: &'a mut Vec<UMessage>,
+    number_of_sends: &'a Arc<AtomicU64>,
+}
+
 async fn send_message_set(
     client: &UPClientFoo,
     name: &str,
     msg_type: &str,
     msg_set: &mut [UMessage],
-    active_connection_listing: &ActiveConnections,
-    sent_messages: &mut Vec<UMessage>,
-    number_of_sends: Arc<AtomicU64>,
+    context: &mut SendMessageContext<'_>,
 ) {
     for (index, msg) in &mut msg_set.iter_mut().enumerate() {
         if let Some(attributes) = msg.attributes.as_mut() {
@@ -274,13 +277,15 @@ async fn send_message_set(
         let send_res = client.send(msg.clone()).await;
         if send_res.is_err() {
             error!("Unable to send from client: {}", &name);
-        } else if !active_connection_listing.is_empty() && active_connection_listing[index] {
-            sent_messages.push(msg.clone());
-            number_of_sends.fetch_add(1, Ordering::SeqCst);
+        } else if !context.active_connection_listing.is_empty()
+            && context.active_connection_listing[index]
+        {
+            context.sent_messages.push(msg.clone());
+            context.number_of_sends.fetch_add(1, Ordering::SeqCst);
             debug!(
                 "{} after {msg_type} send, we have sent: {}",
                 &name,
-                number_of_sends.load(Ordering::SeqCst)
+                context.number_of_sends.load(Ordering::SeqCst)
             );
         }
     }
@@ -329,14 +334,18 @@ pub async fn run_client(
 
                 debug!("-----------------------------------------------------------------------");
 
+                let mut send_context = SendMessageContext {
+                    active_connection_listing: &active_connection_listing,
+                    sent_messages: &mut sent_messages,
+                    number_of_sends: &client_history.number_of_sends,
+                };
+
                 send_message_set(
                     &client,
                     &client_configuration.name,
                     "Notification",
                     &mut client_messages.notification_msgs,
-                    &active_connection_listing,
-                    &mut sent_messages,
-                    client_history.number_of_sends.clone(),
+                    &mut send_context,
                 )
                 .await;
                 send_message_set(
@@ -344,9 +353,7 @@ pub async fn run_client(
                     &client_configuration.name,
                     "Request",
                     &mut client_messages.request_msgs,
-                    &active_connection_listing,
-                    &mut sent_messages,
-                    client_history.number_of_sends.clone(),
+                    &mut send_context,
                 )
                 .await;
                 send_message_set(
@@ -354,9 +361,7 @@ pub async fn run_client(
                     &client_configuration.name,
                     "Response",
                     &mut client_messages.response_msgs,
-                    &active_connection_listing,
-                    &mut sent_messages,
-                    client_history.number_of_sends.clone(),
+                    &mut send_context,
                 )
                 .await;
 

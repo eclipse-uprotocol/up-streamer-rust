@@ -13,13 +13,14 @@
 
 mod config;
 
-use crate::config::Config;
+use crate::config::{Config, SubscriptionProviderMode};
 use clap::Parser;
 use std::io::Read;
 use std::sync::Arc;
 use std::thread;
 use std::{collections::HashMap, fs::File};
 use tracing::info;
+use up_rust::core::usubscription::USubscription;
 use up_rust::{UCode, UStatus, UTransport};
 use up_streamer::{Endpoint, UStreamer};
 use up_transport_mqtt5::{Mqtt5Transport, Mqtt5TransportOptions, MqttClientOptions};
@@ -59,8 +60,17 @@ async fn main() -> Result<(), UStatus> {
     })?;
     config.transports.mqtt.load_mqtt_details().unwrap();
 
-    let subscription_path = config.usubscription_config.file_path;
-    let usubscription = Arc::new(USubscriptionStaticFile::new(subscription_path));
+    let usubscription: Arc<dyn USubscription> = match config.usubscription_config.mode {
+        SubscriptionProviderMode::StaticFile => Arc::new(USubscriptionStaticFile::new(
+            config.usubscription_config.file_path.clone(),
+        )),
+        SubscriptionProviderMode::LiveUsubscription => {
+            return Err(UStatus::fail_with_code(
+                    UCode::UNIMPLEMENTED,
+                    "live_usubscription mode is reserved in this phase; live runtime integration is deferred (see reports/usubscription-decoupled-pubsub-migration/05-live-integration-deferred.md)",
+                ));
+        }
+    };
 
     // Start the streamer instance.
     let mut streamer = UStreamer::new(
@@ -68,6 +78,7 @@ async fn main() -> Result<(), UStatus> {
         config.up_streamer_config.message_queue_size,
         usubscription,
     )
+    .await
     .expect("Failed to create uStreamer");
 
     let mut endpoints: HashMap<String, Endpoint> = HashMap::new();
@@ -162,7 +173,7 @@ async fn main() -> Result<(), UStatus> {
             let left_endpoint = endpoints.get(&zenoh_endpoint.endpoint).unwrap();
             let right_endpoint = endpoints.get(&forwarding).unwrap();
             streamer
-                .add_forwarding_rule(left_endpoint.to_owned(), right_endpoint.to_owned())
+                .add_route(left_endpoint.to_owned(), right_endpoint.to_owned())
                 .await
                 .expect("Could not add forwarding rule from {zenoh.endpoint} to {forwarding}");
         }
@@ -174,7 +185,7 @@ async fn main() -> Result<(), UStatus> {
             let left_endpoint = endpoints.get(&mqtt5_endpoint.endpoint).unwrap();
             let right_endpoint = endpoints.get(&forwarding).unwrap();
             streamer
-                .add_forwarding_rule(left_endpoint.to_owned(), right_endpoint.to_owned())
+                .add_route(left_endpoint.to_owned(), right_endpoint.to_owned())
                 .await
                 .expect("Could not add forwarding rule from {mqtt.endpoint} to {forwarding}");
         }
