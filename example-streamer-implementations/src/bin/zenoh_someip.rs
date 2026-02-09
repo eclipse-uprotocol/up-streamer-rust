@@ -23,9 +23,8 @@ use std::{env, thread};
 use up_rust::{UCode, UStatus, UTransport, UUri};
 use up_streamer::{Endpoint, UStreamer};
 use up_transport_vsomeip::UPTransportVsomeip;
-use up_transport_zenoh::UPTransportZenoh;
+use up_transport_zenoh::{zenoh_config::Config as ZenohConfig, UPTransportZenoh};
 use usubscription_static_file::USubscriptionStaticFile;
-use zenoh::config::Config as ZenohConfig;
 
 #[derive(Parser)]
 #[command()]
@@ -81,7 +80,10 @@ async fn main() -> Result<(), UStatus> {
     let zenoh_config = ZenohConfig::from_file(config.zenoh_transport_config.config_file).unwrap();
 
     let zenoh_transport: Arc<dyn UTransport> = Arc::new(
-        UPTransportZenoh::new(zenoh_config, streamer_uuri)
+        UPTransportZenoh::builder(config.streamer_uuri.authority.clone())
+            .expect("Unable to create Zenoh transport builder")
+            .with_config(zenoh_config)
+            .build()
             .await
             .expect("Unable to initialize Zenoh UTransport"),
     );

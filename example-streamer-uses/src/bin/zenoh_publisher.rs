@@ -20,10 +20,12 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 use up_rust::{UMessageBuilder, UStatus, UTransport, UUri};
-use up_transport_zenoh::UPTransportZenoh;
-use zenoh::config::{Config, EndPoint};
+use up_transport_zenoh::{
+    zenoh_config::{Config, EndPoint},
+    UPTransportZenoh,
+};
 
-const PUB_TOPIC_AUTHORITY: &str = "authority_B";
+const PUB_TOPIC_AUTHORITY: &str = "authority-b";
 const PUB_TOPIC_UE_ID: u32 = 0x3039;
 const PUB_TOPIC_UE_VERSION_MAJOR: u8 = 1;
 const PUB_TOPIC_RESOURCE_ID: u16 = 0x8001;
@@ -69,9 +71,12 @@ async fn main() -> Result<(), UStatus> {
             .expect("Unable to set Zenoh Config");
     }
 
-    let publisher_uri: String = (&publisher_uuri()).into();
+    let publisher_uuri = publisher_uuri();
     let publisher: Arc<dyn UTransport> = Arc::new(
-        UPTransportZenoh::new(zenoh_config, publisher_uri)
+        UPTransportZenoh::builder(publisher_uuri.authority_name())
+            .expect("Unable to create Zenoh transport builder")
+            .with_config(zenoh_config)
+            .build()
             .await
             .unwrap(),
     );

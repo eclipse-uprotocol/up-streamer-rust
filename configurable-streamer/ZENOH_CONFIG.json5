@@ -3,7 +3,7 @@
 // https://github.com/eclipse-zenoh/zenoh/blob/main/DEFAULT_CONFIG.json5
 {
   mode: "router",
-  connect: {
+  listen: {
     endpoints: ["tcp/0.0.0.0:7447"],
   },
    scouting: {

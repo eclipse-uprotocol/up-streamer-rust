@@ -631,7 +631,6 @@ impl UStreamer {
         // TODO: We need to form a FetchSubscriptionsRequest and send over host transport
         let mut fetch_request = FetchSubscriptionsRequest {
             request: None,
-            offset: None,
             ..Default::default()
         };
         fetch_request.set_subscriber(subscriber_info);

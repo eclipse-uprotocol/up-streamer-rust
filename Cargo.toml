@@ -24,7 +24,7 @@ members = [
 ]
 
 [workspace.package]
-rust-version = "1.82.0"
+rust-version = "1.88"
 version = "0.1.0"
 repository = "https://github.com/eclipse-uprotocol/up-streamer-rust"
 homepage = "https://github.com/eclipse-uprotocol"
@@ -52,10 +52,10 @@ tokio = { version = "1.44", default-features = false, features = [
     "macros",
 ] }
 protobuf = { version = "3.7.2", features = ["with-bytes"] }
-up-rust = { version = "0.5.0", default-features = false }
-up-transport-zenoh = { version = "0.6.0", features = ["zenoh-unstable"] }
-up-transport-vsomeip = { git = "https://github.com/eclipse-uprotocol/up-transport-vsomeip-rust", default-features = false }
-up-transport-mqtt5 = { git = "https://github.com/eclipse-uprotocol/up-transport-mqtt5-rust" }
+up-rust = { version = "0.9", default-features = false }
+up-transport-zenoh = { version = "0.9.0" }
+up-transport-vsomeip = { git = "https://github.com/eclipse-uprotocol/up-transport-vsomeip-rust", rev = "278ab26415559d6cb61f40facd21de822032cc83", default-features = false }
+up-transport-mqtt5 = { version = "0.4.0" }
 zenoh = { version = "1.2.1", features = [
     "default",
     "plugins",

@@ -21,7 +21,7 @@ use std::time::Duration;
 use up_rust::{UMessageBuilder, UStatus, UTransport, UUri};
 use up_transport_mqtt5::{Mqtt5Transport, Mqtt5TransportOptions, MqttClientOptions};
 
-const PUB_TOPIC_AUTHORITY: &str = "authority_A";
+const PUB_TOPIC_AUTHORITY: &str = "authority-a";
 const PUB_TOPIC_UE_ID: u32 = 0x5BA0;
 const PUB_TOPIC_UE_VERSION_MAJOR: u8 = 1;
 const PUB_TOPIC_RESOURCE_ID: u16 = 0x8001;

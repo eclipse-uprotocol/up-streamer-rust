@@ -20,15 +20,17 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::thread;
 use up_rust::{UListener, UStatus, UTransport, UUri};
-use up_transport_zenoh::UPTransportZenoh;
-use zenoh::config::{Config, EndPoint};
+use up_transport_zenoh::{
+    zenoh_config::{Config, EndPoint},
+    UPTransportZenoh,
+};
 
-const PUB_TOPIC_AUTHORITY: &str = "authority_A";
+const PUB_TOPIC_AUTHORITY: &str = "authority-a";
 const PUB_TOPIC_UE_ID: u32 = 0x5BA0;
 const PUB_TOPIC_UE_VERSION_MAJOR: u8 = 1;
 const PUB_TOPIC_RESOURCE_ID: u16 = 0x8001;
 
-const SUB_TOPIC_AUTHORITY: &str = "authority_B";
+const SUB_TOPIC_AUTHORITY: &str = "authority-b";
 const SUB_TOPIC_UE_ID: u32 = 0x5BB0;
 const SUB_TOPIC_UE_VERSION_MAJOR: u8 = 1;
 
@@ -73,9 +75,12 @@ async fn main() -> Result<(), UStatus> {
             .expect("Unable to set Zenoh Config");
     }
 
-    let subscriber_uri: String = (&subscriber_uuri()).into();
+    let subscriber_uuri = subscriber_uuri();
     let subscriber: Arc<dyn UTransport> = Arc::new(
-        UPTransportZenoh::new(zenoh_config, subscriber_uri)
+        UPTransportZenoh::builder(subscriber_uuri.authority_name())
+            .expect("Unable to create Zenoh transport builder")
+            .with_config(zenoh_config)
+            .build()
             .await
             .unwrap(),
     );

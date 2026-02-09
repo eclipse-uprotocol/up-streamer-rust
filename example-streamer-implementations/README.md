@@ -76,7 +76,7 @@ cargo run -bin zenoh_mqtt --features="zenoh-transport mqtt-transport" -- --confi
 
 This starts the streamer which should now be idle. As soon as a client tries to connect with the streamer, the connection will be logged.
 The streamer is set to have Zenoh as its "host protocol" or "host transport". This means that the streamer lives in the same component as the Zenoh transport, and shares its authority.
-In this setup "authority_B" is the authority of the Zenoh component (in this example the ECU), "authority_A" is the authority of the MQTT component (i.e. the cloud).
+In this setup "authority-b" is the authority of the Zenoh component (in this example the ECU), "authority-a" is the authority of the MQTT component (i.e. the cloud).
 
 ### Running the Entities
 
@@ -121,7 +121,7 @@ Make sure that you have set the required environment variables for the someip tr
 
 This starts the streamer which should now be idle. As soon as a client tries to connect with the streamer, the connection will be logged.
 The streamer is set to have Zenoh as its "host protocol" or "host transport". This means that the streamer lives in the same component as the Zenoh transport, and shares its authority.
-In this setup "authority_B" is the authority of the Zenoh component (in this example the ECU), "authority_A" is the authority of the SOME/IP component (i.e. the mechatronics component).
+In this setup "authority-b" is the authority of the Zenoh component (in this example the ECU), "authority-a" is the authority of the SOME/IP component (i.e. the mechatronics component).
 
 ### Running the Entities
 

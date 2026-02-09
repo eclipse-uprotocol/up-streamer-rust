@@ -23,19 +23,19 @@ use std::time::Duration;
 use up_rust::{UListener, UMessageBuilder, UStatus, UTransport, UUri};
 use up_transport_vsomeip::UPTransportVsomeip;
 
-const SERVICE_AUTHORITY: &str = "authority_B";
+const SERVICE_AUTHORITY: &str = "authority-b";
 const SERVICE_UE_ID: u32 = 0x1236;
 const SERVICE_UE_VERSION_MAJOR: u8 = 1;
 const SERVICE_RESOURCE_ID: u16 = 0x0421;
 
-const CLIENT_AUTHORITY: &str = "authority_A";
+const CLIENT_AUTHORITY: &str = "authority-a";
 const CLIENT_UE_ID: u32 = 0x5678;
 const CLIENT_UE_VERSION_MAJOR: u8 = 1;
 const CLIENT_RESOURCE_ID: u16 = 0;
 
 const REQUEST_TTL: u32 = 1000;
 
-const REMOTE_AUTHORITY: &str = "authority_B";
+const REMOTE_AUTHORITY: &str = "authority-b";
 
 fn client_uuri() -> UUri {
     UUri::try_from_parts(CLIENT_AUTHORITY, CLIENT_UE_ID, CLIENT_UE_VERSION_MAJOR, 0).unwrap()
