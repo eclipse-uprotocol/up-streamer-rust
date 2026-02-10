@@ -927,6 +927,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "criterion-guardrail"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "clap",
+ "csv",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "walkdir",
+]
+
+[[package]]
 name = "criterion-plot"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

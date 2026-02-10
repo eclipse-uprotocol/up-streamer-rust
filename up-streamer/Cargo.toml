@@ -37,3 +37,7 @@ futures = { workspace = true }
 integration-test-utils = { path = "../utils/integration-test-utils" }
 tokio-condvar = { version = "0.3.0" }
 usubscription-static-file = { path = "../utils/usubscription-static-file" }
+
+[[bench]]
+name = "streamer_criterion"
+harness = false

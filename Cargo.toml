@@ -16,6 +16,7 @@ members = [
     "utils/hello-world-protos",
     "utils/integration-test-utils",
     "example-streamer-implementations",
+    "utils/criterion-guardrail",
     "configurable-streamer",
     "up-linux-streamer-plugin",
     "up-streamer",

@@ -11,7 +11,6 @@ use std::sync::Arc;
 use tokio::sync::broadcast;
 use up_rust::core::usubscription::{FetchSubscriptionsResponse, SubscriberInfo, Subscription};
 use up_rust::{UCode, UListener, UMessage, UStatus, UTransport, UUri};
-
 fn subscription(topic: UUri, subscriber: UUri) -> Subscription {
     Subscription {
         topic: Some(topic).into(),
