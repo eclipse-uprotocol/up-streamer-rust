@@ -15,6 +15,7 @@ name: Lint and Test - Bundled
 
 env:
   VSOMEIP_INSTALL_PATH: vsomeip-install
+  OPENSSL_NO_VENDOR: "1"
 
 on:
   push:
@@ -54,58 +55,124 @@ jobs:
           echo "arch_specific_cpp_stdlib_path=$ARCH_SPECIFIC_CPP_STDLIB_PATH" >> $GITHUB_OUTPUT
           echo "generic_cpp_stdlib_path=$GENERIC_CPP_STDLIB_PATH" >> $GITHUB_OUTPUT
 
-  lint:
-    name: Lint
+  lint_base:
+    name: Lint (base build+clippy)
     runs-on: ubuntu-22.04
     needs: set-env
 
     env:
-       ARCH_SPECIFIC_CPP_STDLIB_PATH: ${{ needs.set-env.outputs.arch_specific_cpp_stdlib_path }}
-       GENERIC_CPP_STDLIB_PATH: ${{ needs.set-env.outputs.generic_cpp_stdlib_path }}
+      ARCH_SPECIFIC_CPP_STDLIB_PATH: ${{ needs.set-env.outputs.arch_specific_cpp_stdlib_path }}
+      GENERIC_CPP_STDLIB_PATH: ${{ needs.set-env.outputs.generic_cpp_stdlib_path }}
 
     steps:
       - uses: actions/checkout@v4
 
       - name: Install C++ dependencies
-        run: sudo apt-get install -y build-essential cmake libboost-all-dev libclang-dev
+        run: sudo apt-get install -y build-essential cmake libboost-all-dev libclang-dev pkg-config libssl-dev
 
       - name: Set environment variables
-        run: |
-          echo "VSOMEIP_INSTALL_PATH=${{ github.workspace }}/${{ env.VSOMEIP_INSTALL_PATH }}" >> $GITHUB_ENV
-          env
-
-      - name: Print environment variables for debugging
-        run: |
-          echo "VSOMEIP_INSTALL_PATH: ${{ env.VSOMEIP_INSTALL_PATH }}"
-          echo "GENERIC_CPP_STDLIB_PATH: ${{ env.GENERIC_CPP_STDLIB_PATH }}"
-          echo "ARCH_SPECIFIC_CPP_STDLIB_PATH: ${{ env.ARCH_SPECIFIC_CPP_STDLIB_PATH }}"
-          env
+        run: echo "VSOMEIP_INSTALL_PATH=${{ github.workspace }}/${{ env.VSOMEIP_INSTALL_PATH }}" >> $GITHUB_ENV
 
       - name: Ensure vsomeip install path exists
-        run: |
-          mkdir -p ${{ env.VSOMEIP_INSTALL_PATH }}
-          ls -l
+        run: mkdir -p "${{ env.VSOMEIP_INSTALL_PATH }}"
 
       - name: Install stable toolchain
         run: |
           rustup show
-          rustup component add rustfmt clippy
+          rustup component add clippy
+
+      - name: Cache Rust dependencies and build outputs
+        uses: swatinem/rust-cache@v2
+        with:
+          shared-key: ${{ github.workflow }}-${{ github.ref }}
+          save-if: ${{ github.job == 'lint_feature' }}
 
       - name: Build the project without Zenoh & vsomeip transports
-        working-directory: ${{github.workspace}}
+        working-directory: ${{ github.workspace }}
         run: cargo build
+
       - name: cargo clippy without Zenoh & vsomeip transports
-        working-directory: ${{github.workspace}}
+        working-directory: ${{ github.workspace }}
         run: cargo clippy --all-targets -- -W warnings -D warnings
-      - name: Build the project with Zenoh & vsomeip transports (and thus streamer references)
-        working-directory: ${{github.workspace}}
-        run: cargo build --features vsomeip-transport,bundled-vsomeip,zenoh-transport,mqtt-transport
+
+  lint_feature:
+    name: Lint (feature build+clippy)
+    runs-on: ubuntu-22.04
+    needs: set-env
+
+    env:
+      ARCH_SPECIFIC_CPP_STDLIB_PATH: ${{ needs.set-env.outputs.arch_specific_cpp_stdlib_path }}
+      GENERIC_CPP_STDLIB_PATH: ${{ needs.set-env.outputs.generic_cpp_stdlib_path }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install C++ dependencies
+        run: sudo apt-get install -y build-essential cmake libboost-all-dev libclang-dev pkg-config libssl-dev
+
+      - name: Set environment variables
+        run: echo "VSOMEIP_INSTALL_PATH=${{ github.workspace }}/${{ env.VSOMEIP_INSTALL_PATH }}" >> $GITHUB_ENV
+
+      - name: Ensure vsomeip install path exists
+        run: mkdir -p "${{ env.VSOMEIP_INSTALL_PATH }}"
+
+      - name: Install stable toolchain
+        run: |
+          rustup show
+          rustup component add clippy
+
+      - name: Cache Rust dependencies and build outputs
+        uses: swatinem/rust-cache@v2
+        with:
+          shared-key: ${{ github.workflow }}-${{ github.ref }}
+          save-if: ${{ github.job == 'lint_feature' }}
+
+      - name: Force rebuild bundled vsomeip artifacts
+        run: |
+          rm -rf "${VSOMEIP_INSTALL_PATH}"
+          rm -rf target/debug/build/vsomeip-sys-* target/debug/build/up-transport-vsomeip-*
+          cargo clean -p vsomeip-sys -p up-transport-vsomeip
+
       - name: cargo clippy with Zenoh & vsomeip transports (and thus streamer references)
-        working-directory: ${{github.workspace}}
-        run: cargo clippy --features vsomeip-transport,bundled-vsomeip,zenoh-transport,mqtt-transport --all-targets -- -W warnings -D warnings
+        working-directory: ${{ github.workspace }}
+        run: env -u VSOMEIP_INSTALL_PATH cargo clippy --features vsomeip-transport,bundled-vsomeip,zenoh-transport,mqtt-transport --all-targets -- -W warnings -D warnings
+
+  lint_fmt:
+    name: Lint (fmt)
+    runs-on: ubuntu-22.04
+    needs: set-env
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install stable toolchain
+        run: |
+          rustup show
+          rustup component add rustfmt
+
       - name: cargo fmt
-        working-directory: ${{github.workspace}}
+        working-directory: ${{ github.workspace }}
         run: cargo fmt -- --check
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-22.04
+    if: ${{ always() }}
+    needs:
+      - lint_base
+      - lint_feature
+      - lint_fmt
+
+    steps:
+      - name: Report lint job results
+        run: |
+          echo "lint_base=${{ needs.lint_base.result }}"
+          echo "lint_feature=${{ needs.lint_feature.result }}"
+          echo "lint_fmt=${{ needs.lint_fmt.result }}"
+
+      - name: Fail when any lint job failed
+        if: ${{ needs.lint_base.result != 'success' || needs.lint_feature.result != 'success' || needs.lint_fmt.result != 'success' }}
+        run: exit 1
 
   test:
     name: Test
@@ -120,8 +187,14 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
 
+      - name: Cache Rust dependencies and build outputs
+        uses: swatinem/rust-cache@v2
+        with:
+          shared-key: ${{ github.workflow }}-${{ github.ref }}
+          save-if: ${{ github.job == 'lint_feature' }}
+
       - name: Install C++ dependencies
-        run: sudo apt-get install -y build-essential cmake libboost-all-dev libclang-dev
+        run: sudo apt-get install -y build-essential cmake libboost-all-dev libclang-dev pkg-config libssl-dev
 
       - name: Set environment variables
         run: |
@@ -140,42 +213,15 @@ jobs:
         run: |
           echo "cache_key: ${{ env.CACHE_KEY }}"
 
-      - name: Install dependencies
-        run: |
-          cargo install cargo-tarpaulin
       - name: Show toolchain information
         working-directory: ${{github.workspace}}
         run: |
           rustup toolchain list
           cargo --version
-      - name: Run tests and report code coverage
+      - name: Run tests
         run: |
-          # enable nightly features so that we can also include Doctests
-          LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${VSOMEIP_INSTALL_PATH}/lib RUSTC_BOOTSTRAP=1 cargo tarpaulin -o xml -o lcov -o html --doc --tests -- --test-threads 1
-
-      - name: Upload coverage report (xml)
-        uses: actions/upload-artifact@v4
-        with:
-          name: Test Coverage Results (xml)
-          path: cobertura.xml
-
-      - name: Upload coverage report (lcov)
-        uses: actions/upload-artifact@v4
-        with:
-          name: Test Coverage Results (lcov)
-          path: lcov.info
-
-      - name: Upload coverage report (html)
-        uses: actions/upload-artifact@v4
-        with:
-          name: Test Coverage Results (html)
-          path: tarpaulin-report.html
-
-      # - name: Upload coverage report
-      #   uses: actions/upload-artifact@v4
-      #   with:
-      #     name: Code coverage report
-      #     path: cobertura.xml
+          LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${VSOMEIP_INSTALL_PATH}/lib cargo test --doc
+          LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${VSOMEIP_INSTALL_PATH}/lib cargo test --tests -- --test-threads 1
 
   build-docs:
     name: Build documentation
@@ -189,8 +235,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Cache Rust dependencies and build outputs
+        uses: swatinem/rust-cache@v2
+        with:
+          shared-key: ${{ github.workflow }}-${{ github.ref }}
+          save-if: ${{ github.job == 'lint_feature' }}
+
       - name: Install C++ dependencies
-        run: sudo apt-get install -y build-essential cmake libboost-all-dev libclang-dev
+        run: sudo apt-get install -y build-essential cmake libboost-all-dev libclang-dev pkg-config libssl-dev
 
       - name: Set environment variables
         run: |
@@ -212,4 +264,3 @@ jobs:
       - name: Create Documentation for up-linux-streamer
         working-directory: ${{github.workspace}}
         run: RUSTDOCFLAGS=-Dwarnings cargo doc -p up-linux-streamer --no-deps
-
