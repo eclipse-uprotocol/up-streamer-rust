@@ -2,6 +2,7 @@
 
 use crate::control_plane::transport_identity::TransportIdentityKey;
 use crate::data_plane::egress_worker::EgressRouteWorker;
+use crate::observability::{events, fields};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::broadcast::Sender;
@@ -9,9 +10,7 @@ use tokio::sync::Mutex;
 use tracing::{debug, warn};
 use up_rust::{UMessage, UTransport};
 
-const EGRESS_ROUTE_POOL_TAG: &str = "EgressRoutePool:";
-const EGRESS_ROUTE_POOL_FN_ATTACH_TAG: &str = "attach_route:";
-const EGRESS_ROUTE_POOL_FN_DETACH_TAG: &str = "detach_route:";
+const COMPONENT: &str = "egress_pool";
 
 /// Per-transport egress worker binding state.
 pub(crate) struct EgressRouteBinding {
@@ -39,22 +38,49 @@ impl EgressRoutePool {
     pub(crate) async fn attach_route(
         &mut self,
         out_transport: Arc<dyn UTransport>,
+        route_label: &str,
     ) -> Sender<Arc<UMessage>> {
         let out_transport_key = TransportIdentityKey::new(out_transport.clone());
 
         let mut egress_workers = self.workers.lock().await;
 
-        let slot = egress_workers.entry(out_transport_key).or_insert_with(|| {
-            debug!("{EGRESS_ROUTE_POOL_TAG}:{EGRESS_ROUTE_POOL_FN_ATTACH_TAG} Inserting...");
-            let (tx, rx) = tokio::sync::broadcast::channel(self.message_queue_size);
+        if let Some(slot) = egress_workers.get_mut(&out_transport_key) {
+            slot.ref_count += 1;
+            debug!(
+                event = events::EGRESS_WORKER_REUSE,
+                component = COMPONENT,
+                worker_id = slot.worker.worker_id(),
+                route_label,
+                ref_count = slot.ref_count,
+                "reused pooled egress worker"
+            );
+            return slot.sender.clone();
+        }
+
+        let (tx, rx) = tokio::sync::broadcast::channel(self.message_queue_size);
+        let worker = EgressRouteWorker::new(out_transport, rx);
+        let worker_id = worker.worker_id().to_string();
+        let sender = tx.clone();
+
+        egress_workers.insert(
+            out_transport_key,
             EgressRouteBinding {
-                ref_count: 0,
-                worker: EgressRouteWorker::new(out_transport, rx),
+                ref_count: 1,
+                worker,
                 sender: tx,
-            }
-        });
-        slot.ref_count += 1;
-        slot.sender.clone()
+            },
+        );
+
+        debug!(
+            event = events::EGRESS_WORKER_CREATE,
+            component = COMPONENT,
+            worker_id,
+            route_label,
+            ref_count = 1,
+            "created pooled egress worker"
+        );
+
+        sender
     }
 
     /// Detaches one route from an egress transport and drops worker state at refcount zero.
@@ -66,7 +92,12 @@ impl EgressRoutePool {
         let active_num = {
             let Some(slot) = egress_workers.get_mut(&out_transport_key) else {
                 warn!(
-                    "{EGRESS_ROUTE_POOL_TAG}:{EGRESS_ROUTE_POOL_FN_DETACH_TAG} no such out_transport_key"
+                    event = events::EGRESS_WORKER_REMOVE,
+                    component = COMPONENT,
+                    worker_id = fields::NONE,
+                    ref_count = 0,
+                    reason = "missing_transport_binding",
+                    "unable to detach missing egress worker"
                 );
                 return;
             };
@@ -79,12 +110,21 @@ impl EgressRoutePool {
             let removed = egress_workers.remove(&out_transport_key);
             if let Some(binding) = removed {
                 debug!(
-                    "{EGRESS_ROUTE_POOL_TAG}:{EGRESS_ROUTE_POOL_FN_DETACH_TAG} removed worker thread {:?}",
-                    binding.worker.thread_id()
+                    event = events::EGRESS_WORKER_REMOVE,
+                    component = COMPONENT,
+                    worker_id = binding.worker.worker_id(),
+                    ref_count = 0,
+                    worker_thread = binding.worker.runtime_thread(),
+                    "removed pooled egress worker"
                 );
             } else {
                 warn!(
-                    "{EGRESS_ROUTE_POOL_TAG}:{EGRESS_ROUTE_POOL_FN_DETACH_TAG} was none to remove"
+                    event = events::EGRESS_WORKER_REMOVE,
+                    component = COMPONENT,
+                    worker_id = fields::NONE,
+                    ref_count = 0,
+                    reason = "missing_transport_binding",
+                    "egress worker remove observed missing binding"
                 );
             }
         }
@@ -141,8 +181,8 @@ mod tests {
         let mut pool = EgressRoutePool::new(8);
         let transport: Arc<dyn UTransport> = Arc::new(NoopTransport);
 
-        let sender_a = pool.attach_route(transport.clone()).await;
-        let sender_b = pool.attach_route(transport).await;
+        let sender_a = pool.attach_route(transport.clone(), "route-a").await;
+        let sender_b = pool.attach_route(transport, "route-b").await;
 
         let workers = pool.workers.lock().await;
         assert_eq!(workers.len(), 1);
@@ -151,6 +191,7 @@ mod tests {
             .next()
             .expect("single egress worker binding");
         assert_eq!(slot.ref_count, 2);
+        assert!(!slot.worker.worker_id().is_empty());
         assert!(sender_a.same_channel(&sender_b));
     }
 
@@ -159,8 +200,8 @@ mod tests {
         let mut pool = EgressRoutePool::new(8);
         let transport: Arc<dyn UTransport> = Arc::new(NoopTransport);
 
-        pool.attach_route(transport.clone()).await;
-        pool.attach_route(transport.clone()).await;
+        pool.attach_route(transport.clone(), "route-a").await;
+        pool.attach_route(transport.clone(), "route-b").await;
 
         pool.detach_route(transport.clone()).await;
         assert_eq!(pool.workers.lock().await.len(), 1);

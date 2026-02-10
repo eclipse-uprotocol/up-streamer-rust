@@ -16,6 +16,7 @@ use crate::control_plane::route_table::RouteTable;
 use crate::data_plane::egress_pool::EgressRoutePool;
 use crate::data_plane::ingress_registry::IngressRouteRegistry;
 use crate::endpoint::Endpoint;
+use crate::observability::events;
 use crate::routing::subscription_directory::SubscriptionDirectory;
 use crate::subscription_sync_health::SubscriptionSyncHealth;
 use std::sync::Arc;
@@ -25,10 +26,7 @@ use up_rust::core::usubscription::{
 };
 use up_rust::{UCode, UStatus};
 
-const USTREAMER_TAG: &str = "UStreamer:";
-const USTREAMER_FN_NEW_TAG: &str = "new():";
-const USTREAMER_FN_ADD_ROUTE_TAG: &str = "add_route():";
-const USTREAMER_FN_DELETE_ROUTE_TAG: &str = "delete_route():";
+const COMPONENT: &str = "ustreamer";
 
 pub struct UStreamer {
     name: String,
@@ -47,14 +45,16 @@ impl UStreamer {
         message_queue_size: u16,
         usubscription: Arc<dyn USubscription>,
     ) -> Result<Self, UStatus> {
-        let name = format!("{USTREAMER_TAG}:{name}:");
+        let name = name.to_string();
         debug!(
-            "{}:{}:{} UStreamer created",
-            &name, USTREAMER_TAG, USTREAMER_FN_NEW_TAG
+            event = "ustreamer_create",
+            component = COMPONENT,
+            streamer_name = name.as_str(),
+            "UStreamer created"
         );
 
         let mut streamer = Self {
-            name: name.to_string(),
+            name,
             route_table: RouteTable::new(),
             egress_route_pool: EgressRoutePool::new(message_queue_size as usize),
             ingress_route_registry: IngressRouteRegistry::new(),
@@ -65,8 +65,11 @@ impl UStreamer {
 
         if let Err(err) = streamer.refresh_subscriptions().await {
             warn!(
-                "{}:{}:{} startup subscription bootstrap failed; deferred-refresh mode active: {}",
-                streamer.name, USTREAMER_TAG, USTREAMER_FN_NEW_TAG, err,
+                event = "subscription_bootstrap_failed",
+                component = COMPONENT,
+                streamer_name = streamer.name.as_str(),
+                err = %err,
+                "startup subscription bootstrap failed; deferred-refresh mode active"
             );
         }
 
@@ -128,79 +131,186 @@ impl UStreamer {
     #[inline(always)]
     fn fail_due_to_same_authority(
         &self,
-        action_tag: &str,
+        failure_event: &str,
+        route_label: &str,
         r#in: &Endpoint,
         out: &Endpoint,
+        action: &str,
     ) -> Result<(), UStatus> {
         let err = Err(UStatus::fail_with_code(
             UCode::INVALID_ARGUMENT,
             format!(
-                "{} are the same. Unable to delete.",
-                Self::route_label(r#in, out)
+                "{} are the same. Unable to {}.",
+                Self::route_label(r#in, out),
+                action,
             ),
         ));
         error!(
-            "{}:{}:{} route operation failed: {:?}",
-            self.name, USTREAMER_TAG, action_tag, err
+            event = failure_event,
+            component = COMPONENT,
+            streamer_name = self.name.as_str(),
+            route_label,
+            in_authority = r#in.authority.as_str(),
+            out_authority = out.authority.as_str(),
+            reason = "same_authority",
+            err = ?err,
+            "route operation failed"
         );
         err
     }
 
     /// Adds a unidirectional route between ingress and egress endpoints.
-    pub async fn add_route(&mut self, r#in: Endpoint, out: Endpoint) -> Result<(), UStatus> {
-        let route_label = Self::route_label(&r#in, &out);
+    pub async fn add_route_ref(
+        &mut self,
+        in_ep: &Endpoint,
+        out_ep: &Endpoint,
+    ) -> Result<(), UStatus> {
+        let route_label = Self::route_label(in_ep, out_ep);
         debug!(
-            "{}:{}:{} Adding route for {}",
-            self.name, USTREAMER_TAG, USTREAMER_FN_ADD_ROUTE_TAG, route_label
+            event = events::ROUTE_ADD_START,
+            component = COMPONENT,
+            streamer_name = self.name.as_str(),
+            route_label,
+            in_authority = in_ep.authority.as_str(),
+            out_authority = out_ep.authority.as_str(),
+            "adding route"
         );
 
-        let mut lifecycle = RouteLifecycle::new(
+        let lifecycle = RouteLifecycle::new(
             &self.route_table,
-            &mut self.egress_route_pool,
             &self.ingress_route_registry,
             &self.subscription_directory,
         );
 
-        match lifecycle.add_route(&r#in, &out, &route_label).await {
-            Ok(()) => Ok(()),
-            Err(AddRouteError::SameAuthority) => {
-                self.fail_due_to_same_authority(USTREAMER_FN_ADD_ROUTE_TAG, &r#in, &out)
+        match lifecycle
+            .add_route(&mut self.egress_route_pool, in_ep, out_ep, &route_label)
+            .await
+        {
+            Ok(()) => {
+                debug!(
+                    event = events::ROUTE_ADD_OK,
+                    component = COMPONENT,
+                    streamer_name = self.name.as_str(),
+                    route_label,
+                    in_authority = in_ep.authority.as_str(),
+                    out_authority = out_ep.authority.as_str(),
+                    "route add succeeded"
+                );
+                Ok(())
             }
-            Err(AddRouteError::AlreadyExists) => Err(UStatus::fail_with_code(
-                UCode::ALREADY_EXISTS,
-                "already exists",
-            )),
-            Err(AddRouteError::FailedToRegisterIngressRoute(err)) => Err(UStatus::fail_with_code(
-                UCode::INVALID_ARGUMENT,
-                err.to_string(),
-            )),
+            Err(AddRouteError::SameAuthority) => self.fail_due_to_same_authority(
+                events::ROUTE_ADD_FAILED,
+                &route_label,
+                in_ep,
+                out_ep,
+                "add",
+            ),
+            Err(AddRouteError::AlreadyExists) => {
+                error!(
+                    event = events::ROUTE_ADD_FAILED,
+                    component = COMPONENT,
+                    streamer_name = self.name.as_str(),
+                    route_label,
+                    in_authority = in_ep.authority.as_str(),
+                    out_authority = out_ep.authority.as_str(),
+                    reason = "already_exists",
+                    "route add failed because route already exists"
+                );
+                Err(UStatus::fail_with_code(
+                    UCode::ALREADY_EXISTS,
+                    "already exists",
+                ))
+            }
+            Err(AddRouteError::FailedToRegisterIngressRoute(err)) => {
+                error!(
+                    event = events::ROUTE_ADD_FAILED,
+                    component = COMPONENT,
+                    streamer_name = self.name.as_str(),
+                    route_label,
+                    in_authority = in_ep.authority.as_str(),
+                    out_authority = out_ep.authority.as_str(),
+                    reason = "ingress_registration_failed",
+                    err = %err,
+                    "route add failed during ingress registration"
+                );
+                Err(UStatus::fail_with_code(
+                    UCode::INVALID_ARGUMENT,
+                    err.to_string(),
+                ))
+            }
+        }
+    }
+
+    /// Adds a unidirectional route between ingress and egress endpoints.
+    pub async fn add_route(&mut self, r#in: Endpoint, out: Endpoint) -> Result<(), UStatus> {
+        self.add_route_ref(&r#in, &out).await
+    }
+
+    /// Deletes a previously registered unidirectional route.
+    pub async fn delete_route_ref(
+        &mut self,
+        in_ep: &Endpoint,
+        out_ep: &Endpoint,
+    ) -> Result<(), UStatus> {
+        let route_label = Self::route_label(in_ep, out_ep);
+        debug!(
+            event = events::ROUTE_DELETE_START,
+            component = COMPONENT,
+            streamer_name = self.name.as_str(),
+            route_label,
+            in_authority = in_ep.authority.as_str(),
+            out_authority = out_ep.authority.as_str(),
+            "deleting route"
+        );
+
+        let lifecycle = RouteLifecycle::new(
+            &self.route_table,
+            &self.ingress_route_registry,
+            &self.subscription_directory,
+        );
+
+        match lifecycle
+            .remove_route(&mut self.egress_route_pool, in_ep, out_ep, &route_label)
+            .await
+        {
+            Ok(()) => {
+                debug!(
+                    event = events::ROUTE_DELETE_OK,
+                    component = COMPONENT,
+                    streamer_name = self.name.as_str(),
+                    route_label,
+                    in_authority = in_ep.authority.as_str(),
+                    out_authority = out_ep.authority.as_str(),
+                    "route delete succeeded"
+                );
+                Ok(())
+            }
+            Err(RemoveRouteError::SameAuthority) => self.fail_due_to_same_authority(
+                events::ROUTE_DELETE_FAILED,
+                &route_label,
+                in_ep,
+                out_ep,
+                "delete",
+            ),
+            Err(RemoveRouteError::NotFound) => {
+                error!(
+                    event = events::ROUTE_DELETE_FAILED,
+                    component = COMPONENT,
+                    streamer_name = self.name.as_str(),
+                    route_label,
+                    in_authority = in_ep.authority.as_str(),
+                    out_authority = out_ep.authority.as_str(),
+                    reason = "not_found",
+                    "route delete failed because route was not found"
+                );
+                Err(UStatus::fail_with_code(UCode::NOT_FOUND, "not found"))
+            }
         }
     }
 
     /// Deletes a previously registered unidirectional route.
     pub async fn delete_route(&mut self, r#in: Endpoint, out: Endpoint) -> Result<(), UStatus> {
-        let route_label = Self::route_label(&r#in, &out);
-        debug!(
-            "{}:{}:{} Deleting route for {}",
-            self.name, USTREAMER_TAG, USTREAMER_FN_DELETE_ROUTE_TAG, route_label
-        );
-
-        let mut lifecycle = RouteLifecycle::new(
-            &self.route_table,
-            &mut self.egress_route_pool,
-            &self.ingress_route_registry,
-            &self.subscription_directory,
-        );
-
-        match lifecycle.remove_route(&r#in, &out).await {
-            Ok(()) => Ok(()),
-            Err(RemoveRouteError::SameAuthority) => {
-                self.fail_due_to_same_authority(USTREAMER_FN_DELETE_ROUTE_TAG, &r#in, &out)
-            }
-            Err(RemoveRouteError::NotFound) => {
-                Err(UStatus::fail_with_code(UCode::NOT_FOUND, "not found"))
-            }
-        }
+        self.delete_route_ref(&r#in, &out).await
     }
 }
 

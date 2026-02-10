@@ -1,13 +1,31 @@
 //! Ingress-route listener adapter that receives messages and feeds egress dispatch.
 
+use crate::observability::{events, fields};
 use async_trait::async_trait;
 use std::sync::Arc;
 use tokio::sync::broadcast::Sender;
-use tracing::{debug, error};
+use tracing::{debug, error, Level};
 use up_rust::{UListener, UMessage, UPayloadFormat};
 
-const INGRESS_ROUTE_LISTENER_TAG: &str = "IngressRouteListener:";
-const INGRESS_ROUTE_LISTENER_FN_ON_RECEIVE_TAG: &str = "on_receive():";
+const COMPONENT: &str = "ingress_listener";
+
+struct FormattedMessageFields {
+    msg_id: String,
+    msg_type: String,
+    src: String,
+    sink: String,
+}
+
+impl FormattedMessageFields {
+    fn from_message(message: &UMessage) -> Self {
+        Self {
+            msg_id: fields::format_message_id(message),
+            msg_type: fields::format_message_type(message),
+            src: fields::format_source_uri(message),
+            sink: fields::format_sink_uri(message),
+        }
+    }
+}
 
 #[derive(Clone)]
 pub(crate) struct IngressRouteListener {
@@ -27,31 +45,49 @@ impl IngressRouteListener {
 #[async_trait]
 impl UListener for IngressRouteListener {
     async fn on_receive(&self, msg: UMessage) {
-        debug!(
-            "{}:{}:{} Received message: {:?}",
-            self.route_id,
-            INGRESS_ROUTE_LISTENER_TAG,
-            INGRESS_ROUTE_LISTENER_FN_ON_RECEIVE_TAG,
-            &msg
-        );
+        let route_label = self.route_id.as_str();
+        let formatted_fields =
+            tracing::enabled!(Level::DEBUG).then(|| FormattedMessageFields::from_message(&msg));
+
+        if let Some(fields) = formatted_fields.as_ref() {
+            debug!(
+                event = events::INGRESS_RECEIVE,
+                component = COMPONENT,
+                route_label,
+                msg_id = fields.msg_id.as_str(),
+                msg_type = fields.msg_type.as_str(),
+                src = fields.src.as_str(),
+                sink = fields.sink.as_str(),
+                "received ingress message"
+            );
+        }
 
         if msg.attributes.payload_format.enum_value_or_default()
             == UPayloadFormat::UPAYLOAD_FORMAT_SHM
         {
-            debug!(
-                "{}:{}:{} Received message with type UPAYLOAD_FORMAT_SHM, which is not supported. A pointer to shared memory will not be usable on another device. UAttributes: {:#?}",
-                self.route_id,
-                INGRESS_ROUTE_LISTENER_TAG,
-                INGRESS_ROUTE_LISTENER_FN_ON_RECEIVE_TAG,
-                &msg.attributes
-            );
+            if let Some(fields) = formatted_fields.as_ref() {
+                debug!(
+                    event = events::INGRESS_DROP_UNSUPPORTED_PAYLOAD,
+                    component = COMPONENT,
+                    route_label,
+                    msg_id = fields.msg_id.as_str(),
+                    msg_type = fields.msg_type.as_str(),
+                    src = fields.src.as_str(),
+                    sink = fields.sink.as_str(),
+                    reason = "unsupported_payload_format_shm",
+                    "dropping unsupported shared-memory payload"
+                );
+            }
             return;
         }
 
         if let Err(e) = self.sender.send(Arc::new(msg)) {
             error!(
-                "{}:{}:{} Unable to send message to worker pool: {e:?}",
-                self.route_id, INGRESS_ROUTE_LISTENER_TAG, INGRESS_ROUTE_LISTENER_FN_ON_RECEIVE_TAG,
+                event = events::INGRESS_SEND_TO_POOL_FAILED,
+                component = COMPONENT,
+                route_label,
+                err = ?e,
+                "unable to send message to egress pool"
             );
         }
     }

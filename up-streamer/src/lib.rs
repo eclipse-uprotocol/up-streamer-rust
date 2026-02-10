@@ -226,6 +226,8 @@ pub use endpoint::Endpoint;
 mod subscription_sync_health;
 pub use subscription_sync_health::SubscriptionSyncHealth;
 
+#[doc(hidden)]
+pub mod observability;
 mod routing;
 mod runtime;
 

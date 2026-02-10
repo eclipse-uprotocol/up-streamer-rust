@@ -56,6 +56,81 @@ pub async fn check_send_receive_message_discrepancy(
     }
 }
 
+pub async fn wait_for_send_count(
+    counter: &Arc<AtomicU64>,
+    target: u64,
+    timeout: Duration,
+    label: &str,
+) -> u64 {
+    let wait_result = tokio::time::timeout(timeout, async {
+        loop {
+            let observed = counter.load(Ordering::SeqCst);
+            if observed >= target {
+                return observed;
+            }
+            tokio::task::yield_now().await;
+        }
+    })
+    .await;
+
+    match wait_result {
+        Ok(observed) => observed,
+        Err(_) => {
+            let observed = counter.load(Ordering::SeqCst);
+            panic!(
+                "Timed out waiting for {label} >= {target}; observed={observed}, timeout_ms={}",
+                timeout.as_millis()
+            );
+        }
+    }
+}
+
+pub async fn wait_for_send_delta(
+    counter: &Arc<AtomicU64>,
+    baseline: u64,
+    minimum_delta: u64,
+    timeout: Duration,
+    label: &str,
+) -> u64 {
+    let target = baseline.saturating_add(minimum_delta);
+    wait_for_send_count(counter, target, timeout, label).await
+}
+
+async fn wait_for_receive_settle(client: &UPClientFoo, name: &str) {
+    let settle_timeout = Duration::from_secs(1);
+    let stable_window = Duration::from_millis(50);
+    let settle_result = tokio::time::timeout(settle_timeout, async {
+        let mut last_count = client.times_received.load(Ordering::SeqCst);
+        let mut stable_since = Instant::now();
+
+        loop {
+            tokio::task::yield_now().await;
+            let current_count = client.times_received.load(Ordering::SeqCst);
+            if current_count == last_count {
+                if stable_since.elapsed() >= stable_window {
+                    return current_count;
+                }
+                continue;
+            }
+
+            last_count = current_count;
+            stable_since = Instant::now();
+        }
+    })
+    .await;
+
+    match settle_result {
+        Ok(settled_count) => debug!("{name} receive count settled at {settled_count}"),
+        Err(_) => {
+            let observed = client.times_received.load(Ordering::SeqCst);
+            debug!(
+                "{name} receive count settle timed out after {}ms at {observed}",
+                settle_timeout.as_millis()
+            );
+        }
+    }
+}
+
 // TODO: Fix this function to work with UUIDv7
 pub async fn check_messages_in_order(messages: Arc<Mutex<Vec<UMessage>>>) {
     let messages = messages.lock().await;
@@ -65,30 +140,57 @@ pub async fn check_messages_in_order(messages: Arc<Mutex<Vec<UMessage>>>) {
 
     // Step 1: Group messages by source UUri
     #[allow(clippy::mutable_key_type)]
-    let mut grouped_messages: HashMap<UUri, Vec<&UMessage>> = HashMap::new();
-    for msg in messages.iter() {
+    let mut grouped_messages: HashMap<UUri, Vec<(usize, &UMessage)>> = HashMap::new();
+    for (index, msg) in messages.iter().enumerate() {
         let source_uuri = msg
             .attributes
             .as_ref()
-            .unwrap()
-            .source
-            .as_ref()
-            .unwrap()
-            .clone();
-        grouped_messages.entry(source_uuri).or_default().push(msg);
+            .and_then(|attributes| attributes.source.as_ref())
+            .cloned()
+            .unwrap_or_else(|| panic!("message index {index} missing source URI"));
+
+        grouped_messages
+            .entry(source_uuri)
+            .or_default()
+            .push((index, msg));
     }
 
     // Step 2: Check each group for strict increasing order of id.msb first 48 bytes
     for (source_uuri, group) in grouped_messages {
         debug!("source_uuri: {source_uuri}");
-        if let Some(first_msg) = group.first() {
-            let mut prev_timestamp = first_msg.attributes.as_ref().unwrap().id.msb >> 16;
-            for msg in group.iter().skip(1) {
-                let curr_timestamp = msg.attributes.as_ref().unwrap().id.msb >> 16;
+        if let Some((first_index, first_msg)) = group.first() {
+            let mut prev_timestamp = first_msg
+                .attributes
+                .as_ref()
+                .and_then(|attributes| attributes.id.as_ref())
+                .map(|id| id.msb >> 16)
+                .unwrap_or_else(|| {
+                    panic!(
+                        "message index {} for source {} missing message id",
+                        first_index, source_uuri
+                    )
+                });
+
+            for (msg_index, msg) in group.iter().skip(1) {
+                let curr_timestamp = msg
+                    .attributes
+                    .as_ref()
+                    .and_then(|attributes| attributes.id.as_ref())
+                    .map(|id| id.msb >> 16)
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "message index {} for source {} missing message id",
+                            msg_index, source_uuri
+                        )
+                    });
+
                 debug!("prev_timestamp: {prev_timestamp}, curr_timestamp: {curr_timestamp}");
                 // relaxing to < instead of <= since we now do not have the counter for tie breaker
                 if curr_timestamp < prev_timestamp {
-                    panic!("!! -- Message ordering issue for source_uuri: {} with prev_timestamp: {} and curr_timestamp: {}-- !!", source_uuri, prev_timestamp, curr_timestamp);
+                    panic!(
+                        "message ordering issue for source_uuri {}: prev_timestamp={}, curr_timestamp={}, msg_index={}",
+                        source_uuri, prev_timestamp, curr_timestamp, msg_index
+                    );
                 }
                 prev_timestamp = curr_timestamp;
             }
@@ -198,13 +300,12 @@ async fn poll_for_new_command(
         let (lock, cvar) = &*pause_execution;
         let mut should_pause = lock.lock().await;
         while *should_pause {
-            tokio::time::sleep(Duration::from_millis(100)).await;
-
             let command = client_command.lock().await;
             if *command == ClientCommand::Stop {
                 let times: u64 = client.times_received.load(Ordering::SeqCst);
                 println!("{name} had rx of: {times}");
-                tokio::time::sleep(Duration::from_millis(1000)).await;
+                drop(command);
+                wait_for_receive_settle(client, name).await;
                 return true;
             } else {
                 match &*command {
@@ -264,6 +365,15 @@ async fn send_message_set(
     context: &mut SendMessageContext<'_>,
 ) {
     for (index, msg) in &mut msg_set.iter_mut().enumerate() {
+        let should_send = context
+            .active_connection_listing
+            .get(index)
+            .copied()
+            .unwrap_or(true);
+        if !should_send {
+            continue;
+        }
+
         if let Some(attributes) = msg.attributes.as_mut() {
             let new_id = UUID::build();
             attributes.id.0 = Some(Box::new(new_id));
@@ -277,9 +387,7 @@ async fn send_message_set(
         let send_res = client.send(msg.clone()).await;
         if send_res.is_err() {
             error!("Unable to send from client: {}", &name);
-        } else if !context.active_connection_listing.is_empty()
-            && context.active_connection_listing[index]
-        {
+        } else {
             context.sent_messages.push(msg.clone());
             context.number_of_sends.fetch_add(1, Ordering::SeqCst);
             debug!(
@@ -312,6 +420,8 @@ pub async fn run_client(
             let start = Instant::now();
 
             let mut sent_messages = Vec::with_capacity(client_history.sent_message_vec_capacity);
+            let mut send_pacer = tokio::time::interval(Duration::from_millis(1));
+            send_pacer.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
 
             loop {
                 debug!("top of loop");
@@ -365,7 +475,7 @@ pub async fn run_client(
                 )
                 .await;
 
-                tokio::time::sleep(Duration::from_millis(1)).await;
+                send_pacer.tick().await;
             }
         })
     })

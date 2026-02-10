@@ -38,7 +38,7 @@ tracing-subscriber = { workspace = true }
 json5 = { workspace = true }
 protobuf = { workspace = true }
 serde = { workspace = true }
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["signal"] }
 up-rust = { workspace = true }
 up-streamer = { path = "../up-streamer" }
 up-transport-zenoh = { workspace = true, optional = true }

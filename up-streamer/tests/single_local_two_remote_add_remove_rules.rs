@@ -22,9 +22,9 @@ use integration_test_utils::{
     remote_client_uuri, request_from_local_client_for_remote_client,
     request_from_remote_client_for_local_client, reset_pause,
     response_from_local_client_for_remote_client, response_from_remote_client_for_local_client,
-    run_client, signal_to_pause, signal_to_resume, wait_for_pause, ClientCommand,
-    ClientConfiguration, ClientControl, ClientHistory, ClientMessages, LocalClientListener,
-    RemoteClientListener, UPClientFoo,
+    run_client, signal_to_pause, signal_to_resume, wait_for_pause, wait_for_send_count,
+    wait_for_send_delta, ClientCommand, ClientConfiguration, ClientControl, ClientHistory,
+    ClientMessages, LocalClientListener, RemoteClientListener, UPClientFoo,
 };
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
@@ -192,7 +192,9 @@ async fn run_single_local_two_remote_add_remove_rules() {
 
     debug!("signalled to resume");
 
-    tokio::time::sleep(Duration::from_millis(DURATION_TO_RUN_CLIENTS as u64)).await;
+    let send_wait_timeout = Duration::from_millis((DURATION_TO_RUN_CLIENTS as u64).max(1_000));
+    wait_for_send_count(&local_sends, 3, send_wait_timeout, "local_sends").await;
+    wait_for_send_count(&remote_a_sends, 3, send_wait_timeout, "remote_a_sends").await;
 
     {
         let mut local_command = local_command.lock().await;
@@ -262,11 +264,38 @@ async fn run_single_local_two_remote_add_remove_rules() {
 
     debug!("remote_b signalled it paused");
 
+    let local_before_remote_b_resume = local_sends.load(Ordering::SeqCst);
+    let remote_a_before_remote_b_resume = remote_a_sends.load(Ordering::SeqCst);
+    let remote_b_before_remote_b_resume = remote_b_sends.load(Ordering::SeqCst);
+
     signal_to_resume(all_signal_should_pause.clone()).await;
 
     debug!("signalled local, remote_a, remote_b to resume");
 
-    tokio::time::sleep(Duration::from_millis(DURATION_TO_RUN_CLIENTS as u64)).await;
+    wait_for_send_delta(
+        &local_sends,
+        local_before_remote_b_resume,
+        6,
+        send_wait_timeout,
+        "local_sends",
+    )
+    .await;
+    wait_for_send_delta(
+        &remote_a_sends,
+        remote_a_before_remote_b_resume,
+        3,
+        send_wait_timeout,
+        "remote_a_sends",
+    )
+    .await;
+    wait_for_send_delta(
+        &remote_b_sends,
+        remote_b_before_remote_b_resume,
+        3,
+        send_wait_timeout,
+        "remote_b_sends",
+    )
+    .await;
 
     debug!("after running local, remote_a, remote_b");
 
@@ -309,11 +338,29 @@ async fn run_single_local_two_remote_add_remove_rules() {
 
     debug!("deleting forwarding rules local <-> remote_a");
 
+    let local_before_final_resume = local_sends.load(Ordering::SeqCst);
+    let remote_b_before_final_resume = remote_b_sends.load(Ordering::SeqCst);
+
     signal_to_resume(all_signal_should_pause.clone()).await;
 
     debug!("signalled all to resume: local & remote_b");
 
-    tokio::time::sleep(Duration::from_millis(DURATION_TO_RUN_CLIENTS as u64)).await;
+    wait_for_send_delta(
+        &local_sends,
+        local_before_final_resume,
+        3,
+        send_wait_timeout,
+        "local_sends",
+    )
+    .await;
+    wait_for_send_delta(
+        &remote_b_sends,
+        remote_b_before_final_resume,
+        3,
+        send_wait_timeout,
+        "remote_b_sends",
+    )
+    .await;
 
     {
         let mut local_command = local_command.lock().await;

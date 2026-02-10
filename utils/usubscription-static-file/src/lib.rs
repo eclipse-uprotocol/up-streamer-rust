@@ -17,6 +17,7 @@ use std::collections::HashMap;
 use std::fs::{self, canonicalize};
 use std::path::PathBuf;
 use std::str::FromStr;
+use std::sync::{Arc, RwLock};
 use tracing::{debug, error, warn};
 use up_rust::core::usubscription::{
     FetchSubscribersRequest, FetchSubscribersResponse, FetchSubscriptionsRequest,
@@ -26,6 +27,13 @@ use up_rust::core::usubscription::{
 use up_rust::{UCode, UStatus, UUri};
 
 const STATIC_RESOURCE_ID: u32 = 0x8001;
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum StaticFileReloadStrategy {
+    #[default]
+    AlwaysReload,
+    CacheOnFirstRead,
+}
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 struct UriProjectionKey {
@@ -68,11 +76,35 @@ struct SubscriptionIdentityKey {
 
 pub struct USubscriptionStaticFile {
     static_file: String,
+    reload_strategy: StaticFileReloadStrategy,
+    cached_subscriptions: RwLock<Option<Arc<Vec<Subscription>>>>,
 }
 
 impl USubscriptionStaticFile {
     pub fn new(static_file: String) -> Self {
-        Self { static_file }
+        Self::with_reload_strategy(static_file, StaticFileReloadStrategy::AlwaysReload)
+    }
+
+    pub fn with_reload_strategy(
+        static_file: String,
+        reload_strategy: StaticFileReloadStrategy,
+    ) -> Self {
+        Self {
+            static_file,
+            reload_strategy,
+            cached_subscriptions: RwLock::new(None),
+        }
+    }
+
+    pub fn clear_cached_subscriptions(&self) -> Result<(), UStatus> {
+        let mut cache_guard = self.cached_subscriptions.write().map_err(|_| {
+            UStatus::fail_with_code(
+                UCode::INTERNAL,
+                "Static subscription cache write lock is poisoned",
+            )
+        })?;
+        *cache_guard = None;
+        Ok(())
     }
 
     fn unsupported_operation_status(operation: &str) -> UStatus {
@@ -180,6 +212,43 @@ impl USubscriptionStaticFile {
 
         Ok(subscriptions_by_key.into_values().collect())
     }
+
+    fn load_subscriptions(&self) -> Result<Arc<Vec<Subscription>>, UStatus> {
+        match self.reload_strategy {
+            StaticFileReloadStrategy::AlwaysReload => {
+                Ok(Arc::new(self.parse_static_subscriptions()?))
+            }
+            StaticFileReloadStrategy::CacheOnFirstRead => {
+                {
+                    let cache_guard = self.cached_subscriptions.read().map_err(|_| {
+                        UStatus::fail_with_code(
+                            UCode::INTERNAL,
+                            "Static subscription cache read lock is poisoned",
+                        )
+                    })?;
+
+                    if let Some(cached_subscriptions) = cache_guard.as_ref() {
+                        return Ok(cached_subscriptions.clone());
+                    }
+                }
+
+                let parsed_subscriptions = Arc::new(self.parse_static_subscriptions()?);
+                let mut cache_guard = self.cached_subscriptions.write().map_err(|_| {
+                    UStatus::fail_with_code(
+                        UCode::INTERNAL,
+                        "Static subscription cache write lock is poisoned",
+                    )
+                })?;
+
+                if let Some(cached_subscriptions) = cache_guard.as_ref() {
+                    return Ok(cached_subscriptions.clone());
+                }
+
+                *cache_guard = Some(parsed_subscriptions.clone());
+                Ok(parsed_subscriptions)
+            }
+        }
+    }
 }
 
 #[async_trait]
@@ -197,11 +266,11 @@ impl USubscription for USubscriptionStaticFile {
     ) -> Result<FetchSubscriptionsResponse, UStatus> {
         debug!("fetch_subscriptions request: {fetch_subscriptions_request:?}");
 
-        let subscriptions = self.parse_static_subscriptions()?;
+        let subscriptions = self.load_subscriptions()?;
         debug!("Finished reading subscriptions\n{subscriptions:#?}");
 
         Ok(FetchSubscriptionsResponse {
-            subscriptions,
+            subscriptions: subscriptions.as_ref().clone(),
             ..Default::default()
         })
     }
@@ -239,10 +308,10 @@ impl USubscription for USubscriptionStaticFile {
         canonical_topic.resource_id = STATIC_RESOURCE_ID;
         let requested_topic_identity = UriProjectionKey::from(canonical_topic);
 
-        let subscriptions = self.parse_static_subscriptions()?;
+        let subscriptions = self.load_subscriptions()?;
         let mut subscribers_by_key: HashMap<UriProjectionKey, SubscriberInfo> = HashMap::new();
 
-        for subscription in subscriptions {
+        for subscription in subscriptions.iter().cloned() {
             let Some(topic) = subscription.topic.into_option() else {
                 continue;
             };
@@ -275,12 +344,14 @@ impl USubscription for USubscriptionStaticFile {
 
 #[cfg(test)]
 mod tests {
-    use super::USubscriptionStaticFile;
+    use super::{StaticFileReloadStrategy, USubscriptionStaticFile};
     use std::collections::HashSet;
     use std::fs;
     use std::str::FromStr;
     use std::sync::atomic::{AtomicUsize, Ordering};
-    use up_rust::core::usubscription::{FetchSubscribersRequest, USubscription};
+    use up_rust::core::usubscription::{
+        FetchSubscribersRequest, FetchSubscriptionsRequest, USubscription,
+    };
     use up_rust::UUri;
 
     static TEST_FILE_COUNTER: AtomicUsize = AtomicUsize::new(0);
@@ -371,5 +442,79 @@ mod tests {
         assert!(subscriber_uris.contains("//authority-b/5678/1/1234"));
         assert!(subscriber_uris.contains("//authority-c/5678/1/1234"));
         assert!(subscriber_uris.contains("//authority-z/5678/1/1234"));
+    }
+
+    #[tokio::test]
+    async fn cache_on_first_read_reuses_snapshot_until_cache_is_cleared() {
+        let static_path = write_static_config(
+            r#"{
+                "//authority-a/5BA0/1/8001": ["//authority-b/5678/1/1234"]
+            }"#,
+        );
+        let backend = USubscriptionStaticFile::with_reload_strategy(
+            static_path.to_string_lossy().to_string(),
+            StaticFileReloadStrategy::CacheOnFirstRead,
+        );
+
+        let first = backend
+            .fetch_subscriptions(FetchSubscriptionsRequest::default())
+            .await
+            .expect("initial fetch_subscriptions should succeed");
+        assert_eq!(first.subscriptions.len(), 1);
+
+        fs::write(&static_path, r#"{}"#).expect("overwrite static config");
+
+        let second = backend
+            .fetch_subscriptions(FetchSubscriptionsRequest::default())
+            .await
+            .expect("cached fetch_subscriptions should succeed");
+        assert_eq!(second.subscriptions.len(), 1);
+
+        backend
+            .clear_cached_subscriptions()
+            .expect("cache clear should succeed");
+
+        let third = backend
+            .fetch_subscriptions(FetchSubscriptionsRequest::default())
+            .await
+            .expect("post-clear fetch_subscriptions should succeed");
+        assert!(third.subscriptions.is_empty());
+
+        fs::remove_file(&static_path).expect("remove static config file");
+    }
+
+    #[tokio::test]
+    async fn always_reload_strategy_reads_updated_file_contents() {
+        let static_path = write_static_config(
+            r#"{
+                "//authority-a/5BA0/1/8001": ["//authority-b/5678/1/1234"]
+            }"#,
+        );
+        let backend = USubscriptionStaticFile::new(static_path.to_string_lossy().to_string());
+
+        let first = backend
+            .fetch_subscriptions(FetchSubscriptionsRequest::default())
+            .await
+            .expect("initial fetch_subscriptions should succeed");
+        assert_eq!(first.subscriptions.len(), 1);
+
+        fs::write(
+            &static_path,
+            r#"{
+                "//authority-a/5BA0/1/8001": [
+                    "//authority-b/5678/1/1234",
+                    "//authority-c/5678/1/1234"
+                ]
+            }"#,
+        )
+        .expect("overwrite static config");
+
+        let second = backend
+            .fetch_subscriptions(FetchSubscriptionsRequest::default())
+            .await
+            .expect("reload fetch_subscriptions should succeed");
+        assert_eq!(second.subscriptions.len(), 2);
+
+        fs::remove_file(&static_path).expect("remove static config file");
     }
 }

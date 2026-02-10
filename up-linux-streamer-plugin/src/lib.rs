@@ -89,13 +89,24 @@ pub mod plugin {
                 .worker_threads(THREAD_NUM)
                 .enable_all()
                 .build()
-                .expect("Unable to create runtime");
-            tokio_runtime.spawn(run(runtime.clone(), config.clone(), flag.clone()));
+                .map_err(|err| zerror!("Unable to create runtime: {}", err))?;
+            tokio_runtime.spawn({
+                let runtime = runtime.clone();
+                let config = config.clone();
+                let flag = flag.clone();
+                async move {
+                    if let Err(err) = run(runtime, config, flag.clone()).await {
+                        trace!("up-linux-streamer-plugin: run task exiting with error: {err}");
+                        flag.store(false, Relaxed);
+                    }
+                }
+            });
             trace!("up-linux-streamer-plugin: after spawning run");
             // return a RunningPlugin to zenohd
             trace!("up-linux-streamer-plugin: before creating RunningPlugin");
             let ret = Box::new(RunningPlugin(Arc::new(Mutex::new(RunningPluginInner {
                 flag,
+                tokio_runtime: Some(tokio_runtime),
             }))));
             trace!("up-linux-streamer-plugin: after creating RunningPlugin");
 
@@ -106,6 +117,7 @@ pub mod plugin {
     // An inner-state for the RunningPlugin
     struct RunningPluginInner {
         flag: Arc<AtomicBool>,
+        tokio_runtime: Option<tokio::runtime::Runtime>,
     }
     // The RunningPlugin struct implementing the RunningPluginTrait trait
     #[derive(Clone)]
@@ -128,37 +140,40 @@ pub mod plugin {
     // If the plugin is dropped, set the flag to false to end the loop
     impl Drop for RunningPlugin {
         fn drop(&mut self) {
-            zlock!(self.0).flag.store(false, Relaxed);
+            let mut inner = zlock!(self.0);
+            inner.flag.store(false, Relaxed);
+            if let Some(runtime) = inner.tokio_runtime.take() {
+                runtime.shutdown_timeout(Duration::from_secs(2));
+            }
         }
     }
 
-    async fn run(runtime: DynamicRuntime, config: Config, flag: Arc<AtomicBool>) {
+    async fn run(runtime: DynamicRuntime, config: Config, flag: Arc<AtomicBool>) -> ZResult<()> {
         trace!("up-linux-streamer-plugin: inside of run");
 
         trace!("attempt to call something on the runtime");
         let timestamp_res = runtime.new_timestamp();
         trace!("called function on runtime: {timestamp_res:?}");
 
-        let usubscription: Arc<dyn USubscription> =
-            match config.usubscription_config.mode {
-                SubscriptionProviderMode::StaticFile => Arc::new(USubscriptionStaticFile::new(
-                    config.usubscription_config.file_path.clone(),
-                )),
-                SubscriptionProviderMode::LiveUsubscription => panic!(
-                    "live_usubscription mode is reserved in this phase; live runtime integration is deferred (see reports/usubscription-decoupled-pubsub-migration/05-live-integration-deferred.md)"
-                ),
-            };
+        let usubscription: Arc<dyn USubscription> = match config.usubscription_config.mode {
+            SubscriptionProviderMode::StaticFile => Arc::new(USubscriptionStaticFile::new(
+                config.usubscription_config.file_path.clone(),
+            )),
+            SubscriptionProviderMode::LiveUsubscription => {
+                return Err(zerror!(
+                        "live_usubscription mode is reserved in this phase; live runtime integration is deferred"
+                    )
+                    .into());
+            }
+        };
 
-        let mut streamer = match UStreamer::new(
+        let mut streamer = UStreamer::new(
             "up-linux-streamer",
             config.up_streamer_config.message_queue_size,
             usubscription,
         )
         .await
-        {
-            Ok(streamer) => streamer,
-            Err(error) => panic!("Failed to create uStreamer: {}", error),
-        };
+        .map_err(|error| zerror!("Failed to create uStreamer: {}", error))?;
 
         let streamer_uuri = UUri::try_from_parts(
             &config.streamer_uuri.authority,
@@ -166,19 +181,19 @@ pub mod plugin {
             config.streamer_uuri.ue_version_major,
             0,
         )
-        .expect("Unable to form streamer_uuri");
+        .map_err(|err| zerror!("Unable to form streamer_uuri: {}", err))?;
 
         trace!("streamer_uuri: {streamer_uuri:#?}");
         let host_transport: Arc<dyn UTransport> = Arc::new(match config.host_config.transport {
             HostTransport::Zenoh => {
-                let zenoh_session = zenoh::session::init(runtime.clone())
-                    .await
-                    .expect("Unable to initialize Zenoh session from runtime");
+                let zenoh_session = zenoh::session::init(runtime.clone()).await.map_err(|err| {
+                    zerror!("Unable to initialize Zenoh session from runtime: {}", err)
+                })?;
                 UPTransportZenoh::builder(config.streamer_uuri.authority.clone())
-                    .expect("Unable to create Zenoh transport builder")
+                    .map_err(|err| zerror!("Unable to create Zenoh transport builder: {}", err))?
                     .with_session(zenoh_session)
                     .build()
-                    .expect("Unable to initialize Zenoh UTransport")
+                    .map_err(|err| zerror!("Unable to initialize Zenoh UTransport: {}", err))?
             } // other host transports can be added here as they become available
         });
 
@@ -191,16 +206,23 @@ pub mod plugin {
         if config.someip_config.enabled {
             let someip_config_file_abs_path = if config.someip_config.config_file.is_relative() {
                 env::current_dir()
-                    .unwrap()
+                    .map_err(|err| {
+                        zerror!(
+                            "Unable to resolve current_dir for someip config path: {}",
+                            err
+                        )
+                    })?
                     .join(&config.someip_config.config_file)
             } else {
-                config.someip_config.config_file
+                config.someip_config.config_file.clone()
             };
             trace!("someip_config_file_abs_path: {someip_config_file_abs_path:?}");
             if !someip_config_file_abs_path.exists() {
-                panic!(
-                "The specified someip config_file doesn't exist: {someip_config_file_abs_path:?}"
-            );
+                return Err(zerror!(
+                    "The specified someip config_file doesn't exist: {:?}",
+                    someip_config_file_abs_path
+                )
+                .into());
             }
 
             let host_uuri = UUri::try_from_parts(
@@ -211,7 +233,7 @@ pub mod plugin {
                 1,
                 0,
             )
-            .expect("Unable to make host_uuri");
+            .map_err(|err| zerror!("Unable to make host_uuri: {}", err))?;
 
             // There will be at most one vsomeip_transport, as there is a connection into device and a streamer
             let someip_transport: Arc<dyn UTransport> = Arc::new(
@@ -221,7 +243,7 @@ pub mod plugin {
                     &someip_config_file_abs_path,
                     None,
                 )
-                .expect("Unable to initialize vsomeip UTransport"),
+                .map_err(|err| zerror!("Unable to initialize vsomeip UTransport: {}", err))?,
             );
 
             let mechatronics_endpoint = Endpoint::new(
@@ -234,7 +256,7 @@ pub mod plugin {
                 .await;
 
             if let Err(err) = forwarding_res {
-                panic!("Unable to add forwarding result: {err:?}");
+                return Err(zerror!("Unable to add forwarding result: {:?}", err).into());
             }
 
             let forwarding_res = streamer
@@ -242,7 +264,7 @@ pub mod plugin {
                 .await;
 
             if let Err(err) = forwarding_res {
-                panic!("Unable to add forwarding result: {err:?}");
+                return Err(zerror!("Unable to add forwarding result: {:?}", err).into());
             }
         }
 
@@ -256,5 +278,7 @@ pub mod plugin {
 
             counter += 1;
         }
+
+        Ok(())
     }
 }

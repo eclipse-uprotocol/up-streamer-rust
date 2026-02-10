@@ -1,12 +1,16 @@
 //! Internal subscription cache used by routing and listener resolution.
 
+use crate::observability::events;
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
+use tracing::{debug, error};
 use up_rust::core::usubscription::{FetchSubscriptionsResponse, SubscriberInfo};
 use up_rust::UUri;
 use up_rust::{UCode, UStatus};
 
 use crate::routing::uri_identity_key::UriIdentityKey;
+
+const COMPONENT: &str = "subscription_cache";
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub(crate) struct SubscriptionIdentityKey {
@@ -53,33 +57,91 @@ impl Hash for SubscriptionInformation {
 #[derive(Default)]
 pub(crate) struct SubscriptionCache {
     subscription_cache_map: HashMap<String, SubscriptionLookup>,
+    wildcard_merged_cache_map: HashMap<String, SubscriptionLookup>,
 }
 
 impl SubscriptionCache {
+    fn build_wildcard_merged_cache(
+        subscription_cache_map: &HashMap<String, SubscriptionLookup>,
+    ) -> HashMap<String, SubscriptionLookup> {
+        let wildcard_rows = subscription_cache_map.get("*");
+        let mut merged_cache_map = HashMap::with_capacity(subscription_cache_map.len());
+
+        for (authority, exact_rows) in subscription_cache_map {
+            let mut merged_rows = exact_rows.clone();
+            if authority != "*" {
+                if let Some(wildcard_rows) = wildcard_rows {
+                    merged_rows.extend(wildcard_rows.clone());
+                }
+            }
+            merged_cache_map.insert(authority.clone(), merged_rows);
+        }
+
+        merged_cache_map
+    }
+
     pub(crate) fn new(subscription_cache_map: FetchSubscriptionsResponse) -> Result<Self, UStatus> {
+        let input_rows = subscription_cache_map.subscriptions.len();
+        debug!(
+            event = events::SUBSCRIPTION_SNAPSHOT_REBUILD_START,
+            component = COMPONENT,
+            input_rows,
+            "starting subscription snapshot rebuild"
+        );
+
         let mut subscription_cache_hash_map = HashMap::new();
         for subscription in subscription_cache_map.subscriptions {
-            let topic = subscription.topic.into_option().ok_or_else(|| {
-                UStatus::fail_with_code(
-                    UCode::INVALID_ARGUMENT,
-                    "Unable to retrieve topic".to_string(),
-                )
-            })?;
-            let subscriber = subscription.subscriber.into_option().ok_or_else(|| {
-                UStatus::fail_with_code(
-                    UCode::INVALID_ARGUMENT,
-                    "Unable to retrieve topic".to_string(),
-                )
-            })?;
+            let topic = match subscription.topic.into_option() {
+                Some(topic) => topic,
+                None => {
+                    let err = UStatus::fail_with_code(
+                        UCode::INVALID_ARGUMENT,
+                        "Unable to retrieve topic".to_string(),
+                    );
+                    error!(
+                        event = events::SUBSCRIPTION_SNAPSHOT_REBUILD_FAILED,
+                        component = COMPONENT,
+                        reason = "missing_topic",
+                        err = %err,
+                        "subscription snapshot rebuild failed"
+                    );
+                    return Err(err);
+                }
+            };
+            let subscriber = match subscription.subscriber.into_option() {
+                Some(subscriber) => subscriber,
+                None => {
+                    let err = UStatus::fail_with_code(
+                        UCode::INVALID_ARGUMENT,
+                        "Unable to retrieve topic".to_string(),
+                    );
+                    error!(
+                        event = events::SUBSCRIPTION_SNAPSHOT_REBUILD_FAILED,
+                        component = COMPONENT,
+                        reason = "missing_subscriber",
+                        err = %err,
+                        "subscription snapshot rebuild failed"
+                    );
+                    return Err(err);
+                }
+            };
 
             let subscription_information = SubscriptionInformation { topic, subscriber };
             let subscriber_authority_name = match subscription_information.subscriber.uri.as_ref() {
                 Some(uri) => uri.authority_name.clone(),
                 None => {
-                    return Err(UStatus::fail_with_code(
+                    let err = UStatus::fail_with_code(
                         UCode::INVALID_ARGUMENT,
                         "Unable to retrieve authority name",
-                    ))
+                    );
+                    error!(
+                        event = events::SUBSCRIPTION_SNAPSHOT_REBUILD_FAILED,
+                        component = COMPONENT,
+                        reason = "missing_subscriber_authority",
+                        err = %err,
+                        "subscription snapshot rebuild failed"
+                    );
+                    return Err(err);
                 }
             };
             let subscription_identity = SubscriptionIdentityKey::from(&subscription_information);
@@ -91,8 +153,25 @@ impl SubscriptionCache {
                 .entry(subscription_identity)
                 .or_insert(subscription_information);
         }
+
+        let authority_count = subscription_cache_hash_map.len();
+        let subscription_count: usize =
+            subscription_cache_hash_map.values().map(HashMap::len).sum();
+        debug!(
+            event = events::SUBSCRIPTION_SNAPSHOT_REBUILD_OK,
+            component = COMPONENT,
+            input_rows,
+            authority_count,
+            subscription_count,
+            "subscription snapshot rebuild succeeded"
+        );
+
+        let wildcard_merged_cache_map =
+            Self::build_wildcard_merged_cache(&subscription_cache_hash_map);
+
         Ok(Self {
             subscription_cache_map: subscription_cache_hash_map,
+            wildcard_merged_cache_map,
         })
     }
 
@@ -105,23 +184,41 @@ impl SubscriptionCache {
         &self,
         entry: &str,
     ) -> Option<SubscriptionLookup> {
-        let mut merged: SubscriptionLookup = HashMap::new();
-
-        if let Some(exact_subscribers) = self.subscription_cache_map.get(entry) {
-            merged.extend(exact_subscribers.clone());
-        }
-
-        if entry != "*" {
-            if let Some(wildcard_subscribers) = self.subscription_cache_map.get("*") {
-                merged.extend(wildcard_subscribers.clone());
-            }
-        }
-
-        if merged.is_empty() {
-            None
+        let exact_count = self
+            .subscription_cache_map
+            .get(entry)
+            .map(HashMap::len)
+            .unwrap_or(0);
+        let wildcard_count = if entry == "*" {
+            0
         } else {
-            Some(merged)
-        }
+            self.subscription_cache_map
+                .get("*")
+                .map(HashMap::len)
+                .unwrap_or(0)
+        };
+
+        let merged = if entry == "*" {
+            self.wildcard_merged_cache_map.get("*").cloned()
+        } else {
+            self.wildcard_merged_cache_map
+                .get(entry)
+                .cloned()
+                .or_else(|| self.subscription_cache_map.get("*").cloned())
+        };
+
+        let merged_count = merged.as_ref().map(HashMap::len).unwrap_or(0);
+        debug!(
+            event = events::SUBSCRIPTION_WILDCARD_MERGE_SUMMARY,
+            component = COMPONENT,
+            out_authority = entry,
+            exact_count,
+            wildcard_count,
+            merged_count,
+            "subscription wildcard merge summary"
+        );
+
+        merged.filter(|rows| !rows.is_empty())
     }
 }
 

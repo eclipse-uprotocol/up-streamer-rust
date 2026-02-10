@@ -22,8 +22,8 @@ use integration_test_utils::{
     request_from_local_client_for_remote_client, request_from_remote_client_for_local_client,
     reset_pause, response_from_local_client_for_remote_client,
     response_from_remote_client_for_local_client, run_client, signal_to_pause, signal_to_resume,
-    wait_for_pause, ClientCommand, ClientConfiguration, ClientControl, ClientHistory,
-    ClientMessages, LocalClientListener, RemoteClientListener, UPClientFoo,
+    wait_for_pause, wait_for_send_count, ClientCommand, ClientConfiguration, ClientControl,
+    ClientHistory, ClientMessages, LocalClientListener, RemoteClientListener, UPClientFoo,
 };
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
@@ -161,7 +161,9 @@ async fn run_single_local_single_remote() {
 
     debug!("after signal_to_resume");
 
-    tokio::time::sleep(Duration::from_millis(DURATION_TO_RUN_CLIENTS as u64)).await;
+    let send_wait_timeout = Duration::from_millis((DURATION_TO_RUN_CLIENTS as u64).max(1_000));
+    wait_for_send_count(&local_sends, 3, send_wait_timeout, "local_sends").await;
+    wait_for_send_count(&remote_sends, 3, send_wait_timeout, "remote_sends").await;
 
     debug!("past wait on clients to run, now tell them to stop");
     {
