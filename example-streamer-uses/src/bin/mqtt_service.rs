@@ -89,6 +89,8 @@ async fn main() -> Result<(), UStatus> {
         )
         .await?;
 
+    println!("READY listener_registered");
+
     thread::park();
     Ok(())
 }

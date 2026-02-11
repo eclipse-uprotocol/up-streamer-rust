@@ -49,6 +49,12 @@ struct Args {
     /// MQTT broker URI in host:port format
     #[arg(long, default_value = DEFAULT_BROKER_URI)]
     broker_uri: String,
+    /// Number of publish messages to send before exiting (0 means run forever)
+    #[arg(long, default_value_t = 0)]
+    send_count: u64,
+    /// Milliseconds to wait between publish sends
+    #[arg(long, default_value_t = 1000)]
+    send_interval_ms: u64,
 }
 
 #[tokio::main]
@@ -80,8 +86,14 @@ async fn main() -> Result<(), UStatus> {
 
     let publisher: Arc<dyn UTransport> = Arc::new(mqtt5_transport);
 
+    let mut sent_count: u64 = 0;
     loop {
-        tokio::time::sleep(Duration::from_millis(1000)).await;
+        if args.send_count > 0 && sent_count >= args.send_count {
+            info!("Completed bounded send run: sent_count={sent_count}");
+            break;
+        }
+
+        tokio::time::sleep(Duration::from_millis(args.send_interval_ms)).await;
 
         let now = Local::now();
 
@@ -105,5 +117,8 @@ async fn main() -> Result<(), UStatus> {
         info!("Sending Publish message:\n{publish_msg:?}");
 
         publisher.send(publish_msg).await?;
+        sent_count += 1;
     }
+
+    Ok(())
 }

@@ -225,6 +225,7 @@ async fn main() -> Result<(), UStatus> {
     .await?;
     wire_forwarding_rules(&mut streamer, &endpoints, &config.transports.mqtt.endpoints).await?;
 
+    println!("READY streamer_initialized");
     info!("Streamer initialized; waiting for shutdown signal");
     wait_for_shutdown_signal().await?;
     info!("Shutdown signal received; exiting");

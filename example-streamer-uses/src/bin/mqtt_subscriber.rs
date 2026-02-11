@@ -111,6 +111,8 @@ async fn main() -> Result<(), UStatus> {
         .register_listener(&source_filter, None, publish_receiver.clone())
         .await?;
 
+    println!("READY listener_registered");
+
     thread::park();
     Ok(())
 }

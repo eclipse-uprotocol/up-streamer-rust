@@ -69,6 +69,12 @@ struct Args {
     /// Resource ID for target service URI (decimal or 0x-prefixed hex)
     #[arg(long, default_value = DEFAULT_TARGET_RESOURCE)]
     target_resource: String,
+    /// Number of requests to send before exiting (0 means run forever)
+    #[arg(long, default_value_t = 0)]
+    send_count: u64,
+    /// Milliseconds to wait between request sends
+    #[arg(long, default_value_t = 1000)]
+    send_interval_ms: u64,
 }
 
 #[tokio::main]
@@ -122,9 +128,15 @@ async fn main() -> Result<(), UStatus> {
         .register_listener(&sink, Some(&source), service_response_listener)
         .await?;
 
-    let mut i = 0;
+    let mut i: u64 = 0;
+    let mut sent_count: u64 = 0;
     loop {
-        tokio::time::sleep(Duration::from_millis(1000)).await;
+        if args.send_count > 0 && sent_count >= args.send_count {
+            info!("Completed bounded send run: sent_count={sent_count}");
+            break;
+        }
+
+        tokio::time::sleep(Duration::from_millis(args.send_interval_ms)).await;
 
         let hello_request = HelloRequest {
             name: format!("ue_client@i={}", i).to_string(),
@@ -139,5 +151,8 @@ async fn main() -> Result<(), UStatus> {
         info!("Sending Request message:\n{:?}", &request_msg);
 
         client.send(request_msg).await?;
+        sent_count += 1;
     }
+
+    Ok(())
 }

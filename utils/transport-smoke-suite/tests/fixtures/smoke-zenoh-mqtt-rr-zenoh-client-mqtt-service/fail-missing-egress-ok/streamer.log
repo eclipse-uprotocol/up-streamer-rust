@@ -1,0 +1,3 @@
+event=egress_worker_create route_label=route-a
+event=egress_send_attempt
+event=egress_send_attempt

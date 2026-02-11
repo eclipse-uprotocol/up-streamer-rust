@@ -1,0 +1,82 @@
+# ********************************************************************************
+#  Copyright (c) 2026 Contributors to the Eclipse Foundation
+#
+#  See the NOTICE file(s) distributed with this work for additional
+#  information regarding copyright ownership.
+#
+#  This program and the accompanying materials are made available under the
+#  terms of the Apache License Version 2.0 which is available at
+#  https://www.apache.org/licenses/LICENSE-2.0
+#
+#  SPDX-License-Identifier: Apache-2.0
+# *******************************************************************************/
+
+name: Transport Smoke Capstone
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 3 * * *"
+
+concurrency:
+  group: transport-smoke-capstone
+  cancel-in-progress: false
+
+jobs:
+  mqtt-smoke:
+    name: MQTT transport smoke matrix
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y build-essential cmake libboost-all-dev libclang-dev pkg-config libssl-dev
+
+      - name: Run MQTT scenario subset
+        run: |
+          cargo run -p transport-smoke-suite --bin transport-smoke-matrix -- \
+            --only smoke-zenoh-mqtt-rr-zenoh-client-mqtt-service \
+            --only smoke-zenoh-mqtt-rr-mqtt-client-zenoh-service \
+            --only smoke-zenoh-mqtt-ps-zenoh-publisher-mqtt-subscriber \
+            --only smoke-zenoh-mqtt-ps-mqtt-publisher-zenoh-subscriber \
+            --artifacts-root target/transport-smoke/ci-mqtt
+
+      - name: Upload MQTT artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: transport-smoke-mqtt
+          path: target/transport-smoke/ci-mqtt
+          retention-days: 14
+
+  someip-smoke:
+    name: SOME/IP transport smoke matrix
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y build-essential cmake libboost-all-dev libclang-dev pkg-config libssl-dev
+
+      - name: Run SOME/IP scenario subset (bundled profile)
+        run: |
+          cargo run -p transport-smoke-suite --bin transport-smoke-matrix -- \
+            --only smoke-zenoh-someip-rr-zenoh-client-someip-service \
+            --only smoke-zenoh-someip-rr-someip-client-zenoh-service \
+            --only smoke-zenoh-someip-ps-zenoh-publisher-someip-subscriber \
+            --only smoke-zenoh-someip-ps-someip-publisher-zenoh-subscriber \
+            --artifacts-root target/transport-smoke/ci-someip
+
+      - name: Upload SOME/IP artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: transport-smoke-someip
+          path: target/transport-smoke/ci-someip
+          retention-days: 14

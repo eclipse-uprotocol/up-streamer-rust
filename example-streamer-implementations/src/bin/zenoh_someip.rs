@@ -217,6 +217,7 @@ async fn main() -> Result<(), UStatus> {
         .add_route(someip_endpoint.clone(), zenoh_endpoint.clone())
         .await?;
 
+    println!("READY streamer_initialized");
     info!("Streamer initialized; waiting for shutdown signal");
     wait_for_shutdown_signal().await?;
     info!("Shutdown signal received; exiting");
