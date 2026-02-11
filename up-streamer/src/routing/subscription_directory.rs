@@ -1,3 +1,16 @@
+/********************************************************************************
+ * Copyright (c) 2026 Contributors to the Eclipse Foundation
+ *
+ * See the NOTICE file(s) distributed with this work for additional
+ * information regarding copyright ownership.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ********************************************************************************/
+
 //! Subscription-directory adapter used by routing and data-plane flows.
 
 use arc_swap::ArcSwap;
@@ -83,7 +96,6 @@ impl SubscriptionDirectory {
         Ok(())
     }
 
-    #[allow(dead_code)]
     /// Looks up subscribers for one egress authority with wildcard matching.
     pub(crate) async fn lookup_route_subscribers(&self, out_authority: &str) -> SubscriptionLookup {
         let snapshot = self.snapshot.load();
