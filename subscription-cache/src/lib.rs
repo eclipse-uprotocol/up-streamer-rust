@@ -39,12 +39,13 @@ impl Eq for SubscriptionInformation {}
 
 impl PartialEq for SubscriptionInformation {
     fn eq(&self, other: &Self) -> bool {
-        self.subscriber == other.subscriber
+        self.topic == other.topic && self.subscriber == other.subscriber
     }
 }
 
 impl Hash for SubscriptionInformation {
     fn hash<H: Hasher>(&self, state: &mut H) {
+        self.topic.hash(state);
         self.subscriber.hash(state);
     }
 }
@@ -147,5 +148,142 @@ impl SubscriptionCache {
             Err(_) => return None,
         };
         map.get(&entry).cloned()
+    }
+
+    pub fn fetch_cache_entry_with_wildcard(
+        &self,
+        entry: &str,
+    ) -> Option<HashSet<SubscriptionInformation>> {
+        let map = match self.subscription_cache_map.lock() {
+            Ok(map) => map,
+            Err(_) => return None,
+        };
+
+        #[allow(clippy::mutable_key_type)]
+        let mut merged = HashSet::new();
+
+        if let Some(exact_subscribers) = map.get(entry) {
+            merged.extend(exact_subscribers.iter().cloned());
+        }
+
+        if entry != "*" {
+            if let Some(wildcard_subscribers) = map.get("*") {
+                merged.extend(wildcard_subscribers.iter().cloned());
+            }
+        }
+
+        if merged.is_empty() {
+            None
+        } else {
+            Some(merged)
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::SubscriptionCache;
+    use std::str::FromStr;
+    use up_rust::core::usubscription::{FetchSubscriptionsResponse, SubscriberInfo, Subscription};
+    use up_rust::UUri;
+
+    fn subscription(topic: &str, subscriber: &str) -> Subscription {
+        Subscription {
+            topic: Some(UUri::from_str(topic).unwrap()).into(),
+            subscriber: Some(SubscriberInfo {
+                uri: Some(UUri::from_str(subscriber).unwrap()).into(),
+                ..Default::default()
+            })
+            .into(),
+            ..Default::default()
+        }
+    }
+
+    fn topics_for_authority(cache: &SubscriptionCache, authority: &str) -> Vec<UUri> {
+        let mut topics: Vec<UUri> = cache
+            .fetch_cache_entry(authority.to_string())
+            .unwrap()
+            .into_iter()
+            .map(|subscription| subscription.topic)
+            .collect();
+        topics.sort_by_key(|topic| topic.to_uri(false));
+        topics
+    }
+
+    #[test]
+    fn same_subscriber_different_topics_coexist() {
+        let cache = SubscriptionCache::new(FetchSubscriptionsResponse {
+            subscriptions: vec![
+                subscription("//authority-a/5BA0/1/8001", "//authority-b/5678/1/1234"),
+                subscription("//authority-a/5BA1/1/8001", "//authority-b/5678/1/1234"),
+            ],
+            ..Default::default()
+        })
+        .unwrap();
+
+        let topics = topics_for_authority(&cache, "authority-b");
+
+        assert_eq!(topics.len(), 2);
+        assert_eq!(
+            topics[0],
+            UUri::from_str("//authority-a/5BA0/1/8001").unwrap()
+        );
+        assert_eq!(
+            topics[1],
+            UUri::from_str("//authority-a/5BA1/1/8001").unwrap()
+        );
+    }
+
+    #[test]
+    fn rebuild_reflects_removed_rows() {
+        let initial_cache = SubscriptionCache::new(FetchSubscriptionsResponse {
+            subscriptions: vec![
+                subscription("//authority-a/5BA0/1/8001", "//authority-b/5678/1/1234"),
+                subscription("//authority-a/5BA1/1/8001", "//authority-b/5678/1/1234"),
+            ],
+            ..Default::default()
+        })
+        .unwrap();
+
+        let rebuilt_cache = SubscriptionCache::new(FetchSubscriptionsResponse {
+            subscriptions: vec![subscription(
+                "//authority-a/5BA1/1/8001",
+                "//authority-b/5678/1/1234",
+            )],
+            ..Default::default()
+        })
+        .unwrap();
+
+        assert_eq!(topics_for_authority(&initial_cache, "authority-b").len(), 2);
+
+        let rebuilt_topics = topics_for_authority(&rebuilt_cache, "authority-b");
+        assert_eq!(rebuilt_topics.len(), 1);
+        assert_eq!(
+            rebuilt_topics[0],
+            UUri::from_str("//authority-a/5BA1/1/8001").unwrap()
+        );
+    }
+
+    #[test]
+    #[allow(clippy::mutable_key_type)]
+    fn wildcard_lookup_merges_exact_and_wildcard_rows() {
+        let cache = SubscriptionCache::new(FetchSubscriptionsResponse {
+            subscriptions: vec![
+                subscription("//authority-a/5BA0/1/8001", "//authority-b/5678/1/1234"),
+                subscription("//authority-a/5BA0/1/8002", "//*/5678/1/1234"),
+            ],
+            ..Default::default()
+        })
+        .unwrap();
+
+        let merged_for_b = cache
+            .fetch_cache_entry_with_wildcard("authority-b")
+            .unwrap();
+        let merged_for_d = cache
+            .fetch_cache_entry_with_wildcard("authority-d")
+            .unwrap();
+
+        assert_eq!(merged_for_b.len(), 2);
+        assert_eq!(merged_for_d.len(), 1);
     }
 }

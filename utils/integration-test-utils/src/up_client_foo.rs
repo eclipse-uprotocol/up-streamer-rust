@@ -242,28 +242,52 @@ impl UTransport for UPClientFoo {
             "{}: registering listener for: source: {:?} sink: {:?}",
             self.name, source_filter, sink_filter
         );
+        if let Some(sink_filter) = sink_filter {
+            let sink_authority = sink_filter.authority_name.clone();
+            let mut authority_listeners = self.authority_listeners.lock().await;
+            debug!(
+                "{}: registering authority listener on authority: {}",
+                &self.name, sink_authority
+            );
 
-        let sink_authority = sink_filter.unwrap().clone().authority_name;
-        let mut authority_listeners = self.authority_listeners.lock().await;
-        let authority = sink_authority;
-        debug!(
-            "{}: registering authority listener on authority: {}",
-            &self.name, authority
-        );
-        let authority_listeners = authority_listeners.entry(authority.clone()).or_default();
-        let comparable_listener = ComparableListener::new(listener);
-        let inserted = authority_listeners.insert(comparable_listener);
+            let authority_listeners = authority_listeners
+                .entry(sink_authority.clone())
+                .or_default();
+            let comparable_listener = ComparableListener::new(listener);
+            let inserted = authority_listeners.insert(comparable_listener);
 
-        match inserted {
-            true => {
-                debug!("{}: successfully registered authority listener for: authority: {}", &self.name, authority);
+            match inserted {
+                true => {
+                    debug!(
+                        "{}: successfully registered authority listener for: authority: {}",
+                        &self.name, sink_authority
+                    );
 
+                    Ok(())
+                }
+                false => Err(UStatus::fail_with_code(
+                    UCode::ALREADY_EXISTS,
+                    format!(
+                        "{}: UUri and listener already registered! failed to register authority listener for: authority: {}",
+                        &self.name, sink_authority
+                    ),
+                )),
+            }
+        } else {
+            let mut listeners = self.listeners.lock().await;
+            let topic_listeners = listeners
+                .entry((source_filter.clone(), None))
+                .or_insert_with(HashSet::new);
+            let comparable_listener = ComparableListener::new(listener);
+
+            if topic_listeners.insert(comparable_listener) {
                 Ok(())
-            },
-            false => Err(UStatus::fail_with_code(
-                UCode::ALREADY_EXISTS,
-                format!("{}: UUri and listener already registered! failed to register authority listener for: authority: {}", &self.name, authority)
-            )),
+            } else {
+                Err(UStatus::fail_with_code(
+                    UCode::ALREADY_EXISTS,
+                    "Listener already registered for topic!",
+                ))
+            }
         }
     }
 
@@ -278,20 +302,16 @@ impl UTransport for UPClientFoo {
             &self.name
         );
 
-        let sink_for_any = {
-            if let Some(sink) = sink_filter {
-                sink.authority_name == "*"
-            } else {
-                false
-            }
-        };
-
-        return if source_filter.authority_name != "*" && sink_for_any {
+        return if let Some(sink) = sink_filter {
             debug!("{}: unregistering authority listener", &self.name);
 
             let mut authority_listeners = self.authority_listeners.lock().await;
 
-            let authority = source_filter.authority_name.clone();
+            let authority = if sink.authority_name == "*" {
+                source_filter.authority_name.clone()
+            } else {
+                sink.authority_name.clone()
+            };
 
             let Some(authority_listeners) = authority_listeners.get_mut(&authority) else {
                 let err = UStatus::fail_with_code(

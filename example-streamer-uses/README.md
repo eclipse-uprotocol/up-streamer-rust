@@ -74,3 +74,47 @@ To better track the messages you can also check that the payload is listed with 
 Further, you will see printed the deserialized `HelloResponse` ProtoBuf object:
 
 > Here we received response: HelloResponse { message: "The response to the request: someip_client@i=n", special_fields: SpecialFields { unknown_fields: UnknownFields { fields: None }, cached_size: CachedSize { size: 0 } } }
+
+## CLI parameter overrides
+
+All 12 example binaries now support a common local-entity override surface:
+
+- `--uauthority <string>`
+- `--uentity <u32 decimal|hex>`
+- `--uversion <u8 decimal|hex>`
+- `--resource <u16 decimal|hex>`
+
+Additional role-specific flags:
+
+- Client binaries: `--target-authority --target-uentity --target-uversion --target-resource`
+- Subscriber binaries: `--source-authority --source-uentity --source-uversion --source-resource`
+
+Transport-specific flags:
+
+- MQTT binaries: `--broker-uri` (default `localhost:1883`)
+- Zenoh binaries: `--endpoint` (existing behavior, now composed with URI overrides)
+- SOME/IP binaries: `--vsomeip-config` and `--remote-authority`
+
+Running with no extra flags keeps prior behavior (defaults are aligned with previous constants).
+
+### Numeric formats
+
+Numeric URI flags accept decimal and `0x`/`0X` prefixed hex.
+
+Decimal example:
+
+```bash
+cargo run -p example-streamer-uses --bin mqtt_publisher --features mqtt-transport -- --uauthority authority-a --uentity 23456 --uversion 1 --resource 32769
+```
+
+Hex example:
+
+```bash
+cargo run -p example-streamer-uses --bin mqtt_publisher --features mqtt-transport -- --uauthority authority-a --uentity 0x5BA0 --uversion 0x1 --resource 0x8001
+```
+
+Invalid formats (for example underscores in numeric values) are rejected with deterministic errors that include the flag name, raw value, and expected range.
+
+### SOME/IP caveat
+
+SOME/IP binaries accept URI overrides, but runtime compatibility can still depend on application/service IDs configured in the selected `--vsomeip-config` file. If `--uentity` is overridden, the binaries emit a startup warning when that override may conflict with vsomeip config expectations.
