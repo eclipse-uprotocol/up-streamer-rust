@@ -17,6 +17,7 @@ members = [
     "utils/integration-test-utils",
     "example-streamer-implementations",
     "utils/criterion-guardrail",
+    "utils/transport-smoke-suite",
     "configurable-streamer",
     "up-linux-streamer-plugin",
     "up-streamer",
@@ -35,10 +36,8 @@ license = "Apache-2.0"
 [workspace.dependencies]
 async-trait = { version = "0.1" }
 clap = { version = "4.5" }
-env_logger = { version = "0.10.1" }
 futures = { version = "0.3.30" }
 lazy_static = { version = "1.5.0" }
-log = { version = "0.4.20" }
 json5 = { version = "0.4.1" }
 serde = { version = "1.0.154", features = ["derive"] }
 serde_json = { version = "1.0.94" }

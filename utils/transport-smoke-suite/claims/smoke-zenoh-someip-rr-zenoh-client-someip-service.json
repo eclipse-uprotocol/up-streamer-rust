@@ -1,0 +1,81 @@
+{
+  "schema_version": "1.0",
+  "scenario_id": "smoke-zenoh-someip-rr-zenoh-client-someip-service",
+  "claims": [
+    {
+      "claim_id": "client_response_evidence",
+      "category": "endpoint_communication",
+      "kind": "must_match",
+      "file": "client.log",
+      "pattern": "ServiceResponseListener: Received a message|UMESSAGE_TYPE_RESPONSE",
+      "threshold": "endpoint_communication"
+    },
+    {
+      "claim_id": "service_request_response_evidence",
+      "category": "endpoint_communication",
+      "kind": "must_match",
+      "file": "service.log",
+      "pattern": "ServiceResponseListener: Received a message|Sending Response message",
+      "threshold": "endpoint_communication"
+    },
+    {
+      "claim_id": "streamer_egress_send_attempt",
+      "category": "streamer_egress",
+      "kind": "must_match",
+      "file": "streamer.log",
+      "pattern": "egress_send_attempt",
+      "threshold": "egress_send_attempt"
+    },
+    {
+      "claim_id": "streamer_egress_send_ok",
+      "category": "streamer_egress",
+      "kind": "must_match",
+      "file": "streamer.log",
+      "pattern": "egress_send_ok",
+      "threshold": "egress_send_ok"
+    },
+    {
+      "claim_id": "streamer_egress_worker_create_or_reuse",
+      "category": "streamer_egress",
+      "kind": "must_match",
+      "file": "streamer.log",
+      "pattern": "egress_worker_create|egress_worker_reuse",
+      "threshold": "egress_worker_create_or_reuse"
+    },
+    {
+      "claim_id": "streamer_no_missing_route_info",
+      "category": "forbidden_signature",
+      "kind": "must_not_match",
+      "file": "streamer.log",
+      "pattern": "Routing info for remote service could not be found"
+    },
+    {
+      "claim_id": "streamer_no_panic",
+      "category": "forbidden_signature",
+      "kind": "must_not_match",
+      "file": "streamer.log",
+      "pattern": "panicked at"
+    },
+    {
+      "claim_id": "streamer_no_egress_send_failed",
+      "category": "forbidden_signature",
+      "kind": "must_not_match",
+      "file": "streamer.log",
+      "pattern": "egress_send_failed"
+    },
+    {
+      "claim_id": "client_no_panic",
+      "category": "forbidden_signature",
+      "kind": "must_not_match",
+      "file": "client.log",
+      "pattern": "panicked at"
+    },
+    {
+      "claim_id": "service_no_panic",
+      "category": "forbidden_signature",
+      "kind": "must_not_match",
+      "file": "service.log",
+      "pattern": "panicked at"
+    }
+  ]
+}

@@ -16,9 +16,9 @@ mod common;
 use clap::Parser;
 use common::cli;
 use common::PublishReceiver;
-use log::info;
 use std::sync::Arc;
 use std::thread;
+use tracing::info;
 use up_rust::{UListener, UStatus, UTransport};
 use up_transport_mqtt5::{Mqtt5Transport, Mqtt5TransportOptions, MqttClientOptions};
 
@@ -66,7 +66,7 @@ struct Args {
 
 #[tokio::main]
 async fn main() -> Result<(), UStatus> {
-    env_logger::init();
+    let _ = tracing_subscriber::fmt::try_init();
 
     let args = Args::parse();
 
@@ -110,6 +110,8 @@ async fn main() -> Result<(), UStatus> {
     subscriber
         .register_listener(&source_filter, None, publish_receiver.clone())
         .await?;
+
+    println!("READY listener_registered");
 
     thread::park();
     Ok(())

@@ -1,0 +1,5 @@
+ServiceResponseListener: Received a message
+UMESSAGE_TYPE_RESPONSE
+ServiceResponseListener: Received a message
+UMESSAGE_TYPE_RESPONSE
+commstatus: Some(OK)

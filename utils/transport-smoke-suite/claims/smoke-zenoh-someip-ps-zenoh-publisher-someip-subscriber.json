@@ -1,0 +1,81 @@
+{
+  "schema_version": "1.0",
+  "scenario_id": "smoke-zenoh-someip-ps-zenoh-publisher-someip-subscriber",
+  "claims": [
+    {
+      "claim_id": "publisher_sent_messages",
+      "category": "endpoint_communication",
+      "kind": "must_match",
+      "file": "publisher.log",
+      "pattern": "Sending Publish message",
+      "threshold": "endpoint_communication"
+    },
+    {
+      "claim_id": "subscriber_received_messages",
+      "category": "endpoint_communication",
+      "kind": "must_match",
+      "file": "subscriber.log",
+      "pattern": "PublishReceiver: Received a message",
+      "threshold": "endpoint_communication"
+    },
+    {
+      "claim_id": "streamer_egress_send_attempt",
+      "category": "streamer_egress",
+      "kind": "must_match",
+      "file": "streamer.log",
+      "pattern": "egress_send_attempt",
+      "threshold": "egress_send_attempt"
+    },
+    {
+      "claim_id": "streamer_egress_send_ok",
+      "category": "streamer_egress",
+      "kind": "must_match",
+      "file": "streamer.log",
+      "pattern": "egress_send_ok",
+      "threshold": "egress_send_ok"
+    },
+    {
+      "claim_id": "streamer_egress_worker_create_or_reuse",
+      "category": "streamer_egress",
+      "kind": "must_match",
+      "file": "streamer.log",
+      "pattern": "egress_worker_create|egress_worker_reuse",
+      "threshold": "egress_worker_create_or_reuse"
+    },
+    {
+      "claim_id": "streamer_no_missing_route_info",
+      "category": "forbidden_signature",
+      "kind": "must_not_match",
+      "file": "streamer.log",
+      "pattern": "Routing info for remote service could not be found"
+    },
+    {
+      "claim_id": "streamer_no_panic",
+      "category": "forbidden_signature",
+      "kind": "must_not_match",
+      "file": "streamer.log",
+      "pattern": "panicked at"
+    },
+    {
+      "claim_id": "streamer_no_egress_send_failed",
+      "category": "forbidden_signature",
+      "kind": "must_not_match",
+      "file": "streamer.log",
+      "pattern": "egress_send_failed"
+    },
+    {
+      "claim_id": "publisher_no_panic",
+      "category": "forbidden_signature",
+      "kind": "must_not_match",
+      "file": "publisher.log",
+      "pattern": "panicked at"
+    },
+    {
+      "claim_id": "subscriber_no_panic",
+      "category": "forbidden_signature",
+      "kind": "must_not_match",
+      "file": "subscriber.log",
+      "pattern": "panicked at"
+    }
+  ]
+}

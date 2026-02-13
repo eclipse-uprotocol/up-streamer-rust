@@ -95,6 +95,15 @@ Transport-specific flags:
 - Zenoh binaries: `--endpoint` (existing behavior, now composed with URI overrides)
 - SOME/IP binaries: `--vsomeip-config` and `--remote-authority`
 
+Deterministic sender controls (active client/publisher binaries only):
+
+- `--send-count <n>`
+  - `0` (default) preserves existing infinite-send behavior
+  - any value `>0` performs a bounded send run and then exits
+- `--send-interval-ms <ms>`
+  - defaults to `1000`
+  - controls delay between sends for bounded and unbounded runs
+
 Running with no extra flags keeps prior behavior (defaults are aligned with previous constants).
 
 ### Numeric formats

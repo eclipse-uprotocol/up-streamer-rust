@@ -332,7 +332,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "955e602d2d68b79ca5d674984259234fad2c8d869ad99011699e0a3cd76f38cd"
 dependencies = [
  "autocxx-engine",
- "env_logger 0.9.3",
+ "env_logger",
  "indexmap 1.9.3",
  "syn 2.0.114",
 ]
@@ -1283,19 +1283,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "env_logger"
-version = "0.10.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4cd405aab171cb85d6735e5c8d9db038c17d3ca007a4d2c25f337935c3d90580"
-dependencies = [
- "humantime",
- "is-terminal",
- "log",
- "regex",
- "termcolor",
-]
-
-[[package]]
 name = "equivalent"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1356,14 +1343,13 @@ dependencies = [
  "async-trait",
  "chrono",
  "clap",
- "env_logger 0.10.2",
  "hello-world-protos",
  "json5",
- "log",
  "protobuf",
  "serde",
  "tokio",
  "tracing",
+ "tracing-subscriber",
  "up-rust",
  "up-transport-mqtt5",
  "up-transport-vsomeip",
@@ -4854,6 +4840,22 @@ dependencies = [
  "tracing-core",
  "tracing-log",
  "tracing-serde",
+]
+
+[[package]]
+name = "transport-smoke-suite"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "clap",
+ "libc",
+ "regex",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "walkdir",
 ]
 
 [[package]]
