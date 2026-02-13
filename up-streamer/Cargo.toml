@@ -32,7 +32,12 @@ arc-swap = "1.7"
 [dev-dependencies]
 async-broadcast = { version = "0.7.0" }
 chrono = { version = "0.4.31", features = [] }
+criterion = { version = "0.5.1", features = ["csv_output"] }
 futures = { workspace = true }
 integration-test-utils = { path = "../utils/integration-test-utils" }
 tokio-condvar = { version = "0.3.0" }
 usubscription-static-file = { path = "../utils/usubscription-static-file" }
+
+[[bench]]
+name = "streamer_criterion"
+harness = false
