@@ -33,12 +33,12 @@ bundled-vsomeip = ["up-transport-vsomeip/bundled"]
 async-trait = { workspace = true }
 chrono = { version = "0.4" }
 clap = { version = "4.5.9", features = ["derive"] }
-env_logger = { version = "0.10.2" }
-log = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
 json5 = { workspace = true }
 protobuf = { workspace = true }
 serde = { workspace = true }
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["signal"] }
 up-rust = { workspace = true }
 up-streamer = { path = "../up-streamer" }
 up-transport-zenoh = { workspace = true, optional = true }

@@ -24,7 +24,7 @@ use integration_test_utils::{
     ClientConfiguration, ClientControl, ClientHistory, ClientMessages, LocalClientListener,
     RemoteClientListener, UPClientFoo,
 };
-use log::debug;
+use tracing::debug;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -57,7 +57,7 @@ async fn single_local_two_remote_add_remove_rules() {
     let subscription_path =
         "../utils/usubscription-static-file/static-configs/testdata.json".to_string();
     let usubscription = Arc::new(USubscriptionStaticFile::new(subscription_path));
-    let mut ustreamer = match UStreamer::new("foo_bar_streamer", 3000, usubscription) {
+    let mut ustreamer = match UStreamer::new("foo_bar_streamer", 3000, usubscription).await {
         Ok(streamer) => streamer,
         Err(error) => panic!("Failed to create uStreamer: {}", error),
     };
@@ -70,16 +70,16 @@ async fn single_local_two_remote_add_remove_rules() {
         Endpoint::new("remote_endpoint_b", &remote_authority_b(), utransport_bar_2);
 
     // adding local to remote_a routing
-    let add_forwarding_rule_res = ustreamer
-        .add_forwarding_rule(local_endpoint.clone(), remote_endpoint_a.clone())
+    let add_route_res = ustreamer
+        .add_route(local_endpoint.clone(), remote_endpoint_a.clone())
         .await;
-    assert!(add_forwarding_rule_res.is_ok());
+    assert!(add_route_res.is_ok());
 
     // adding remote_a to local routing
-    let add_forwarding_rule_res = ustreamer
-        .add_forwarding_rule(remote_endpoint_a.clone(), local_endpoint.clone())
+    let add_route_res = ustreamer
+        .add_route(remote_endpoint_a.clone(), local_endpoint.clone())
         .await;
-    assert!(add_forwarding_rule_res.is_ok());
+    assert!(add_route_res.is_ok());
 
     let local_client_listener = Arc::new(LocalClientListener::new());
     let remote_a_client_listener = Arc::new(RemoteClientListener::new());
@@ -270,16 +270,16 @@ async fn single_local_two_remote_add_remove_rules() {
     debug!("ran run_client for remote_b");
 
     // adding local to remote_b routing
-    let add_forwarding_rule_res = ustreamer
-        .add_forwarding_rule(local_endpoint.clone(), remote_endpoint_b.clone())
+    let add_route_res = ustreamer
+        .add_route(local_endpoint.clone(), remote_endpoint_b.clone())
         .await;
-    assert!(add_forwarding_rule_res.is_ok());
+    assert!(add_route_res.is_ok());
 
     // adding remote_b to local routing
-    let add_forwarding_rule_res = ustreamer
-        .add_forwarding_rule(remote_endpoint_b.clone(), local_endpoint.clone())
+    let add_route_res = ustreamer
+        .add_route(remote_endpoint_b.clone(), local_endpoint.clone())
         .await;
-    assert!(add_forwarding_rule_res.is_ok());
+    assert!(add_route_res.is_ok());
 
     debug!("added forwarding rules for remote_b <-> local");
 
@@ -330,16 +330,16 @@ async fn single_local_two_remote_add_remove_rules() {
     debug!("joined on local_paused and remote_b_paused");
 
     // deleting local to remote_a routing
-    let delete_forwarding_rule_res = ustreamer
-        .delete_forwarding_rule(local_endpoint.clone(), remote_endpoint_a.clone())
+    let delete_route_res = ustreamer
+        .delete_route(local_endpoint.clone(), remote_endpoint_a.clone())
         .await;
-    assert!(delete_forwarding_rule_res.is_ok());
+    assert!(delete_route_res.is_ok());
 
     // deleting remote_a to local routing
-    let delete_forwarding_rule_res = ustreamer
-        .delete_forwarding_rule(remote_endpoint_a.clone(), local_endpoint.clone())
+    let delete_route_res = ustreamer
+        .delete_route(remote_endpoint_a.clone(), local_endpoint.clone())
         .await;
-    assert!(delete_forwarding_rule_res.is_ok());
+    assert!(delete_route_res.is_ok());
 
     debug!("deleting forwarding rules local <-> remote_a");
 

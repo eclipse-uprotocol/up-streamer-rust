@@ -23,7 +23,7 @@ use integration_test_utils::{
     wait_for_pause, ClientCommand, ClientConfiguration, ClientControl, ClientHistory,
     ClientMessages, LocalClientListener, RemoteClientListener, UPClientFoo,
 };
-use log::debug;
+use tracing::debug;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -53,7 +53,7 @@ async fn single_local_single_remote() {
     let subscription_path =
         "../utils/usubscription-static-file/static-configs/testdata.json".to_string();
     let usubscription = Arc::new(USubscriptionStaticFile::new(subscription_path));
-    let mut ustreamer = match UStreamer::new("foo_bar_streamer", 3000, usubscription) {
+    let mut ustreamer = match UStreamer::new("foo_bar_streamer", 3000, usubscription).await {
         Ok(streamer) => streamer,
         Err(error) => panic!("Failed to create uStreamer: {}", error),
     };
@@ -63,16 +63,16 @@ async fn single_local_single_remote() {
     let remote_endpoint = Endpoint::new("remote_endpoint", &remote_authority_a(), utransport_bar);
 
     // adding local to remote routing
-    let add_forwarding_rule_res = ustreamer
-        .add_forwarding_rule(local_endpoint.clone(), remote_endpoint.clone())
+    let add_route_res = ustreamer
+        .add_route(local_endpoint.clone(), remote_endpoint.clone())
         .await;
-    assert!(add_forwarding_rule_res.is_ok());
+    assert!(add_route_res.is_ok());
 
     // adding remote to local routing
-    let add_forwarding_rule_res = ustreamer
-        .add_forwarding_rule(remote_endpoint.clone(), local_endpoint.clone())
+    let add_route_res = ustreamer
+        .add_route(remote_endpoint.clone(), local_endpoint.clone())
         .await;
-    assert!(add_forwarding_rule_res.is_ok());
+    assert!(add_route_res.is_ok());
 
     let local_client_listener = Arc::new(LocalClientListener::new());
     let remote_client_listener = Arc::new(RemoteClientListener::new());

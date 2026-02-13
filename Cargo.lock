@@ -938,13 +938,13 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "clap",
- "env_logger 0.10.2",
  "hello-world-protos",
  "json5",
- "log",
  "protobuf",
  "serde",
  "tokio",
+ "tracing",
+ "tracing-subscriber",
  "up-rust",
  "up-streamer",
  "up-transport-mqtt5",
@@ -1410,6 +1410,7 @@ dependencies = [
  "protobuf",
  "serde",
  "tokio",
+ "tracing",
  "up-rust",
  "up-transport-mqtt5",
  "up-transport-vsomeip",
@@ -2185,6 +2186,7 @@ dependencies = [
  "serde_json",
  "tokio",
  "tokio-condvar",
+ "tracing",
  "up-rust",
  "up-streamer",
  "uuid",
@@ -4324,22 +4326,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "subscription-cache"
-version = "0.1.0"
-dependencies = [
- "async-std",
- "async-trait",
- "env_logger 0.10.2",
- "futures",
- "log",
- "protobuf",
- "serde",
- "serde_json",
- "up-rust",
- "uuid",
-]
-
-[[package]]
 name = "subtle"
 version = "2.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4647,6 +4633,7 @@ dependencies = [
  "libc",
  "mio",
  "pin-project-lite",
+ "signal-hook-registry",
  "socket2 0.6.2",
  "tokio-macros",
  "tracing",
@@ -5056,13 +5043,13 @@ dependencies = [
  "async-trait",
  "chrono",
  "clap",
- "env_logger 0.10.2",
  "hello-world-protos",
  "json5",
- "log",
  "protobuf",
  "serde",
  "tokio",
+ "tracing",
+ "tracing-subscriber",
  "up-rust",
  "up-streamer",
  "up-transport-vsomeip",
@@ -5076,13 +5063,13 @@ name = "up-linux-streamer-plugin"
 version = "0.1.0"
 dependencies = [
  "const_format",
- "env_logger 0.10.2",
  "futures",
  "git-version",
  "serde",
  "serde_json",
  "tokio",
  "tracing",
+ "tracing-subscriber",
  "up-rust",
  "up-streamer",
  "up-transport-vsomeip",
@@ -5120,22 +5107,18 @@ dependencies = [
 name = "up-streamer"
 version = "0.1.0"
 dependencies = [
+ "arc-swap",
  "async-broadcast",
  "async-trait",
  "chrono",
- "env_logger 0.10.2",
  "futures",
  "integration-test-utils",
- "lazy_static",
- "log",
  "protobuf",
- "serde_json",
- "subscription-cache",
  "tokio",
  "tokio-condvar",
+ "tracing",
  "up-rust",
  "usubscription-static-file",
- "uuid",
 ]
 
 [[package]]
@@ -5257,7 +5240,6 @@ dependencies = [
  "async-trait",
  "log",
  "serde_json",
- "subscription-cache",
  "up-rust",
 ]
 
