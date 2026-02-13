@@ -20,16 +20,16 @@ use integration_test_utils::{
     remote_client_uuri, request_from_local_client_for_remote_client,
     request_from_remote_client_for_local_client, reset_pause,
     response_from_local_client_for_remote_client, response_from_remote_client_for_local_client,
-    run_client, signal_to_pause, signal_to_resume, wait_for_pause, ClientCommand,
-    ClientConfiguration, ClientControl, ClientHistory, ClientMessages, LocalClientListener,
-    RemoteClientListener, UPClientFoo,
+    run_client, signal_to_pause, signal_to_resume, wait_for_pause, wait_for_send_count,
+    ClientCommand, ClientConfiguration, ClientControl, ClientHistory, ClientMessages,
+    LocalClientListener, RemoteClientListener, UPClientFoo,
 };
-use tracing::debug;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Mutex;
 use tokio_condvar::Condvar;
+use tracing::debug;
 use up_rust::{UListener, UTransport};
 use up_streamer::{Endpoint, UStreamer};
 use usubscription_static_file::USubscriptionStaticFile;
@@ -40,6 +40,10 @@ const SENT_MESSAGE_VEC_CAPACITY: usize = 10_000;
 #[ignore]
 #[tokio::test(flavor = "multi_thread")]
 async fn single_local_two_remote_authorities_same_remote_transport() {
+    run_single_local_two_remote_authorities_same_remote_transport().await;
+}
+
+async fn run_single_local_two_remote_authorities_same_remote_transport() {
     integration_test_utils::init_logging();
 
     // using async_broadcast to simulate communication protocol
@@ -260,7 +264,10 @@ async fn single_local_two_remote_authorities_same_remote_transport() {
     // Now signal both clients to resume
     signal_to_resume(all_signal_should_pause.clone()).await;
 
-    tokio::time::sleep(Duration::from_millis(DURATION_TO_RUN_CLIENTS as u64)).await;
+    let send_wait_timeout = Duration::from_millis((DURATION_TO_RUN_CLIENTS as u64).max(1_000));
+    wait_for_send_count(&local_sends, 6, send_wait_timeout, "local_sends").await;
+    wait_for_send_count(&remote_a_sends, 3, send_wait_timeout, "remote_a_sends").await;
+    wait_for_send_count(&remote_b_sends, 3, send_wait_timeout, "remote_b_sends").await;
 
     {
         let mut local_command = local_command.lock().await;

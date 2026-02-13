@@ -13,13 +13,13 @@
 
 use async_broadcast::{Receiver, Sender};
 use async_trait::async_trait;
-use log::{debug, error};
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::thread;
 use tokio::runtime::Builder;
 use tokio::sync::Mutex;
+use tracing::{debug, error};
 use up_rust::{
     ComparableListener, UAttributes, UCode, UListener, UMessage, UMessageType, UStatus, UTransport,
     UUri,
@@ -209,6 +209,10 @@ impl UPClientFoo {
             }
         }
     }
+
+    fn comparable_listener(listener: Arc<dyn UListener>) -> ComparableListener {
+        ComparableListener::new(listener)
+    }
 }
 
 #[async_trait]
@@ -253,7 +257,7 @@ impl UTransport for UPClientFoo {
             let authority_listeners = authority_listeners
                 .entry(sink_authority.clone())
                 .or_default();
-            let comparable_listener = ComparableListener::new(listener);
+            let comparable_listener = Self::comparable_listener(listener);
             let inserted = authority_listeners.insert(comparable_listener);
 
             match inserted {
@@ -278,7 +282,7 @@ impl UTransport for UPClientFoo {
             let topic_listeners = listeners
                 .entry((source_filter.clone(), None))
                 .or_insert_with(HashSet::new);
-            let comparable_listener = ComparableListener::new(listener);
+            let comparable_listener = Self::comparable_listener(listener);
 
             if topic_listeners.insert(comparable_listener) {
                 Ok(())
@@ -322,7 +326,7 @@ impl UTransport for UPClientFoo {
                 return Err(err);
             };
 
-            let comparable_listener = ComparableListener::new(listener);
+            let comparable_listener = Self::comparable_listener(listener);
             let removed = authority_listeners.remove(&comparable_listener);
             match removed {
                 true => Ok(()),
@@ -345,7 +349,7 @@ impl UTransport for UPClientFoo {
                     "No listeners registered for topic!",
                 ));
             };
-            let comparable_listener = ComparableListener::new(listener);
+            let comparable_listener = Self::comparable_listener(listener);
             let removed = topic_listeners.remove(&comparable_listener);
 
             match removed {
