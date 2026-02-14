@@ -16,9 +16,9 @@ mod common;
 use clap::Parser;
 use common::cli;
 use common::ServiceRequestResponder;
-use log::{info, trace, warn};
 use std::sync::Arc;
 use std::thread;
+use tracing::{info, trace, warn};
 use up_rust::{UListener, UStatus, UTransport, UUri};
 use up_transport_vsomeip::UPTransportVsomeip;
 
@@ -58,7 +58,7 @@ struct Args {
 
 #[tokio::main]
 async fn main() -> Result<(), UStatus> {
-    env_logger::init();
+    let _ = tracing_subscriber::fmt::try_init();
 
     let args = Args::parse();
 
@@ -103,6 +103,8 @@ async fn main() -> Result<(), UStatus> {
             service_request_responder.clone(),
         )
         .await?;
+
+    println!("READY listener_registered");
 
     thread::park();
     Ok(())

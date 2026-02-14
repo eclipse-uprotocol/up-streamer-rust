@@ -1,0 +1,66 @@
+# ********************************************************************************
+#  Copyright (c) 2026 Contributors to the Eclipse Foundation
+#
+#  See the NOTICE file(s) distributed with this work for additional
+#  information regarding copyright ownership.
+#
+#  This program and the accompanying materials are made available under the
+#  terms of the Apache License Version 2.0 which is available at
+#  https://www.apache.org/licenses/LICENSE-2.0
+#
+#  SPDX-License-Identifier: Apache-2.0
+# *******************************************************************************/
+
+name: Benchmark Guardrail Advisory
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/benchmark-guardrail-advisory.yaml"
+      - "up-streamer/**"
+      - "utils/criterion-guardrail/**"
+      - "scripts/bench_streamer_criterion.sh"
+  workflow_dispatch:
+
+jobs:
+  criterion_guardrail_advisory:
+    name: Criterion Guardrail Advisory
+    runs-on: ubuntu-22.04
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Add execute permissions for scripts
+        run: chmod +x build/envsetup.sh scripts/bench_streamer_criterion.sh
+
+      - name: Benchmark baseline and candidate
+        shell: bash
+        run: |
+          source build/envsetup.sh highest
+          export CRITERION_ARGS="--sample-size 60 --warm-up-time 3 --measurement-time 12 --noise-threshold 0.02"
+          if command -v taskset >/dev/null; then export BENCH_PIN_PREFIX="taskset -c 2"; else export BENCH_PIN_PREFIX=""; fi
+          scripts/bench_streamer_criterion.sh baseline
+          scripts/bench_streamer_criterion.sh candidate ci_candidate
+
+      - name: Run criterion-guardrail (advisory)
+        continue-on-error: true
+        run: |
+          scripts/bench_streamer_criterion.sh guardrail ci_candidate "$GITHUB_WORKSPACE/target/criterion/ci-guardrail.json"
+
+      - name: Export bencher compare output (advisory)
+        continue-on-error: true
+        shell: bash
+        run: |
+          export OPENCODE_CONFIG_DIR="$GITHUB_WORKSPACE/target/criterion-artifacts"
+          scripts/bench_streamer_criterion.sh export
+
+      - name: Upload criterion guardrail artifacts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: criterion-guardrail-advisory
+          if-no-files-found: warn
+          path: |
+            target/criterion/ci-guardrail.json
+            target/criterion-artifacts/reports/ergonomics-perf/bench-data/criterion-compare-bencher.txt

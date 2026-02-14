@@ -28,16 +28,16 @@ sequenceDiagram
   
     main thread->>main thread: let ustreamer = UStreamer::new()
 
-    main thread->>main thread: ustreamer.add_forwarding_rule(local_endpoint, remote_endpoint)
+    main thread->>main thread: ustreamer.add_route(local_endpoint, remote_endpoint)
     main thread->>TransportForwarder - Foo: launch TransportForwarder - Foo
     activate TransportForwarder - Foo
-    main thread->>UPClientFoo owned thread / task: (within ustreamer.add_forwarding_rule()) <br> local_endpoint.transport.lock().await.register_listener <br> (uauthority_to_uuri(remote_endpoint.authority), forwarding_listener).await
+    main thread->>UPClientFoo owned thread / task: (within ustreamer.add_route()) <br> local_endpoint.transport.lock().await.register_listener <br> (uauthority_to_uuri(remote_endpoint.authority), forwarding_listener).await
     activate UPClientFoo owned thread / task
 
-    main thread->>main thread: ustreamer.add_forwarding_rule(remote_endpoint, local_endpoint)
+    main thread->>main thread: ustreamer.add_route(remote_endpoint, local_endpoint)
     main thread->>TransportForwarder - Bar: launch TransportForwarder - Bar
     activate TransportForwarder - Bar
-    main thread->>UPClientBar owned thread / task: (within ustreamer.add_forwarding_rule()) <br> remote_endpoint.transport.lock().await.register_listener <br> (uauthority_to_uuri(local_endpoint.authority), forwarding_listener).await
+    main thread->>UPClientBar owned thread / task: (within ustreamer.add_route()) <br> remote_endpoint.transport.lock().await.register_listener <br> (uauthority_to_uuri(local_endpoint.authority), forwarding_listener).await
     activate UPClientBar owned thread / task
 
     loop Park the main thread, let background tasks run until closing UStreamer app
@@ -93,3 +93,34 @@ After following along with the [cargo docs](#generating-cargo-docs-locally) gene
 - [x] Routing of Request, Response, and Notification Messages
 - [ ] Routing of Publish messages (requires further development of uSubscription interface)
 - [x] Mechanism to retrieve messages received on and sent over transports
+
+## Benchmark Guardrails
+
+`up-streamer` uses a pinned Criterion harness (`criterion = 0.5.1`) at:
+
+- `up-streamer/benches/streamer_criterion.rs`
+
+The helper script runs canonical benchmark commands and can invoke the Rust guardrail CLI:
+
+```bash
+export CRITERION_ARGS="--sample-size 60 --warm-up-time 3 --measurement-time 12 --noise-threshold 0.02"
+if command -v taskset >/dev/null; then export BENCH_PIN_PREFIX="taskset -c 2"; else export BENCH_PIN_PREFIX=""; fi
+
+scripts/bench_streamer_criterion.sh baseline
+scripts/bench_streamer_criterion.sh candidate ergonomics_candidate_slice_a
+scripts/bench_streamer_criterion.sh guardrail ergonomics_candidate_slice_a "$OPENCODE_CONFIG_DIR/reports/ergonomics-perf/bench-data/criterion-guardrail.json"
+scripts/bench_streamer_criterion.sh export
+```
+
+Threshold pass/fail evaluation is handled only by the Rust CLI:
+
+```bash
+cargo run -p criterion-guardrail -- \
+  --criterion-root target/criterion \
+  --baseline ergonomics_baseline \
+  --candidate ergonomics_candidate_slice_a \
+  --throughput-threshold-pct 3 \
+  --latency-threshold-pct 5 \
+  --alloc-proxy-threshold-pct 5 \
+  --report "$OPENCODE_CONFIG_DIR/reports/ergonomics-perf/bench-data/criterion-guardrail.json"
+```

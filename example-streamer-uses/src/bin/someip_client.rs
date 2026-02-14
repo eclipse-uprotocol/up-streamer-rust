@@ -17,9 +17,9 @@ use clap::Parser;
 use common::cli;
 use common::ServiceResponseListener;
 use hello_world_protos::hello_world_service::HelloRequest;
-use log::{info, trace, warn};
 use std::sync::Arc;
 use std::time::Duration;
+use tracing::{info, trace, warn};
 use up_rust::{UListener, UMessageBuilder, UStatus, UTransport};
 use up_transport_vsomeip::UPTransportVsomeip;
 
@@ -75,11 +75,17 @@ struct Args {
     /// Path to the vsomeip JSON configuration file
     #[arg(long, default_value = DEFAULT_VSOMEIP_CONFIG)]
     vsomeip_config: String,
+    /// Number of requests to send before exiting (0 means run forever)
+    #[arg(long, default_value_t = 0)]
+    send_count: u64,
+    /// Milliseconds to wait between request sends
+    #[arg(long, default_value_t = 1000)]
+    send_interval_ms: u64,
 }
 
 #[tokio::main]
 async fn main() -> Result<(), UStatus> {
-    env_logger::init();
+    let _ = tracing_subscriber::fmt::try_init();
 
     let args = Args::parse();
 
@@ -129,9 +135,15 @@ async fn main() -> Result<(), UStatus> {
         .register_listener(&sink, Some(&source), service_response_listener)
         .await?;
 
-    let mut i = 0;
+    let mut i: u64 = 0;
+    let mut sent_count: u64 = 0;
     loop {
-        tokio::time::sleep(Duration::from_millis(1000)).await;
+        if args.send_count > 0 && sent_count >= args.send_count {
+            info!("Completed bounded send run: sent_count={sent_count}");
+            break;
+        }
+
+        tokio::time::sleep(Duration::from_millis(args.send_interval_ms)).await;
 
         let hello_request = HelloRequest {
             name: format!("me_client@i={}", i).to_string(),
@@ -145,5 +157,8 @@ async fn main() -> Result<(), UStatus> {
         info!("Sending Request message:\n{request_msg:?}");
 
         client.send(request_msg).await?;
+        sent_count += 1;
     }
+
+    Ok(())
 }

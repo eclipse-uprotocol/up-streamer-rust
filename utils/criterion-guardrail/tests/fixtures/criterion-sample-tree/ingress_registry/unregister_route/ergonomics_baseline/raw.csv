@@ -1,0 +1,4 @@
+group,function,value,sample_measured_value,unit,iteration_count
+ingress_registry,unregister_route,unregister_route,1000,ns,10
+ingress_registry,unregister_route,unregister_route,1010,ns,10
+ingress_registry,unregister_route,unregister_route,990,ns,10

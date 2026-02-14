@@ -1,0 +1,4 @@
+group,function,value,sample_measured_value,unit,iteration_count
+egress_forwarding,single_route_dispatch,single_route_dispatch,1000,ns,10
+egress_forwarding,single_route_dispatch,single_route_dispatch,1010,ns,10
+egress_forwarding,single_route_dispatch,single_route_dispatch,990,ns,10

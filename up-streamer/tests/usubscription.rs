@@ -30,7 +30,7 @@ async fn usubscription_bad_data() {
     let subscription_path =
         "../utils/usubscription-static-file/static-configs/testdata.json".to_string();
     let usubscription = Arc::new(USubscriptionStaticFile::new(subscription_path));
-    let mut ustreamer = match UStreamer::new("foo_bar_streamer", 3000, usubscription) {
+    let mut ustreamer = match UStreamer::new("foo_bar_streamer", 3000, usubscription).await {
         Ok(streamer) => streamer,
         Err(error) => panic!("Failed to create uStreamer: {}", error),
     };
@@ -40,11 +40,11 @@ async fn usubscription_bad_data() {
     let remote_endpoint = Endpoint::new("remote_endpoint", &remote_authority_a(), utransport_bar);
 
     // adding local to remote routing
-    let add_forwarding_rule_res = ustreamer
-        .add_forwarding_rule(local_endpoint.clone(), remote_endpoint.clone())
+    let add_route_res = ustreamer
+        .add_route(local_endpoint.clone(), remote_endpoint.clone())
         .await;
     assert_eq!(
-        add_forwarding_rule_res,
+        add_route_res,
         Err(UStatus::fail_with_code(
             UCode::INVALID_ARGUMENT,
             "Failed to register notification request/response listener"

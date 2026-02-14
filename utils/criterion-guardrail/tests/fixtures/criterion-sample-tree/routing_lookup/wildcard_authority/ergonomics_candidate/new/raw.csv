@@ -1,0 +1,4 @@
+group,function,value,sample_measured_value,unit,iteration_count
+routing_lookup,wildcard_authority,wildcard_authority,1040,ns,10
+routing_lookup,wildcard_authority,wildcard_authority,1030,ns,10
+routing_lookup,wildcard_authority,wildcard_authority,1050,ns,10

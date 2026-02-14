@@ -52,11 +52,17 @@ struct Args {
     /// Resource ID for publish source URI (decimal or 0x-prefixed hex)
     #[arg(long, default_value = DEFAULT_RESOURCE)]
     resource: String,
+    /// Number of publish messages to send before exiting (0 means run forever)
+    #[arg(long, default_value_t = 0)]
+    send_count: u64,
+    /// Milliseconds to wait between publish sends
+    #[arg(long, default_value_t = 1000)]
+    send_interval_ms: u64,
 }
 
 #[tokio::main]
 async fn main() -> Result<(), UStatus> {
-    env_logger::init();
+    let _ = tracing_subscriber::fmt::try_init();
 
     let args = Args::parse();
 
@@ -93,8 +99,14 @@ async fn main() -> Result<(), UStatus> {
 
     let source = cli::build_uuri(&args.uauthority, uentity, uversion, resource)?;
 
+    let mut sent_count: u64 = 0;
     loop {
-        tokio::time::sleep(Duration::from_millis(1000)).await;
+        if args.send_count > 0 && sent_count >= args.send_count {
+            println!("Completed bounded send run: sent_count={sent_count}");
+            break;
+        }
+
+        tokio::time::sleep(Duration::from_millis(args.send_interval_ms)).await;
 
         let now = Local::now();
 
@@ -117,5 +129,8 @@ async fn main() -> Result<(), UStatus> {
         println!("Sending Publish message:\n{publish_msg:?}");
 
         publisher.send(publish_msg).await?;
+        sent_count += 1;
     }
+
+    Ok(())
 }

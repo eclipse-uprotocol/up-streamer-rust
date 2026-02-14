@@ -11,12 +11,8 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
-use log::*;
 use std::sync::Arc;
 use up_rust::UTransport;
-
-const ENDPOINT_TAG: &str = "Endpoint:";
-const ENDPOINT_FN_NEW_TAG: &str = "new():";
 
 ///
 /// [`Endpoint`] is defined as a combination of `authority_name` and
@@ -95,14 +91,6 @@ pub struct Endpoint {
 
 impl Endpoint {
     pub fn new(name: &str, authority: &str, transport: Arc<dyn UTransport>) -> Self {
-        // Try to initiate logging.
-        // Required in case of dynamic lib, otherwise no logs.
-        // But cannot be done twice in case of static link.
-        let _ = env_logger::try_init();
-        debug!(
-            "{}:{} Creating Endpoint from: ({:?})",
-            &ENDPOINT_TAG, &ENDPOINT_FN_NEW_TAG, &authority,
-        );
         Self {
             name: name.to_string(),
             authority: authority.to_string(),

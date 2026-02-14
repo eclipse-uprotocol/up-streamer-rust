@@ -77,13 +77,13 @@ mqtt-transport = ["up-transport-mqtt5"]
 async-trait = { workspace = true }
 chrono = { version = "0.4" }
 clap = { version = "4.5.9", features = ["derive"] }
-env_logger = { version = "0.10.2" }
 hello-world-protos = { path = "../utils/hello-world-protos" }
-log = { workspace = true }
 json5 = { workspace = true }
 protobuf = { workspace = true }
 serde = { workspace = true }
 tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
 up-rust = { workspace = true }
 up-transport-zenoh = { workspace = true, optional = true }
 up-transport-vsomeip = { workspace = true, optional = true }
