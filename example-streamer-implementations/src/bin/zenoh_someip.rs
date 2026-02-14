@@ -13,13 +13,15 @@
 
 mod config;
 
-use crate::config::Config;
+use crate::config::{Config, SubscriptionProviderMode};
 use clap::Parser;
-use log::trace;
+use std::env;
 use std::fs::File;
 use std::io::Read;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::{env, thread};
+use tracing::{info, trace};
+use up_rust::core::usubscription::USubscription;
 use up_rust::{UCode, UStatus, UTransport, UUri};
 use up_streamer::{Endpoint, UStreamer};
 use up_transport_vsomeip::UPTransportVsomeip;
@@ -33,9 +35,39 @@ struct StreamerArgs {
     config: String,
 }
 
+fn resolve_someip_config_file_path(config_file: &Path) -> Result<PathBuf, UStatus> {
+    if !config_file.is_relative() {
+        return Ok(config_file.to_path_buf());
+    }
+
+    let executable_path = env::current_exe().map_err(|error| {
+        UStatus::fail_with_code(
+            UCode::INTERNAL,
+            format!("Unable to determine current executable path: {error:?}"),
+        )
+    })?;
+    let executable_dir = executable_path.parent().ok_or_else(|| {
+        UStatus::fail_with_code(
+            UCode::INTERNAL,
+            format!("Current executable has no parent directory: {executable_path:?}"),
+        )
+    })?;
+
+    Ok(executable_dir.join(config_file))
+}
+
+async fn wait_for_shutdown_signal() -> Result<(), UStatus> {
+    tokio::signal::ctrl_c().await.map_err(|error| {
+        UStatus::fail_with_code(
+            UCode::INTERNAL,
+            format!("Unable to wait for shutdown signal: {error:?}"),
+        )
+    })
+}
+
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> Result<(), UStatus> {
-    env_logger::init();
+    let _ = tracing_subscriber::fmt::try_init();
 
     let args = StreamerArgs::parse();
 
@@ -56,8 +88,17 @@ async fn main() -> Result<(), UStatus> {
         )
     })?;
 
-    let subscription_path = config.usubscription_config.file_path;
-    let usubscription = Arc::new(USubscriptionStaticFile::new(subscription_path));
+    let usubscription: Arc<dyn USubscription> = match config.usubscription_config.mode {
+        SubscriptionProviderMode::StaticFile => Arc::new(USubscriptionStaticFile::new(
+            config.usubscription_config.file_path.clone(),
+        )),
+        SubscriptionProviderMode::LiveUsubscription => {
+            return Err(UStatus::fail_with_code(
+                    UCode::UNIMPLEMENTED,
+                    "live_usubscription mode is reserved in this phase; live runtime integration is deferred (see reports/usubscription-decoupled-pubsub-migration/05-live-integration-deferred.md)",
+                ));
+        }
+    };
 
     // Start the streamer instance.
     let mut streamer = UStreamer::new(
@@ -65,7 +106,7 @@ async fn main() -> Result<(), UStatus> {
         config.up_streamer_config.message_queue_size,
         usubscription,
     )
-    .expect("Failed to create uStreamer");
+    .await?;
 
     let streamer_uuri = UUri::try_from_parts(
         &config.streamer_uuri.authority,
@@ -73,19 +114,40 @@ async fn main() -> Result<(), UStatus> {
         config.streamer_uuri.ue_version_major,
         0,
     )
-    .expect("Unable to form streamer_uuri");
+    .map_err(|error| {
+        UStatus::fail_with_code(
+            UCode::INVALID_ARGUMENT,
+            format!("Unable to form streamer_uuri: {error:?}"),
+        )
+    })?;
 
     trace!("streamer_uuri: {streamer_uuri:#?}");
 
-    let zenoh_config = ZenohConfig::from_file(config.zenoh_transport_config.config_file).unwrap();
+    let zenoh_config =
+        ZenohConfig::from_file(config.zenoh_transport_config.config_file).map_err(|error| {
+            UStatus::fail_with_code(
+                UCode::INVALID_ARGUMENT,
+                format!("Unable to load Zenoh config file: {error:?}"),
+            )
+        })?;
 
     let zenoh_transport: Arc<dyn UTransport> = Arc::new(
         UPTransportZenoh::builder(config.streamer_uuri.authority.clone())
-            .expect("Unable to create Zenoh transport builder")
+            .map_err(|error| {
+                UStatus::fail_with_code(
+                    UCode::INTERNAL,
+                    format!("Unable to create Zenoh transport builder: {error:?}"),
+                )
+            })?
             .with_config(zenoh_config)
             .build()
             .await
-            .expect("Unable to initialize Zenoh UTransport"),
+            .map_err(|error| {
+                UStatus::fail_with_code(
+                    UCode::INTERNAL,
+                    format!("Unable to initialize Zenoh UTransport: {error:?}"),
+                )
+            })?,
     );
 
     // Because the streamer runs on the ecu side in this implementation, we call the zenoh endpoint the "host".
@@ -95,18 +157,16 @@ async fn main() -> Result<(), UStatus> {
         zenoh_transport.clone(),
     );
 
-    let someip_config_file_abs_path = if config.someip_config.config_file.is_relative() {
-        env::current_exe()
-            .unwrap()
-            .parent()
-            .unwrap()
-            .join(&config.someip_config.config_file)
-    } else {
-        config.someip_config.config_file
-    };
+    let someip_config_file_abs_path =
+        resolve_someip_config_file_path(&config.someip_config.config_file)?;
     trace!("someip_config_file_abs_path: {someip_config_file_abs_path:?}");
     if !someip_config_file_abs_path.exists() {
-        panic!("The specified someip config_file doesn't exist: {someip_config_file_abs_path:?}");
+        return Err(UStatus::fail_with_code(
+            UCode::INVALID_ARGUMENT,
+            format!(
+                "The specified someip config_file doesn't exist: {someip_config_file_abs_path:?}"
+            ),
+        ));
     }
 
     let host_uuri = UUri::try_from_parts(
@@ -117,7 +177,12 @@ async fn main() -> Result<(), UStatus> {
         1,
         0,
     )
-    .expect("Unable to make host_uuri");
+    .map_err(|error| {
+        UStatus::fail_with_code(
+            UCode::INVALID_ARGUMENT,
+            format!("Unable to make host_uuri: {error:?}"),
+        )
+    })?;
 
     // There will be at most one vsomeip_transport, as there is a connection into device and a streamer
     let someip_transport: Arc<dyn UTransport> = Arc::new(
@@ -127,7 +192,12 @@ async fn main() -> Result<(), UStatus> {
             &someip_config_file_abs_path,
             None,
         )
-        .expect("Unable to initialize vsomeip UTransport"),
+        .map_err(|error| {
+            UStatus::fail_with_code(
+                UCode::INTERNAL,
+                format!("Unable to initialize vsomeip UTransport: {error:?}"),
+            )
+        })?,
     );
 
     // In this implementation, the mqtt entity runs in the cloud and has its own authority.
@@ -139,17 +209,18 @@ async fn main() -> Result<(), UStatus> {
 
     // Here we tell the streamer to forward any zenoh messages to the someip endpoint
     streamer
-        .add_forwarding_rule(zenoh_endpoint.clone(), someip_endpoint.clone())
-        .await
-        .expect("Could not add zenoh -> someip forwarding rule");
+        .add_route(zenoh_endpoint.clone(), someip_endpoint.clone())
+        .await?;
 
     // And here we set up the forwarding in the other direction.
     streamer
-        .add_forwarding_rule(someip_endpoint.clone(), zenoh_endpoint.clone())
-        .await
-        .expect("Could not add someip -> zenoh forwarding rule");
+        .add_route(someip_endpoint.clone(), zenoh_endpoint.clone())
+        .await?;
 
-    thread::park();
+    println!("READY streamer_initialized");
+    info!("Streamer initialized; waiting for shutdown signal");
+    wait_for_shutdown_signal().await?;
+    info!("Shutdown signal received; exiting");
 
     Ok(())
 }

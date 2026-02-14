@@ -5,9 +5,9 @@ use hello_world_protos::{
     hello_world_service::{HelloRequest, HelloResponse},
     hello_world_topics::Timer,
 };
-use log::{debug, error, info};
 use protobuf::Message;
 use std::sync::Arc;
+use tracing::{debug, error, info};
 use up_rust::{UListener, UMessage, UMessageBuilder, UTransport};
 
 #[allow(dead_code)]

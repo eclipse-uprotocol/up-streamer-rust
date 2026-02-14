@@ -20,6 +20,8 @@
       ue_version_major: 1
     },
     usubscription_config: {
+      // Provider mode: static_file (default) or reserved live_usubscription
+      mode: "static_file",
       // Lists the path to the subscription file when using static file
       file_path: "../example-streamer-implementations/subscription_data.json"
     },

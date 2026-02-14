@@ -11,6 +11,8 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
+mod support;
+
 use async_broadcast::broadcast;
 use futures::future::join;
 use integration_test_utils::{
@@ -20,25 +22,23 @@ use integration_test_utils::{
     remote_client_uuri, request_from_local_client_for_remote_client,
     request_from_remote_client_for_local_client, reset_pause,
     response_from_local_client_for_remote_client, response_from_remote_client_for_local_client,
-    run_client, signal_to_pause, signal_to_resume, wait_for_pause, ClientCommand,
-    ClientConfiguration, ClientControl, ClientHistory, ClientMessages, LocalClientListener,
-    RemoteClientListener, UPClientFoo,
+    run_client, signal_to_pause, signal_to_resume, wait_for_pause, wait_for_send_count,
+    wait_for_send_delta, ClientCommand, ClientConfiguration, ClientControl, ClientHistory,
+    ClientMessages, LocalClientListener, RemoteClientListener, UPClientFoo,
 };
-use log::debug;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Mutex;
 use tokio_condvar::Condvar;
+use tracing::debug;
 use up_rust::{UListener, UTransport};
-use up_streamer::{Endpoint, UStreamer};
-use usubscription_static_file::USubscriptionStaticFile;
+use up_streamer::Endpoint;
 
 const DURATION_TO_RUN_CLIENTS: u128 = 500;
 const SENT_MESSAGE_VEC_CAPACITY: usize = 20_000;
 
-#[tokio::test(flavor = "multi_thread")]
-async fn single_local_two_remote_add_remove_rules() {
+async fn run_single_local_two_remote_add_remove_rules() {
     integration_test_utils::init_logging();
 
     // using async_broadcast to simulate communication protocol
@@ -53,14 +53,7 @@ async fn single_local_two_remote_add_remove_rules() {
     let utransport_bar_2: Arc<dyn UTransport> =
         Arc::new(UPClientFoo::new("upclient_bar_2", rx_3.clone(), tx_3.clone()).await);
 
-    // setting up streamer to bridge between "foo" and "bar"
-    let subscription_path =
-        "../utils/usubscription-static-file/static-configs/testdata.json".to_string();
-    let usubscription = Arc::new(USubscriptionStaticFile::new(subscription_path));
-    let mut ustreamer = match UStreamer::new("foo_bar_streamer", 3000, usubscription) {
-        Ok(streamer) => streamer,
-        Err(error) => panic!("Failed to create uStreamer: {}", error),
-    };
+    let mut ustreamer = support::make_streamer("foo_bar_streamer", 3000).await;
 
     // setting up endpoints between authorities and protocols
     let local_endpoint = Endpoint::new("local_endpoint", &local_authority(), utransport_foo);
@@ -69,17 +62,8 @@ async fn single_local_two_remote_add_remove_rules() {
     let remote_endpoint_b =
         Endpoint::new("remote_endpoint_b", &remote_authority_b(), utransport_bar_2);
 
-    // adding local to remote_a routing
-    let add_forwarding_rule_res = ustreamer
-        .add_forwarding_rule(local_endpoint.clone(), remote_endpoint_a.clone())
-        .await;
-    assert!(add_forwarding_rule_res.is_ok());
-
-    // adding remote_a to local routing
-    let add_forwarding_rule_res = ustreamer
-        .add_forwarding_rule(remote_endpoint_a.clone(), local_endpoint.clone())
-        .await;
-    assert!(add_forwarding_rule_res.is_ok());
+    support::assert_add_rule_ok(&mut ustreamer, &local_endpoint, &remote_endpoint_a).await;
+    support::assert_add_rule_ok(&mut ustreamer, &remote_endpoint_a, &local_endpoint).await;
 
     let local_client_listener = Arc::new(LocalClientListener::new());
     let remote_a_client_listener = Arc::new(RemoteClientListener::new());
@@ -208,7 +192,9 @@ async fn single_local_two_remote_add_remove_rules() {
 
     debug!("signalled to resume");
 
-    tokio::time::sleep(Duration::from_millis(DURATION_TO_RUN_CLIENTS as u64)).await;
+    let send_wait_timeout = Duration::from_millis((DURATION_TO_RUN_CLIENTS as u64).max(1_000));
+    wait_for_send_count(&local_sends, 3, send_wait_timeout, "local_sends").await;
+    wait_for_send_count(&remote_a_sends, 3, send_wait_timeout, "remote_a_sends").await;
 
     {
         let mut local_command = local_command.lock().await;
@@ -269,17 +255,8 @@ async fn single_local_two_remote_add_remove_rules() {
 
     debug!("ran run_client for remote_b");
 
-    // adding local to remote_b routing
-    let add_forwarding_rule_res = ustreamer
-        .add_forwarding_rule(local_endpoint.clone(), remote_endpoint_b.clone())
-        .await;
-    assert!(add_forwarding_rule_res.is_ok());
-
-    // adding remote_b to local routing
-    let add_forwarding_rule_res = ustreamer
-        .add_forwarding_rule(remote_endpoint_b.clone(), local_endpoint.clone())
-        .await;
-    assert!(add_forwarding_rule_res.is_ok());
+    support::assert_add_rule_ok(&mut ustreamer, &local_endpoint, &remote_endpoint_b).await;
+    support::assert_add_rule_ok(&mut ustreamer, &remote_endpoint_b, &local_endpoint).await;
 
     debug!("added forwarding rules for remote_b <-> local");
 
@@ -287,11 +264,38 @@ async fn single_local_two_remote_add_remove_rules() {
 
     debug!("remote_b signalled it paused");
 
+    let local_before_remote_b_resume = local_sends.load(Ordering::SeqCst);
+    let remote_a_before_remote_b_resume = remote_a_sends.load(Ordering::SeqCst);
+    let remote_b_before_remote_b_resume = remote_b_sends.load(Ordering::SeqCst);
+
     signal_to_resume(all_signal_should_pause.clone()).await;
 
     debug!("signalled local, remote_a, remote_b to resume");
 
-    tokio::time::sleep(Duration::from_millis(DURATION_TO_RUN_CLIENTS as u64)).await;
+    wait_for_send_delta(
+        &local_sends,
+        local_before_remote_b_resume,
+        6,
+        send_wait_timeout,
+        "local_sends",
+    )
+    .await;
+    wait_for_send_delta(
+        &remote_a_sends,
+        remote_a_before_remote_b_resume,
+        3,
+        send_wait_timeout,
+        "remote_a_sends",
+    )
+    .await;
+    wait_for_send_delta(
+        &remote_b_sends,
+        remote_b_before_remote_b_resume,
+        3,
+        send_wait_timeout,
+        "remote_b_sends",
+    )
+    .await;
 
     debug!("after running local, remote_a, remote_b");
 
@@ -329,25 +333,34 @@ async fn single_local_two_remote_add_remove_rules() {
     join(local_paused, remote_b_paused).await;
     debug!("joined on local_paused and remote_b_paused");
 
-    // deleting local to remote_a routing
-    let delete_forwarding_rule_res = ustreamer
-        .delete_forwarding_rule(local_endpoint.clone(), remote_endpoint_a.clone())
-        .await;
-    assert!(delete_forwarding_rule_res.is_ok());
-
-    // deleting remote_a to local routing
-    let delete_forwarding_rule_res = ustreamer
-        .delete_forwarding_rule(remote_endpoint_a.clone(), local_endpoint.clone())
-        .await;
-    assert!(delete_forwarding_rule_res.is_ok());
+    support::assert_delete_rule_ok(&mut ustreamer, &local_endpoint, &remote_endpoint_a).await;
+    support::assert_delete_rule_ok(&mut ustreamer, &remote_endpoint_a, &local_endpoint).await;
 
     debug!("deleting forwarding rules local <-> remote_a");
+
+    let local_before_final_resume = local_sends.load(Ordering::SeqCst);
+    let remote_b_before_final_resume = remote_b_sends.load(Ordering::SeqCst);
 
     signal_to_resume(all_signal_should_pause.clone()).await;
 
     debug!("signalled all to resume: local & remote_b");
 
-    tokio::time::sleep(Duration::from_millis(DURATION_TO_RUN_CLIENTS as u64)).await;
+    wait_for_send_delta(
+        &local_sends,
+        local_before_final_resume,
+        3,
+        send_wait_timeout,
+        "local_sends",
+    )
+    .await;
+    wait_for_send_delta(
+        &remote_b_sends,
+        remote_b_before_final_resume,
+        3,
+        send_wait_timeout,
+        "remote_b_sends",
+    )
+    .await;
 
     {
         let mut local_command = local_command.lock().await;
@@ -453,4 +466,9 @@ async fn single_local_two_remote_add_remove_rules() {
     check_messages_in_order(remote_b_client_listener.retrieve_message_store()).await;
 
     debug!("All clients finished.");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn single_local_two_remote_add_remove_rules() {
+    run_single_local_two_remote_add_remove_rules().await;
 }

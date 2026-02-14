@@ -12,8 +12,8 @@
  ********************************************************************************/
 
 use async_trait::async_trait;
-use log::debug;
 use std::sync::Arc;
+use tracing::debug;
 use up_rust::{UCode, UListener, UMessage, UStatus, UTransport, UUri};
 
 pub struct UPClientFailingRegister {

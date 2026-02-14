@@ -19,7 +19,6 @@ members = [
     "configurable-streamer",
     "up-linux-streamer-plugin",
     "up-streamer",
-    "subscription-cache",
     "utils/usubscription-static-file",
 ]
 
@@ -33,7 +32,6 @@ keywords = ["uProtocol", "SDV", "routing", "streamer"]
 license = "Apache-2.0"
 
 [workspace.dependencies]
-async-std = { version = "1.12.0", features = ["attributes"] }
 async-trait = { version = "0.1" }
 clap = { version = "4.5" }
 env_logger = { version = "0.10.1" }
@@ -43,6 +41,8 @@ log = { version = "0.4.20" }
 json5 = { version = "0.4.1" }
 serde = { version = "1.0.154", features = ["derive"] }
 serde_json = { version = "1.0.94" }
+tracing = { version = "0.1" }
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 uuid = { version = "1.7.0" }
 tokio = { version = "1.44", default-features = false, features = [
     "rt",

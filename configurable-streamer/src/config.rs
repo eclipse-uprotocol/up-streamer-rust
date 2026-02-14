@@ -39,7 +39,17 @@ pub struct StreamerUuri {
 #[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct USubscriptionConfig {
+    #[serde(default)]
+    pub(crate) mode: SubscriptionProviderMode,
     pub(crate) file_path: String,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum SubscriptionProviderMode {
+    #[default]
+    StaticFile,
+    LiveUsubscription,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
