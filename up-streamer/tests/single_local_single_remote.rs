@@ -11,6 +11,8 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
+mod support;
+
 use async_broadcast::broadcast;
 use futures::future::join;
 use integration_test_utils::{
@@ -20,24 +22,22 @@ use integration_test_utils::{
     request_from_local_client_for_remote_client, request_from_remote_client_for_local_client,
     reset_pause, response_from_local_client_for_remote_client,
     response_from_remote_client_for_local_client, run_client, signal_to_pause, signal_to_resume,
-    wait_for_pause, ClientCommand, ClientConfiguration, ClientControl, ClientHistory,
-    ClientMessages, LocalClientListener, RemoteClientListener, UPClientFoo,
+    wait_for_pause, wait_for_send_count, ClientCommand, ClientConfiguration, ClientControl,
+    ClientHistory, ClientMessages, LocalClientListener, RemoteClientListener, UPClientFoo,
 };
-use log::debug;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Mutex;
 use tokio_condvar::Condvar;
+use tracing::debug;
 use up_rust::{UListener, UTransport};
-use up_streamer::{Endpoint, UStreamer};
-use usubscription_static_file::USubscriptionStaticFile;
+use up_streamer::Endpoint;
 
 const DURATION_TO_RUN_CLIENTS: u128 = 10;
 const SENT_MESSAGE_VEC_CAPACITY: usize = 10_000;
 
-#[tokio::test(flavor = "multi_thread")]
-async fn single_local_single_remote() {
+async fn run_single_local_single_remote() {
     integration_test_utils::init_logging();
 
     // using async_broadcast to simulate communication protocol
@@ -49,30 +49,14 @@ async fn single_local_single_remote() {
     let utransport_bar: Arc<dyn UTransport> =
         Arc::new(UPClientFoo::new("upclient_bar", rx_2.clone(), tx_2.clone()).await);
 
-    // setting up streamer to bridge between "foo" and "bar"
-    let subscription_path =
-        "../utils/usubscription-static-file/static-configs/testdata.json".to_string();
-    let usubscription = Arc::new(USubscriptionStaticFile::new(subscription_path));
-    let mut ustreamer = match UStreamer::new("foo_bar_streamer", 3000, usubscription) {
-        Ok(streamer) => streamer,
-        Err(error) => panic!("Failed to create uStreamer: {}", error),
-    };
+    let mut ustreamer = support::make_streamer("foo_bar_streamer", 3000).await;
 
     // setting up endpoints between authorities and protocols
     let local_endpoint = Endpoint::new("local_endpoint", &local_authority(), utransport_foo);
     let remote_endpoint = Endpoint::new("remote_endpoint", &remote_authority_a(), utransport_bar);
 
-    // adding local to remote routing
-    let add_forwarding_rule_res = ustreamer
-        .add_forwarding_rule(local_endpoint.clone(), remote_endpoint.clone())
-        .await;
-    assert!(add_forwarding_rule_res.is_ok());
-
-    // adding remote to local routing
-    let add_forwarding_rule_res = ustreamer
-        .add_forwarding_rule(remote_endpoint.clone(), local_endpoint.clone())
-        .await;
-    assert!(add_forwarding_rule_res.is_ok());
+    support::assert_add_rule_ok(&mut ustreamer, &local_endpoint, &remote_endpoint).await;
+    support::assert_add_rule_ok(&mut ustreamer, &remote_endpoint, &local_endpoint).await;
 
     let local_client_listener = Arc::new(LocalClientListener::new());
     let remote_client_listener = Arc::new(RemoteClientListener::new());
@@ -177,7 +161,9 @@ async fn single_local_single_remote() {
 
     debug!("after signal_to_resume");
 
-    tokio::time::sleep(Duration::from_millis(DURATION_TO_RUN_CLIENTS as u64)).await;
+    let send_wait_timeout = Duration::from_millis((DURATION_TO_RUN_CLIENTS as u64).max(1_000));
+    wait_for_send_count(&local_sends, 3, send_wait_timeout, "local_sends").await;
+    wait_for_send_count(&remote_sends, 3, send_wait_timeout, "remote_sends").await;
 
     debug!("past wait on clients to run, now tell them to stop");
     {
@@ -246,4 +232,9 @@ async fn single_local_single_remote() {
     check_messages_in_order(remote_client_listener.retrieve_message_store()).await;
 
     debug!("All clients finished.");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn single_local_single_remote() {
+    run_single_local_single_remote().await;
 }

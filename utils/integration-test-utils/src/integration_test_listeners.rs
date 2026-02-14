@@ -12,9 +12,9 @@
  ********************************************************************************/
 
 use async_trait::async_trait;
-use log::debug;
 use std::sync::Arc;
 use tokio::sync::Mutex;
+use tracing::debug;
 use up_rust::{UListener, UMessage};
 
 #[derive(Clone)]

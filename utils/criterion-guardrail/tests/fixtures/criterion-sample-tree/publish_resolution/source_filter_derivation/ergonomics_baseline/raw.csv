@@ -1,0 +1,4 @@
+group,function,value,sample_measured_value,unit,iteration_count
+publish_resolution,source_filter_derivation,source_filter_derivation,1000,ns,10
+publish_resolution,source_filter_derivation,source_filter_derivation,1010,ns,10
+publish_resolution,source_filter_derivation,source_filter_derivation,990,ns,10
