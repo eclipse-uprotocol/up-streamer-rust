@@ -29,8 +29,8 @@ jobs:
     timeout-minutes: 45
 
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
 
       - name: Install dependencies
         run: sudo apt-get update && sudo apt-get install -y build-essential cmake libboost-all-dev libclang-dev pkg-config libssl-dev
@@ -46,7 +46,7 @@ jobs:
 
       - name: Upload MQTT artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: transport-smoke-mqtt
           path: target/transport-smoke/ci-mqtt
@@ -58,8 +58,8 @@ jobs:
     timeout-minutes: 60
 
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
 
       - name: Install dependencies
         run: sudo apt-get update && sudo apt-get install -y build-essential cmake libboost-all-dev libclang-dev pkg-config libssl-dev
@@ -75,7 +75,7 @@ jobs:
 
       - name: Upload SOME/IP artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: transport-smoke-someip
           path: target/transport-smoke/ci-someip
