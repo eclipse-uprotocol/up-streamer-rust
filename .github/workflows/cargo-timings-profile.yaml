@@ -40,7 +40,7 @@ jobs:
       generic_cpp_stdlib_path: ${{ steps.set_env.outputs.generic_cpp_stdlib_path }}
 
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Add execute permissions for envsetup
         run: chmod +x build/envsetup.sh
@@ -66,7 +66,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Set environment variables
         run: |
@@ -127,7 +127,7 @@ jobs:
       GENERIC_CPP_STDLIB_PATH: ${{ needs.set-env.outputs.generic_cpp_stdlib_path }}
 
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Install C++ dependencies
         run: sudo apt-get install -y build-essential cmake libboost-all-dev libclang-dev pkg-config libssl-dev
@@ -182,7 +182,7 @@ jobs:
       CACHE_KEY: ${{ needs.obtain_and_build_vsomeip.outputs.cache_key }}
 
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Install C++ dependencies
         run: sudo apt-get install -y build-essential cmake libboost-all-dev libclang-dev pkg-config libssl-dev
