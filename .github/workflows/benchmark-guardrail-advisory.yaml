@@ -28,8 +28,8 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
 
       - name: Add execute permissions for scripts
         run: chmod +x build/envsetup.sh scripts/bench_streamer_criterion.sh
@@ -57,7 +57,7 @@ jobs:
 
       - name: Upload criterion guardrail artifacts
         if: ${{ always() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: criterion-guardrail-advisory
           if-no-files-found: warn

@@ -37,7 +37,7 @@ jobs:
       generic_cpp_stdlib_path: ${{ steps.set_env.outputs.generic_cpp_stdlib_path }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Add execute permissions for envsetup
         run: chmod +x build/envsetup.sh
@@ -59,8 +59,8 @@ jobs:
        GENERIC_CPP_STDLIB_PATH: ${{ needs.set-env.outputs.generic_cpp_stdlib_path }}
 
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
 
       - name: Install C++ dependencies
         run: sudo apt-get install -y build-essential cmake libboost-all-dev libclang-dev
@@ -87,19 +87,19 @@ jobs:
           LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${VSOMEIP_INSTALL_PATH}/lib RUSTC_BOOTSTRAP=1 cargo tarpaulin -o xml -o lcov -o html --doc --tests -- --test-threads 1
 
       - name: Upload coverage report (xml)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: Test Coverage Results (xml)
           path: cobertura.xml
 
       - name: Upload coverage report (lcov)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: Test Coverage Results (lcov)
           path: lcov.info
 
       - name: Upload coverage report (html)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: Test Coverage Results (html)
           path: tarpaulin-report.html
