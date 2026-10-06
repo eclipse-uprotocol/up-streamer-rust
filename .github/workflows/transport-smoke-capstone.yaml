@@ -30,7 +30,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+      - uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
 
       - name: Install dependencies
         run: sudo apt-get update && sudo apt-get install -y build-essential cmake libboost-all-dev libclang-dev pkg-config libssl-dev
@@ -59,7 +59,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+      - uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
 
       - name: Install dependencies
         run: sudo apt-get update && sudo apt-get install -y build-essential cmake libboost-all-dev libclang-dev pkg-config libssl-dev
