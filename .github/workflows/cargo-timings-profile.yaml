@@ -40,7 +40,7 @@ jobs:
       generic_cpp_stdlib_path: ${{ steps.set_env.outputs.generic_cpp_stdlib_path }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Add execute permissions for envsetup
         run: chmod +x build/envsetup.sh
@@ -66,7 +66,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Set environment variables
         run: |
@@ -93,7 +93,7 @@ jobs:
 
       - name: Cache vsomeip build
         id: cache-vsomeip
-        uses: actions/cache@v3
+        uses: actions/cache@6f8efc29b200d32929f49075959781ed54ec270c # v3.5.0
         with:
           path: ${{ env.VSOMEIP_INSTALL_PATH }}
           key: ${{ runner.os }}-vsomeip-${{ hashFiles(env.VSOMEIP_SOURCE_PATH_WITH_WILDCARD) }}
@@ -112,7 +112,7 @@ jobs:
 
       - name: Save vsomeip build to cache
         if: steps.cache-vsomeip.outputs.cache-hit != 'true'
-        uses: actions/cache@v3
+        uses: actions/cache@6f8efc29b200d32929f49075959781ed54ec270c # v3.5.0
         with:
           path: ${{ env.VSOMEIP_INSTALL_PATH }}
           key: ${{ runner.os }}-vsomeip-${{ hashFiles(env.VSOMEIP_SOURCE_PATH_WITH_WILDCARD) }}
@@ -127,7 +127,7 @@ jobs:
       GENERIC_CPP_STDLIB_PATH: ${{ needs.set-env.outputs.generic_cpp_stdlib_path }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Install C++ dependencies
         run: sudo apt-get install -y build-essential cmake libboost-all-dev libclang-dev pkg-config libssl-dev
@@ -156,14 +156,14 @@ jobs:
           cp -r target/cargo-timings/. timings-artifacts/bundled-feature/
 
       - name: Upload bundled base timings artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: cargo-timings-bundled-base
           path: timings-artifacts/bundled-base
           if-no-files-found: error
 
       - name: Upload bundled feature timings artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: cargo-timings-bundled-feature
           path: timings-artifacts/bundled-feature
@@ -182,7 +182,7 @@ jobs:
       CACHE_KEY: ${{ needs.obtain_and_build_vsomeip.outputs.cache_key }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Install C++ dependencies
         run: sudo apt-get install -y build-essential cmake libboost-all-dev libclang-dev pkg-config libssl-dev
@@ -196,7 +196,7 @@ jobs:
         run: mkdir -p "${{ github.workspace }}/${{ env.VSOMEIP_INSTALL_PATH }}"
 
       - name: Restore vsomeip build cache
-        uses: actions/cache@v3
+        uses: actions/cache@6f8efc29b200d32929f49075959781ed54ec270c # v3.5.0
         with:
           path: ${{ env.VSOMEIP_INSTALL_PATH }}
           key: ${{ env.CACHE_KEY }}
@@ -211,7 +211,7 @@ jobs:
           cp -r target/cargo-timings/. timings-artifacts/unbundled-feature/
 
       - name: Upload unbundled feature timings artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: cargo-timings-unbundled-feature
           path: timings-artifacts/unbundled-feature
